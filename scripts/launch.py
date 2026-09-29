@@ -43,7 +43,13 @@ def spawn(argv):
     subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
 
 
+KNOWN = {"--auto", "--dry-run", "--watch-args"}
+
+
 def main(argv, system=None, env=None, opener=spawn):
+    if "-h" in argv or "--help" in argv: print(__doc__); return 0
+    mine = argv[:argv.index("--watch-args")] if "--watch-args" in argv else argv
+    if [a for a in mine if a not in KNOWN]: print("unknown option; nothing was opened (see --help)"); return 2
     auto, dry = "--auto" in argv, "--dry-run" in argv
     extra = tuple(argv[argv.index("--watch-args") + 1:]) if "--watch-args" in argv else ()
     if auto and not coach.setting("auto_open_watch", False): return 0
