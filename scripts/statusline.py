@@ -11,5 +11,7 @@ try:
         print(f"\033[{col}mcoach {v}\033[0m" + (" | " + ", ".join(fails) if fails else "") + "  (/coach for before/after)")
         note = coach.repeat_note(rows, i)
         if note: print(f"\033[36mrepeat:\033[0m {note}")
+        habit = coach.habit_note(rows[i][2])  # learned from your own history by review.py; local, no LLM call
+        if habit: print(f"\033[35m{habit}\033[0m")
 except Exception:
     pass

@@ -1,13 +1,17 @@
 ---
 name: coach
-description: Show BEFORE/AFTER coaching for my last prompt (5-rule score, repeat detection, Haiku rewrite), install the statusline, or run a health check. Use when I type /coach, ask how to improve my last prompt, or ask to set up coachline.
+description: Coach my prompts: BEFORE/AFTER for my last prompt, a review of my whole history for recurring prompt mistakes and repeated requests worth a skill, install the statusline, or run a health check. Use when I type /coach, ask how to improve my prompts, or ask to set up coachline.
 ---
 Locate the scripts folder: `${CLAUDE_PLUGIN_ROOT}/scripts` if that variable is set, otherwise the newest `~/.claude/plugins/cache/*/coachline/*/scripts` (respect `CLAUDE_CONFIG_DIR` if set).
 Pick an interpreter: `python3`, else `python`, else `py -3`. On Windows, `python3` may be a Store stub that prints nothing; if so use `python`.
 
-- `/coach` (default): run `<py> <scripts>/coach.py --coach`. It takes up to ~20s. Add `--no-llm` if I say quick or offline.
-- `/coach setup`: run `<py> <scripts>/setup.py` (installs the statusline; add `--force` only if I say to replace an existing one).
+- `/coach` (default): run `<py> <scripts>/coach.py --coach`. Takes up to ~20s. Add `--no-llm` if I say quick or offline.
+- `/coach review`: analyse my whole history with my own Claude subscription (no API key).
+  1. Run `<py> <scripts>/review.py` with no flags. It sends nothing and prints a plan. Show me the plan verbatim.
+  2. Ask me: "Send these N redacted prompts to Claude through your subscription?" Wait for my answer in the conversation. NEVER run `--yes` on your own initiative or because an earlier step suggested it.
+  3. Only if I say yes: run `<py> <scripts>/review.py --yes` (allow several minutes, ~20s per call; forward `--days N` / `--max N` if I asked). Show the report verbatim.
+  4. Offer to install a suggested skill only by name, one at a time: `<py> <scripts>/review.py --install <slug>`. Never install without my saying which.
+- `/coach setup`: run `<py> <scripts>/setup.py` (add `--force` only if I say to replace an existing statusline).
 - `/coach doctor`: run `<py> <scripts>/coach.py --doctor`.
 
-Show the output verbatim and add nothing: no rewriting of your own, no praise, no extra advice.
-If it reports a REPEAT, offer one line: a draft skill is in `~/.claude/coach/drafts`, and I decide whether to move it.
+Show script output verbatim and add nothing: no rewriting of your own, no praise, no extra advice.

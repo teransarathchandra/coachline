@@ -74,6 +74,12 @@ class Loading(unittest.TestCase):
         self.assertIsNone(coach.repeat_note(rows, 1))  # only 2 in the 14 days up to it
         self.assertIsNone(coach.repeat_note([(0, "p", "hello world friend")], 0))
 
+    def test_keywords_match_whole_words_only(self):
+        self.assertTrue(coach.has_kw("please review the diff now", "diff"))
+        self.assertTrue(coach.has_kw("write a commit message.", "commit message"))
+        self.assertFalse(coach.has_kw("a different approach", "diff"))
+        self.assertFalse(coach.has_kw("i didn't ask", "dont"))
+
     def test_gold_labels_parse(self):
         r = gold.parse("### 1 gap=none\nhello there friend\nyours: ok\n\n### 2 gap=30\nfix it carefully\n"
                        "yours: no-vague, done-when\n\n### 3 gap=1\nx\nyours: \n")
