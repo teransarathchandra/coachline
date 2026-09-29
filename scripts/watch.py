@@ -15,7 +15,9 @@ Reads local history only, calls no LLM, redacts prompt text. The screen redraws 
 import argparse, datetime as dt, json, os, shutil, sys, textwrap, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import advisor
 import coach
+import discover
 
 MAX_THREADS, MIN_CW, MAX_CW = 40, 30, 48
 POSIX_KEYS = {"[A": "up", "[B": "down", "[C": "right", "[D": "left", "[5~": "pgup", "[6~": "pgdn", "[H": "home", "[F": "end",
@@ -47,7 +49,7 @@ def rewrites():
     try:
         with open(coach.REWRITES, encoding="utf-8") as f:
             for l in f:
-                try: d = json.loads(l); out[d["key"]] = d["text"]
+                try: d = json.loads(l); out[d["key"]] = d
                 except (ValueError, KeyError, TypeError): continue
     except OSError:
         pass
@@ -65,11 +67,13 @@ def build(path):
         if not coach.scorable(text) or text.startswith("/coach"): continue
         m["scored"] += 1
         fails = [n for n, fn in coach.RULES if not fn(text, gap)]
-        if not fails: continue
         key = coach.prompt_key((ts, proj, text))
+        if not fails and key not in aft: continue    # nothing to say about this prompt
+        rec = aft.get(key) or {}
+        extra = advisor.lines(rec["advice"], 200) if rec.get("advice") else [("after", l) for l in coach._after_lines(rec["text"], 200)] if rec.get("text") else []
+        if rec.get("discovery"): extra += discover.lines(rec["discovery"], 200)
         per.setdefault(sid, []).append({"ts": ts, "score": 5 - len(fails), "text": coach.redact(text).replace("\n", " ")[:400],
-                                        "fixes": [f"{n}: {coach.FIX[n]}" for n in fails],
-                                        "after": coach._after_lines(aft[key], 200) if key in aft else []})
+                                        "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "extra": extra})
     def thread(sid, current):
         m = meta[sid]; d = lambda t: dt.datetime.fromtimestamp(t).strftime("%m-%d")
         span = d(m["first"]) if d(m["first"]) == d(m["last"]) else f"{d(m['first'])}>{d(m['last'])}"
@@ -82,7 +86,7 @@ def build(path):
 
 
 def signature(st):
-    return tuple((t["sid"], len(t["entries"]), sum(len(e["after"]) for e in t["entries"])) for t in st["threads"])
+    return tuple((t["sid"], len(t["entries"]), sum(len(e["extra"]) for e in t["entries"])) for t in st["threads"])
 
 
 # ---------------------------------------------------------------- rendering
@@ -95,7 +99,7 @@ def column_lines(t, iw):
         out.append(("head%d" % e["score"], f"[{e['score']}/5] " + dt.datetime.fromtimestamp(e["ts"]).strftime("%m-%d %H:%M")))
         out += [("text", w) for w in textwrap.wrap('"' + e["text"] + '"', iw)]
         for f in e["fixes"]: out += [("dim", w) for w in textwrap.wrap("- " + f, iw, subsequent_indent="  ")]
-        for a in e["after"]: out += [("after", w) for w in textwrap.wrap(a, iw, subsequent_indent="       ") or [""]]
+        for kind, a in e["extra"]: out += [(kind, w) for w in textwrap.wrap(a, iw, subsequent_indent="      ") or [""]]
         out.append(("blank", ""))
     return out[:-1]
 
@@ -104,7 +108,8 @@ def new_ui():
     return {"focus": 0, "vs": 0, "off": {}, "follow": True, "lens": {}, "body_h": 10}
 
 
-CODE = {"head5": "32", "head4": "32", "head3": "33", "head2": "31", "head1": "31", "head0": "31", "text": "0", "dim": "2", "after": "36", "blank": "0"}
+CODE = {"head5": "32", "head4": "32", "head3": "33", "head2": "31", "head1": "31", "head0": "31", "text": "0", "dim": "2", "after": "36", "blank": "0",
+        "task": "1;35", "use": "32", "get": "34", "tip": "33", "flow": "2;37", "why": "2", "better": "1;36", "src": "2;36"}
 
 
 def render(st, ui, W, H, color=True):
@@ -187,10 +192,21 @@ def read_key(timeout):
     return POSIX_KEYS.get(seq, "esc")
 
 
-def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0):
+def beat(last=[0.0]):
+    """Tell launch.py a panel is open (at most one write per second)."""
+    if time.time() - last[0] >= 1:
+        last[0] = time.time()
+        try:
+            os.makedirs(coach.STATE, exist_ok=True)
+            with open(coach.ALIVE, "w") as f: f.write(str(last[0]))
+        except OSError: pass
+
+
+def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0, stop=lambda: False, heartbeat=lambda: None):
     """Draw only when something changed: a key, a new size, or new data. next_key(timeout) -> key|None."""
     ui = new_ui(); st = load_state(); last_load = clock(); last_size = None; dirty = True
-    while True:
+    while not stop():
+        heartbeat()
         W, H = size()
         if dirty or (W, H) != last_size:
             write(render(st, ui, W, H)); last_size = (W, H); dirty = False
@@ -206,6 +222,7 @@ def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0):
 
 def main(argv):
     ap = argparse.ArgumentParser(); ap.add_argument("--history", default=coach.HIST)
+    ap.add_argument("--exit-after", type=float, default=0, help=argparse.SUPPRESS)
     ap.add_argument("--once", action="store_true"); ap.add_argument("--width", type=int); ap.add_argument("--height", type=int)
     a = ap.parse_args(argv)
     if a.once or not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -215,15 +232,17 @@ def main(argv):
     else:
         import termios, tty
         fd = sys.stdin.fileno(); old = termios.tcgetattr(fd); tty.setcbreak(fd)
-    sys.stdout.write("\033[?1049h\033[?25l")
+    sys.stdout.write("\033[?1049h\033[?25l"); t0 = time.time()
     try:
         loop(read_key, lambda rows: (sys.stdout.write("\033[H" + "\033[K\n".join(rows) + "\033[K\033[J"), sys.stdout.flush()),
              lambda: (a.width or shutil.get_terminal_size((100, 30)).columns, a.height or shutil.get_terminal_size((100, 30)).lines),
-             lambda: build(a.history))
+             lambda: build(a.history), stop=lambda: bool(a.exit_after) and time.time() - t0 > a.exit_after, heartbeat=beat)
     except KeyboardInterrupt:
         pass
     finally:
         sys.stdout.write("\033[?25h\033[?1049l"); sys.stdout.flush()
+        try: os.remove(coach.ALIVE)
+        except OSError: pass
         if os.name != "nt": termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
