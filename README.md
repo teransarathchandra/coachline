@@ -11,7 +11,8 @@ repeat: 'commit/PR/ticket text' asked 9x in 14d (from 2026-09-03)
 
 ## What it does
 
-- **Statusline** (after each reply): the score of your last prompt, the failed rules, and a repeat note when you have asked for the same kind of thing 3+ times in the last 14 days. Scoring is local; no network.
+- **Statusline** (after each reply): the score of your last prompt, the concrete fix for each failed rule (local, free), and a repeat note when you have asked for the same kind of thing 3+ times in the last 14 days. Scoring is local; no network.
+- **Auto-rewrite (opt in)**: `setup.py --auto-rewrite on` makes each flagged prompt get a rewritten AFTER (plus a one-line WHY) shown right in the statusline, produced by a background Haiku call on your subscription. One call per prompt, never blocks the UI, never retried in a loop. Off by default because it sends every flagged prompt (redacted, `llm-off.txt` respected) automatically. Turn off with `--auto-rewrite off`.
 - **`/coach`**: BEFORE with the failed rules and a fix for each, then AFTER: a rewrite from Haiku via `claude -p`. Runs only when you ask.
 - **`/coach review`**: sends your redacted history to Claude (your subscription) and asks what *you* do repeatedly: tasks worth a skill, and recurring prompt mistakes. Nothing is hardcoded: the model proposes patterns, then every claim is re-checked locally (see [How review is checked](#how-review-is-checked)). Output: a Markdown report, draft skills in `~/.claude/coach/drafts/`, and `learned.json`, which the statusline reads with no LLM call, so it can say `habit: vague-correction-without-criteria - state what is wrong and how to verify`.
 - **Install a drafted skill**: `review.py --install <slug>` copies one draft into your skills folder. It never overwrites, and the `/coach` skill only does it for a name you give.
@@ -43,6 +44,7 @@ This verifies that a pattern exists in your prompts. It does **not** verify that
 
 ## Privacy
 
+- Auto-rewrite is the only feature that sends prompts without you asking each time, which is why it is opt-in.
 - Scoring and repeat detection read `~/.claude/history.jsonl` and never leave your machine.
 - `/coach review` first prints a plan (how many prompts, how many calls) and sends nothing until you re-run with `--yes`. Then it sends up to 300 redacted prompts (project names replaced by P1, P2...) in a few `claude -p` calls. The `/coach` rewrite sends **one prompt**. Both go to Anthropic through your own `claude` CLI, after redaction (emails, GUIDs, JWTs, API keys, bearer tokens, `password=`/`AccountKey=`-style values). Redaction is pattern-based and will miss things; do not rely on it for secrets.
 - List project path fragments in `~/.claude/coach/llm-off.txt` (one per line) to block both the rewrite and the review for those projects.
