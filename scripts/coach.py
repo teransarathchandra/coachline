@@ -198,21 +198,18 @@ def ask_claude(prompt, model="haiku", timeout=180):
         raise RuntimeError((r.stderr or r.stdout or "claude returned nothing").strip()[:300])
     return r.stdout.strip()
 
-def _rewrite_ask(text, fails, timeout=180):
-    ask = ("Rewrite this coding-agent prompt so it satisfies the failed checks, keeping the user's intent and facts. "
-           "Failed checks: " + ", ".join(fails or ["none"]) + ". Use a Goal / Don't touch / Done-when layout only if it helps. "
-           "Never invent facts: put [ASK: ...] where the user must supply one. "
-           "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text[:4000])
-    return ask_claude(ask, timeout=timeout)
-
-def rewrite(text, fails):
-    try:
-        return _rewrite_ask(text, fails)
-    except RuntimeError as e:
-        return f"(rewrite skipped: {e})"
+def advisable(text, fails):
+    """Worth an LLM call: a rule fired, or it is long enough to be a real task (not 'continue' or 'yes')."""
+    return bool(fails) or len(body(text).split()) >= 6
 
 # --- auto-rewrite: opt-in, runs in a detached background process so the statusline never blocks ------
 CACHE = os.path.join(STATE, "last-rewrite.json")
+ALIVE = os.path.join(STATE, "watch.alive")  # watch.py touches this every second while it is open
+
+def panel_alive(max_age=6):
+    try: return time.time() - os.path.getmtime(ALIVE) < max_age
+    except OSError: return False
+
 REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished AFTER rewrites, keyed by prompt_key
 
 def setting(name, default=None):
@@ -257,14 +254,17 @@ def spawn_bg(key):
 
 def bg_rewrite(path):
     rows = load(path); i, fails = last_eval(rows)
-    if i is None or not fails or llm_off(rows[i][1]): return
+    if i is None or not advisable(rows[i][2], fails) or llm_off(rows[i][1]): return
     key = prompt_key(rows[i])
-    try: res = {"key": key, "status": "done", "text": _rewrite_ask(redact(rows[i][2]), fails, timeout=90)}
-    except RuntimeError as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
+    import advisor
+    try:
+        adv = advisor.advise(redact(rows[i][2]), fails, timeout=90)
+        res = {"key": key, "status": "done", "advice": adv, "text": "AFTER: " + adv.get("after", "")}
+    except (RuntimeError, ValueError) as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
     if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
     if res["status"] == "done":  # keep every rewrite so watch.py can show this and earlier threads' AFTERs
         os.makedirs(STATE, exist_ok=True)
-        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps({"key": key, "text": res["text"]}) + "\n")
+        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps({"key": key, "text": res["text"], "advice": res["advice"]}) + "\n")
 
 def _after_lines(text, width=96):
     import textwrap
@@ -277,14 +277,20 @@ def _after_lines(text, width=96):
     return out + (["WHY:   " + why[:width - 7] + ("…" if len(why) > width - 7 else "")] if why else [])
 
 def auto_after(rows, i, fails):
-    """Statusline lines for the AFTER block, or []. Starts the background rewrite once per flagged prompt."""
-    if not fails or not setting("auto_rewrite", False) or llm_off(rows[i][1]): return []
+    """Statusline lines for the advice block, or []. Starts the background advisor once per prompt."""
+    if not advisable(rows[i][2], fails) or not setting("auto_rewrite", False) or llm_off(rows[i][1]): return []
     key = prompt_key(rows[i]); c = read_cache(); age = time.time() - c.get("ts", 0)
     if c.get("key") != key:
-        spawn_bg(key); return ["AFTER: (writing a better version...)"]
-    if c.get("status") == "done": return _after_lines(c.get("text", ""))
-    if c.get("status") == "pending" and age < 150: return ["AFTER: (writing a better version...)"]
-    return ["AFTER: (unavailable: " + c.get("error", "timed out") + "; /coach retries)"]
+        spawn_bg(key); return ["advice: (working on it...)"]
+    if c.get("status") == "done":
+        import advisor
+        adv = c.get("advice")
+        if not adv: return _after_lines(c.get("text", ""))
+        lines = advisor.compact(adv)
+        if adv.get("after"): lines += [t for _k, t in advisor.lines({"after": adv["after"]}, 96)][:6]
+        return lines
+    if c.get("status") == "pending" and age < 150: return ["advice: (working on it...)"]
+    return ["advice: (unavailable: " + c.get("error", "timed out") + "; /coach retries)"]
 
 LEARNED = os.path.join(STATE, "learned.json")  # written by review.py from YOUR history; read locally, no LLM
 
@@ -319,8 +325,14 @@ def coach(path, llm=True):
     n = repeat_note(rows, i)
     if n: print(f"\nREPEAT: {n}. Draft skills are in {os.path.join(STATE, 'drafts')} (review, then move into your skills folder yourself).")
     if not llm: return
-    if llm_off(proj): print(f"\n(LLM rewrite skipped: project matches an entry in {OFF})"); return
-    print("\n" + rewrite(redact(t), fails))
+    if llm_off(proj): print(f"\n(LLM advice skipped: project matches an entry in {OFF})"); return
+    import advisor
+    try:
+        adv = advisor.advise(redact(t), fails)
+    except (RuntimeError, ValueError) as e:
+        print(f"\n(advice skipped: {e})"); return
+    print()
+    for _k, text in advisor.lines(adv, 100): print(text)
 
 def script_of(cmd):
     """Path of the statusline.py a statusLine command runs, or None. Handles quoted paths with spaces."""

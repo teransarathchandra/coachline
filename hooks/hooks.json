@@ -8,6 +8,11 @@
             "type": "command",
             "command": "S=\"${CLAUDE_PLUGIN_ROOT}/scripts/setup.py\"; (python3 \"$S\" --refresh || python \"$S\" --refresh || py -3 \"$S\" --refresh) >/dev/null 2>&1 || true",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "S=\"${CLAUDE_PLUGIN_ROOT}/scripts/launch.py\"; (python3 \"$S\" --auto || python \"$S\" --auto || py -3 \"$S\" --auto) >/dev/null 2>&1 || true",
+            "timeout": 5
           }
         ]
       }

@@ -12,7 +12,8 @@ Pick an interpreter: `python3`, else `python`, else `py -3`. On Windows, `python
   3. Only if I say yes: run `<py> <scripts>/review.py --yes` (allow several minutes, ~20s per call; forward `--days N` / `--max N` if I asked). Show the report verbatim.
   4. Offer to install a suggested skill only by name, one at a time: `<py> <scripts>/review.py --install <slug>`. Never install without my saying which.
 - `/coach watch`: a keyboard-driven panel that must run in its own terminal pane, so you cannot run it inside this session. Tell me the exact command to paste in a second terminal or split pane: `<py> <scripts>/watch.py` (with the real resolved paths). One column per thread, this thread pinned on the left; left/right move between threads, up/down scroll, `q` quits. No animation, no LLM.
-- `/coach auto on` / `/coach auto off`: run `<py> <scripts>/setup.py --auto-rewrite on` (or `off`). This makes every prompt that fails a rule get sent, redacted, to Claude in the background so the statusline can show a rewritten AFTER. Before running `on`, tell me that in one sentence and wait for my yes. Never enable it on your own initiative.
+- `/coach advisor on` / `off`: run `<py> <scripts>/setup.py --advisor on` (or `off`). While on, every task-like prompt is sent, redacted, to Claude in the background, together with the names of installed skills and marketplace plugins, so the statusline and panel can suggest skills, plugins, prompt tips and a workflow. Before running `on`, tell me that in one sentence and wait for my yes. Never enable it on your own initiative.
+- `/coach auto-open on` / `off`: run `<py> <scripts>/setup.py --auto-open on` (or `off`). While on, starting a session opens the thread panel in a new pane or window. Ask me before turning it on, since it opens windows.
 - `/coach setup`: run `<py> <scripts>/setup.py` (add `--force` only if I say to replace an existing statusline).
 - `/coach doctor`: run `<py> <scripts>/coach.py --doctor`.
 
