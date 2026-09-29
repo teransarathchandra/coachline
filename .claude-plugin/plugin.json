@@ -1,6 +1,6 @@
 {
   "name": "coachline",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Prompt coach for Claude Code: a statusline score for your last prompt, plus a review of your own history for recurring prompt mistakes and repeated requests, run on your Claude subscription (no API key).",
   "author": {
     "name": "Teran Sarathchandra"
