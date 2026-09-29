@@ -179,9 +179,9 @@ def llm_off(proj):
     except OSError:
         return False
 
-def ask_claude(prompt, model="haiku", timeout=180):
-    """One-shot question to the user's own Claude subscription via `claude -p`. No API key, no tools,
-    no settings, no session saved. The prompt goes over stdin (no argv length limit, not visible in `ps`).
+def ask_claude(prompt, model="haiku", timeout=180, web=False):
+    """One-shot question to the user's own Claude subscription via `claude -p`. No API key, no settings, no session
+    saved, and no tools, except that web=True allows exactly two read-only ones: WebSearch and WebFetch. The prompt goes over stdin (no argv length limit, not visible in `ps`).
     COACHLINE_CLAUDE overrides the command (used by the tests). Returns text; raises RuntimeError on failure."""
     import shlex
     cmd = shlex.split(os.environ.get("COACHLINE_CLAUDE") or "claude") or ["claude"]  # use forward slashes in COACHLINE_CLAUDE
@@ -189,7 +189,8 @@ def ask_claude(prompt, model="haiku", timeout=180):
         raise RuntimeError("`claude` CLI not on PATH")
     try:
         r = subprocess.run(cmd + ["-p", "--model", model, "--no-session-persistence", "--disable-slash-commands",
-                                  "--tools", "", "--setting-sources", ""],
+                                  "--tools", "WebSearch,WebFetch" if web else "", "--setting-sources", ""]
+                                 + (["--allowedTools", "WebSearch,WebFetch"] if web else []),
                            input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
                            cwd=tempfile.gettempdir())
     except subprocess.TimeoutExpired:
@@ -198,21 +199,26 @@ def ask_claude(prompt, model="haiku", timeout=180):
         raise RuntimeError((r.stderr or r.stdout or "claude returned nothing").strip()[:300])
     return r.stdout.strip()
 
-def _rewrite_ask(text, fails, timeout=180):
-    ask = ("Rewrite this coding-agent prompt so it satisfies the failed checks, keeping the user's intent and facts. "
-           "Failed checks: " + ", ".join(fails or ["none"]) + ". Use a Goal / Don't touch / Done-when layout only if it helps. "
-           "Never invent facts: put [ASK: ...] where the user must supply one. "
-           "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text[:4000])
-    return ask_claude(ask, timeout=timeout)
+_ESC = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.")
 
-def rewrite(text, fails):
-    try:
-        return _rewrite_ask(text, fails)
-    except RuntimeError as e:
-        return f"(rewrite skipped: {e})"
+def clean(s, keep_newlines=False):
+    """Text from a model or the web goes to a terminal: strip escape sequences and control characters first."""
+    s = _ESC.sub("", str(s))
+    s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]" if keep_newlines else r"[\x00-\x1f\x7f-\x9f]", " ", s)
+    return s if keep_newlines else re.sub(r"\s+", " ", s).strip()
+
+def advisable(text, fails):
+    """Worth an LLM call: a rule fired, or it is long enough to be a real task (not 'continue' or 'yes')."""
+    return bool(fails) or len(body(text).split()) >= 6
 
 # --- auto-rewrite: opt-in, runs in a detached background process so the statusline never blocks ------
 CACHE = os.path.join(STATE, "last-rewrite.json")
+ALIVE = os.path.join(STATE, "watch.alive")  # watch.py touches this every second while it is open
+
+def panel_alive(max_age=6):
+    try: return time.time() - os.path.getmtime(ALIVE) < max_age
+    except OSError: return False
+
 REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished AFTER rewrites, keyed by prompt_key
 
 def setting(name, default=None):
@@ -255,16 +261,28 @@ def spawn_bg(key):
     subprocess.Popen([sys.executable, os.path.abspath(__file__), "--bg-rewrite"], stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
 
+def _save(key, res):
+    if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
+    if res["status"] == "done":  # keep every result so watch.py can show this and earlier threads' advice; later lines win
+        os.makedirs(STATE, exist_ok=True)
+        rec = {"key": key, "text": res["text"], "advice": res["advice"]}
+        if res.get("discovery"): rec["discovery"] = res["discovery"]
+        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
+
 def bg_rewrite(path):
     rows = load(path); i, fails = last_eval(rows)
-    if i is None or not fails or llm_off(rows[i][1]): return
+    if i is None or not advisable(rows[i][2], fails) or llm_off(rows[i][1]): return
     key = prompt_key(rows[i])
-    try: res = {"key": key, "status": "done", "text": _rewrite_ask(redact(rows[i][2]), fails, timeout=90)}
-    except RuntimeError as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
-    if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
-    if res["status"] == "done":  # keep every rewrite so watch.py can show this and earlier threads' AFTERs
-        os.makedirs(STATE, exist_ok=True)
-        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps({"key": key, "text": res["text"]}) + "\n")
+    import advisor
+    try:
+        adv = advisor.advise(redact(rows[i][2]), fails, timeout=90)
+        res = {"key": key, "status": "done", "advice": adv, "text": "AFTER: " + adv.get("after", "")}
+    except (RuntimeError, ValueError) as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
+    _save(key, res)
+    if res["status"] == "done" and setting("discover", False):
+        import discover
+        items = discover.for_advice(res["advice"])  # cached per topic for 24h; verified locally; never raises
+        if items: _save(key, {**res, "discovery": items})
 
 def _after_lines(text, width=96):
     import textwrap
@@ -277,14 +295,23 @@ def _after_lines(text, width=96):
     return out + (["WHY:   " + why[:width - 7] + ("…" if len(why) > width - 7 else "")] if why else [])
 
 def auto_after(rows, i, fails):
-    """Statusline lines for the AFTER block, or []. Starts the background rewrite once per flagged prompt."""
-    if not fails or not setting("auto_rewrite", False) or llm_off(rows[i][1]): return []
+    """Statusline lines for the advice block, or []. Starts the background advisor once per prompt."""
+    if not advisable(rows[i][2], fails) or not setting("auto_rewrite", False) or llm_off(rows[i][1]): return []
     key = prompt_key(rows[i]); c = read_cache(); age = time.time() - c.get("ts", 0)
     if c.get("key") != key:
-        spawn_bg(key); return ["AFTER: (writing a better version...)"]
-    if c.get("status") == "done": return _after_lines(c.get("text", ""))
-    if c.get("status") == "pending" and age < 150: return ["AFTER: (writing a better version...)"]
-    return ["AFTER: (unavailable: " + c.get("error", "timed out") + "; /coach retries)"]
+        spawn_bg(key); return ["advice: (working on it...)"]
+    if c.get("status") == "done":
+        import advisor
+        adv = c.get("advice")
+        if not adv: return _after_lines(c.get("text", ""))
+        lines = advisor.compact(adv)
+        if c.get("discovery"):
+            import discover
+            lines += discover.compact(c["discovery"])
+        if adv.get("after"): lines += [t for _k, t in advisor.lines({"after": adv["after"]}, 96)][:6]
+        return lines
+    if c.get("status") == "pending" and age < 150: return ["advice: (working on it...)"]
+    return ["advice: (unavailable: " + c.get("error", "timed out") + "; /coach retries)"]
 
 LEARNED = os.path.join(STATE, "learned.json")  # written by review.py from YOUR history; read locally, no LLM
 
@@ -319,8 +346,14 @@ def coach(path, llm=True):
     n = repeat_note(rows, i)
     if n: print(f"\nREPEAT: {n}. Draft skills are in {os.path.join(STATE, 'drafts')} (review, then move into your skills folder yourself).")
     if not llm: return
-    if llm_off(proj): print(f"\n(LLM rewrite skipped: project matches an entry in {OFF})"); return
-    print("\n" + rewrite(redact(t), fails))
+    if llm_off(proj): print(f"\n(LLM advice skipped: project matches an entry in {OFF})"); return
+    import advisor
+    try:
+        adv = advisor.advise(redact(t), fails)
+    except (RuntimeError, ValueError) as e:
+        print(f"\n(advice skipped: {e})"); return
+    print()
+    for _k, text in advisor.lines(adv, 100): print(text)
 
 def script_of(cmd):
     """Path of the statusline.py a statusLine command runs, or None. Handles quoted paths with spaces."""
