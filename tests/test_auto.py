@@ -41,7 +41,11 @@ class AutoSuggestions(unittest.TestCase):
         first = run(self.cfg, "statusline.py", FAKE_JSON=AFTER).stdout
         self.assertIn("writing a better version", first)
         self.wait_cache("done")
-        shown = run(self.cfg, "statusline.py", FAKE_JSON=AFTER).stdout
+        with open(os.path.join(self.state, "rewrites.jsonl"), encoding="utf-8") as f:  # watch.py reads this log
+            logged = [json.loads(l) for l in f]
+        self.assertEqual(len(logged), 1)
+        self.assertIn("Fix the parser", logged[0]["text"])
+        shown =run(self.cfg, "statusline.py", FAKE_JSON=AFTER).stdout
         self.assertIn("AFTER: Fix the parser and verify with the test suite.", shown)
         self.assertIn("WHY:", shown)
         run(self.cfg, "statusline.py", FAKE_JSON=AFTER)
