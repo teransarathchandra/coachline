@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "coachline",
+  "description": "Prompt coaching in your Claude Code statusline.",
+  "owner": { "name": "Teran Sarathchandra" },
+  "plugins": [
+    {
+      "name": "coachline",
+      "description": "Scores your last prompt, spots repeated requests, writes before/after on demand. Local-first, stdlib Python.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}
