@@ -213,6 +213,7 @@ def rewrite(text, fails):
 
 # --- auto-rewrite: opt-in, runs in a detached background process so the statusline never blocks ------
 CACHE = os.path.join(STATE, "last-rewrite.json")
+REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished AFTER rewrites, keyed by prompt_key
 
 def setting(name, default=None):
     try:
@@ -261,6 +262,9 @@ def bg_rewrite(path):
     try: res = {"key": key, "status": "done", "text": _rewrite_ask(redact(rows[i][2]), fails, timeout=90)}
     except RuntimeError as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
     if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
+    if res["status"] == "done":  # keep every rewrite so watch.py can show this and earlier threads' AFTERs
+        os.makedirs(STATE, exist_ok=True)
+        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps({"key": key, "text": res["text"]}) + "\n")
 
 def _after_lines(text, width=96):
     import textwrap
