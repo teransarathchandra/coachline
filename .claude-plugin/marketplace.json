@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "coachline",
-      "description": "Scores your last prompt, spots repeated requests, writes before/after on demand. Local-first, stdlib Python.",
+      "description": "Scores your last prompt, learns your recurring prompt mistakes and repeated requests from your own history via your Claude subscription (no API key), drafts skills. Stdlib Python.",
       "source": "./",
       "category": "productivity"
     }

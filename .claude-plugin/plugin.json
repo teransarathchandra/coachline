@@ -1,7 +1,9 @@
 {
   "name": "coachline",
-  "version": "0.2.0",
-  "description": "Statusline prompt coach for Claude Code: scores your last prompt against 5 rules, spots repeated requests, and writes a before/after on demand.",
-  "author": { "name": "Teran Sarathchandra" },
+  "version": "0.3.0",
+  "description": "Prompt coach for Claude Code: a statusline score for your last prompt, plus a review of your own history for recurring prompt mistakes and repeated requests, run on your Claude subscription (no API key).",
+  "author": {
+    "name": "Teran Sarathchandra"
+  },
   "license": "MIT"
 }
