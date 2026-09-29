@@ -13,3 +13,5 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "${{ matrix.python }}" }
       - run: python -W error::ResourceWarning -m unittest discover -s tests
+        env:
+          COACHLINE_TEST_REAL_CLIPBOARD: ${{ matrix.os == 'windows-latest' && '1' || '' }}

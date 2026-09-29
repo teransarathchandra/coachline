@@ -28,8 +28,15 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.cfg = self.tmp.name
         self.path = os.path.join(self.cfg, "history.jsonl")
         self._env = os.environ.get("CLAUDE_CONFIG_DIR"); os.environ["CLAUDE_CONFIG_DIR"] = self.cfg
+        # coach.py fixes its paths when it is imported. In-process tests must not read or write the real ~/.claude/coach.
+        self._paths = {n: getattr(coach, n) for n in ("CONFIG", "HIST", "STATE", "REWRITES", "OFF", "ALIVE", "USER_CFG", "CACHE", "LEARNED")}
+        st = os.path.join(self.cfg, "coach")
+        coach.CONFIG, coach.HIST, coach.STATE = self.cfg, self.path, st
+        coach.REWRITES, coach.OFF, coach.ALIVE = (os.path.join(st, n) for n in ("rewrites.jsonl", "llm-off.txt", "watch.alive"))
+        coach.USER_CFG, coach.CACHE, coach.LEARNED = (os.path.join(st, n) for n in ("config.json", "last-rewrite.json", "learned.json"))
 
     def tearDown(self):
+        for n, v in self._paths.items(): setattr(coach, n, v)
         self.tmp.cleanup()
         if self._env is None: os.environ.pop("CLAUDE_CONFIG_DIR", None)
         else: os.environ["CLAUDE_CONFIG_DIR"] = self._env

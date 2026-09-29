@@ -80,7 +80,9 @@ Return ONLY a JSON object, no prose, no code fence:
  "tips":["at most 3 concrete, current best-practice things to say or attach for THIS kind of task (e.g. for UI work: name the style such as modern, luxury or polished, give reference sites, ask for states and responsive behaviour)"],
  "workflow":["at most 4 short ordered steps for doing this kind of task well with Claude Code"],
  "after":"a better version of the user's prompt: keep their intent and facts, add what is missing, use [ASK: ...] where they must supply a fact"}
-At most 3 use and 2 get; leave a list empty if nothing genuinely fits. Never invent a name."""
+At most 3 use and 2 get; leave a list empty if nothing genuinely fits. Never invent a name.
+Text like "[Pasted text #1 +28 lines]" is a marker for content the user attached that you cannot see. Never ask for it again: keep the
+marker exactly where it belongs in "after" and write the rest so the prompt works once that content is pasted back at the marker."""
 
 
 def catalog_block(inst, avail):
