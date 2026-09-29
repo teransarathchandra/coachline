@@ -115,10 +115,12 @@ def clusters(hits, days=14, need=3):
     out = {}
     for cat, xs in hits.items():
         xs.sort()
-        best = max(((sum(1 for y in xs if 0 <= y[0] - x[0] <= days * 86400), x[0]) for x in xs), default=(0, 0))
+        j = 0; best = (0, 0, 0)  # (count, first index, last index) of the densest window
+        for i in range(len(xs)):  # two pointers: O(n), the old scan was O(n^2) and took 13s on 30k prompts
+            while xs[i][0] - xs[j][0] > days * 86400: j += 1
+            if i - j + 1 > best[0]: best = (i - j + 1, j, i)
         if best[0] >= need:
-            win = [y for y in xs if 0 <= y[0] - best[1] <= days * 86400]
-            out[cat] = (len(xs), best[0], dt.date.fromtimestamp(best[1]).isoformat(), win[-1][1])
+            out[cat] = (len(xs), best[0], dt.date.fromtimestamp(xs[best[1]][0]).isoformat(), xs[best[2]][1])
     return out
 
 def draft(cat, n, example):
@@ -162,11 +164,12 @@ def verdict(text, fails):
     return f"{5 - len(fails)}/5" if fails or len(body(text).split()) > 25 else "short"
 
 def repeat_note(rows, i):
-    """If prompt i belongs to a category at threshold, return a one-line note."""
-    hits = analyse(rows)[4]
-    for cat, (_t, win, start, _ex) in clusters(hits).items():
-        if any(x[0] == rows[i][0] for x in hits[cat]):
-            return f"'{cat}' asked {win}x in 14d (from {start})"
+    """If prompt i is a category you asked 3+ times in the 14 days up to it, return a one-line note."""
+    ts = rows[i][0]
+    recent = [r for r in rows[max(0, i - 5000):i + 1] if ts - r[0] <= 14 * 86400]
+    for cat, xs in analyse(recent)[4].items():
+        if len(xs) >= 3 and any(x[0] == ts for x in xs):
+            return f"'{cat}' asked {len(xs)}x in the last 14 days"
     return None
 
 def llm_off(proj):
@@ -182,7 +185,7 @@ def rewrite(text, fails):
     ask = ("Rewrite this coding-agent prompt so it satisfies the failed checks, keeping the user's intent and facts. "
            "Failed checks: " + ", ".join(fails or ["none"]) + ". Use a Goal / Don't touch / Done-when layout only if it helps. "
            "Never invent facts: put [ASK: ...] where the user must supply one. "
-           "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text)
+           "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text[:4000])  # keep the argv under Windows' 32k limit
     try:
         r = subprocess.run(["claude", "-p", "--model", "haiku", "--no-session-persistence", "--disable-slash-commands",
                             "--tools", "", "--setting-sources", "", ask],
@@ -204,6 +207,13 @@ def coach(path, llm=True):
     if llm_off(proj): print(f"\n(LLM rewrite skipped: project matches an entry in {OFF})"); return
     print("\n" + rewrite(redact(t), fails))
 
+def script_of(cmd):
+    """Path of the statusline.py a statusLine command runs, or None. Handles quoted paths with spaces."""
+    import shlex
+    try: parts = shlex.split(cmd)
+    except ValueError: parts = cmd.split()
+    return next((p for p in parts if p.lower().endswith("statusline.py")), None)
+
 def doctor(path):
     ok = True
     def line(good, msg):
@@ -219,8 +229,8 @@ def doctor(path):
         sl = {}
     cmd = sl.get("command", "")
     print(("ok   " if "statusline.py" in cmd else "warn ") + f"statusLine: {cmd or 'not set (run scripts/setup.py)'}")
-    m = re.search(r'"?([^"\s]+statusline\.py)', cmd)
-    if m: line(os.path.isfile(m.group(1)), f"statusline script exists: {m.group(1)} (re-run setup.py after a plugin update if not)")
+    script = script_of(cmd)
+    if script: line(os.path.isfile(script), f"statusline script exists: {script} (run setup.py again if not)")
     sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
