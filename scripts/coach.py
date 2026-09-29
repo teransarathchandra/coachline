@@ -207,6 +207,52 @@ def clean(s, keep_newlines=False):
     s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]" if keep_newlines else r"[\x00-\x1f\x7f-\x9f]", " ", s)
     return s if keep_newlines else re.sub(r"\s+", " ", s).strip()
 
+def _win_clip(text):
+    """Windows: put text on the clipboard through the Win32 API. Exact, no byte-order mark, no subprocess."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        k, u = ctypes.windll.kernel32, ctypes.windll.user32
+        k.GlobalAlloc.restype = wintypes.HGLOBAL; k.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+        k.GlobalLock.restype = ctypes.c_void_p; k.GlobalLock.argtypes = [wintypes.HGLOBAL]; k.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        u.OpenClipboard.argtypes = [wintypes.HWND]; u.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+        data = (text.replace("\r\n", "\n").replace("\n", "\r\n") + "\0").encode("utf-16-le")   # CF_UNICODETEXT wants CRLF and a NUL
+        h = k.GlobalAlloc(0x0002, len(data)); ptr = k.GlobalLock(h)
+        if not h or not ptr: return False
+        ctypes.memmove(ptr, data, len(data)); k.GlobalUnlock(h)
+        for _ in range(20):
+            if u.OpenClipboard(None): break
+            time.sleep(0.05)
+        else:
+            return False
+        try:
+            u.EmptyClipboard()
+            return bool(u.SetClipboardData(13, h))    # on success the system owns the memory
+        finally:
+            u.CloseClipboard()
+    except (OSError, AttributeError, ValueError):
+        return False
+
+def copy_text(text):
+    """Put text on the system clipboard exactly as given. Returns the method used, or None. Stdlib only.
+    COACHLINE_CLIPBOARD (a command reading stdin) overrides everything; the tests use it so they never touch a real clipboard."""
+    import base64, shlex
+    def run(argv, data):
+        try: return subprocess.run(argv, input=data, capture_output=True, timeout=10).returncode == 0
+        except (OSError, subprocess.TimeoutExpired): return False
+    if os.environ.get("COACHLINE_CLIPBOARD"):
+        return "override" if run(shlex.split(os.environ["COACHLINE_CLIPBOARD"]), text.encode("utf-8")) else None
+    if os.name == "nt" and _win_clip(text): return "the Windows clipboard"
+    # clip.exe (WSL via interop, or a failed API call): UTF-16LE with NO byte-order mark; a BOM is copied as a stray U+FEFF character
+    if shutil.which("clip.exe") and run(["clip.exe"], text.encode("utf-16-le")): return "clip.exe"
+    if sys.platform == "darwin" and shutil.which("pbcopy") and run(["pbcopy"], text.encode("utf-8")): return "pbcopy"
+    for argv in (["wl-copy"], ["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"]):
+        if shutil.which(argv[0]) and run(argv, text.encode("utf-8")): return argv[0]
+    if sys.stdout.isatty():  # OSC 52: Windows Terminal, iTerm2, kitty and tmux (with set-clipboard) copy on this sequence
+        sys.stdout.write("\033]52;c;" + base64.b64encode(text.encode("utf-8")).decode() + "\a"); sys.stdout.flush()
+        return "terminal (OSC 52)"
+    return None
+
 def advisable(text, fails):
     """Worth an LLM call: a rule fired, or it is long enough to be a real task (not 'continue' or 'yes')."""
     return bool(fails) or len(body(text).split()) >= 6
@@ -263,15 +309,30 @@ def spawn_bg(key):
 
 def _save(key, res):
     if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
-    if res["status"] == "done":  # keep every result so watch.py can show this and earlier threads' advice; later lines win
-        os.makedirs(STATE, exist_ok=True)
+    os.makedirs(STATE, exist_ok=True)  # keep every result so watch.py can show this and earlier threads' advice; later lines win
+    if res["status"] == "done":
         rec = {"key": key, "text": res["text"], "advice": res["advice"]}
         if res.get("discovery"): rec["discovery"] = res["discovery"]
-        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
+    else:
+        rec = {"key": key, "error": res.get("error", "failed")}
+    with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
 
-def bg_rewrite(path):
-    rows = load(path); i, fails = last_eval(rows)
-    if i is None or not advisable(rows[i][2], fails) or llm_off(rows[i][1]): return
+def spawn_key(key):
+    """Enhance one specific prompt in a detached process (no statusline cache involved)."""
+    kw = {"creationflags": 0x00000008 | 0x00000200 | 0x08000000} if os.name == "nt" else {"start_new_session": True}
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "--bg-rewrite", "--key", key], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
+
+def bg_rewrite(path, only_key=None):
+    rows = load(path)
+    if only_key:  # asked for by name (the panel's `e`): any prompt, not just the last one
+        i = next((n for n, r in enumerate(rows) if prompt_key(r) == only_key), None)
+        if i is None: return
+        fails = [n for n, fn in RULES if not fn(rows[i][2], rows[i][0] - rows[i - 1][0] if i else None)]
+    else:
+        i, fails = last_eval(rows)
+        if i is None or not advisable(rows[i][2], fails): return
+    if llm_off(rows[i][1]): return
     key = prompt_key(rows[i])
     import advisor
     try:
@@ -336,7 +397,7 @@ def habit_note(text):
             return f"repeat request: {r['name']} (asked {r.get('count', '?')}x; /coach review can draft a skill)"
     return None
 
-def coach(path, llm=True):
+def coach(path, llm=True, copy=False):
     rows = load(path); i, fails = last_eval(rows)
     if i is None: print("No scorable prompt found. Run `--doctor` to check your history file."); return
     _ts, proj, t = rows[i]
@@ -353,7 +414,13 @@ def coach(path, llm=True):
     except (RuntimeError, ValueError) as e:
         print(f"\n(advice skipped: {e})"); return
     print()
-    for _k, text in advisor.lines(adv, 100): print(text)
+    for k, text in advisor.lines(adv, 100):
+        if k != "after": print(text)                      # the enhanced prompt is printed once, below, as plain text
+    if adv.get("after"):
+        print("\n----- ENHANCED PROMPT (plain text; [ASK: ...] and <email>-style placeholders are for you to fill in) -----")
+        print(adv["after"]); print("-" * 60)
+        if copy:
+            m = copy_text(adv["after"]); print(f"(copied to your clipboard via {m})" if m else "(no clipboard available here: select the text above)")
 
 def script_of(cmd):
     """Path of the statusline.py a statusLine command runs, or None. Handles quoted paths with spaces."""
@@ -388,10 +455,11 @@ if __name__ == "__main__":
     ap.add_argument("--coach", action="store_true"); ap.add_argument("--no-llm", action="store_true")
     ap.add_argument("--doctor", action="store_true"); ap.add_argument("--show", action="store_true", help="list rejection-rule hits")
     ap.add_argument("--bg-rewrite", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--key", help=argparse.SUPPRESS); ap.add_argument("--copy", action="store_true", help="with --coach: copy the enhanced prompt to the clipboard")
     a = ap.parse_args()
-    if a.bg_rewrite: bg_rewrite(a.history)
+    if a.bg_rewrite: bg_rewrite(a.history, a.key)
     elif a.doctor: doctor(a.history)
-    elif a.coach: coach(a.history, llm=not a.no_llm)
+    elif a.coach: coach(a.history, llm=not a.no_llm, copy=a.copy)
     else:
         report(a.history)
         if a.show:
