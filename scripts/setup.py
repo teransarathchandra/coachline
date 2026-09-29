@@ -43,7 +43,13 @@ def write(s):
     os.makedirs(CONFIG, exist_ok=True)
     with open(SETTINGS, "w", encoding="utf-8") as f: json.dump(s, f, indent=2)
 
+KNOWN = {"--force", "--uninstall", "--refresh", "--advisor", "--auto-rewrite", "--auto-open", "--discover"}
+
+
 def main(argv):
+    if "-h" in argv or "--help" in argv: print(__doc__); return
+    bad = [a for a in argv if a.startswith("-") and a not in KNOWN]
+    if bad: sys.exit(f"unknown option {bad[0]}; nothing was changed (see --help)")
     try:
         with open(SETTINGS, encoding="utf-8") as f: s = json.load(f)
     except FileNotFoundError:
