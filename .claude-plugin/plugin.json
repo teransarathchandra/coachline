@@ -1,6 +1,6 @@
 {
   "name": "coachline",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Prompt coach for Claude Code: statusline score and fixes, a thread panel that can open itself, and an advisor that suggests installed skills, marketplace plugins and web-verified better tools for your current task, on your Claude subscription (no API key).",
   "author": {
     "name": "Teran Sarathchandra"
