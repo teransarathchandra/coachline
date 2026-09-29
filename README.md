@@ -11,7 +11,7 @@ repeat: 'commit/PR/ticket text' asked 9x in 14d (from 2026-09-03)
 
 ## What it does
 
-- **Statusline** (after each reply): the score of your last prompt, the failed rules, and a repeat note when you have asked for the same kind of thing 3+ times in 14 days. Scoring is local; no network.
+- **Statusline** (after each reply): the score of your last prompt, the failed rules, and a repeat note when you have asked for the same kind of thing 3+ times in the last 14 days. Scoring is local; no network.
 - **`/coach`**: BEFORE with the failed rules and a fix for each, then AFTER: a rewrite from Haiku via `claude -p`. Runs only when you ask.
 - **Repeat to skill**: when a request category crosses the threshold, a draft `SKILL.md` is written to `~/.claude/coach/drafts/`. Nothing is installed for you.
 - **`/coach doctor`**: checks history parsing, interpreter, `claude` CLI and the statusline path.
@@ -26,7 +26,7 @@ The five rules: **done-when** (long prompt with no completion criterion), **dont
 /coach setup
 ```
 
-`/coach setup` writes a `statusLine` entry into `~/.claude/settings.json` (backup: `settings.json.coach-bak`). It will not replace a statusline you already have unless you pass `--force`. Re-run it after a plugin update, because the plugin folder path can change. Undo with `python scripts/setup.py --uninstall`.
+`/coach setup` writes a `statusLine` entry into `~/.claude/settings.json` (backup: `settings.json.coach-bak`). It will not replace a statusline you already have unless you pass `--force`. After a plugin update a SessionStart hook re-points the entry at the new version (only if the entry is ours; it never touches another statusline or creates one). Undo with `python scripts/setup.py --uninstall`.
 
 Requires Python 3.9+. On macOS `python3` is the command; on Windows use `python` or `py -3`. `setup.py` records the exact interpreter that ran it, so the statusline does not depend on your PATH.
 
