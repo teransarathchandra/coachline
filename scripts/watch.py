@@ -17,6 +17,7 @@ import argparse, datetime as dt, json, os, shutil, sys, textwrap, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import advisor
 import coach
+import discover
 
 MAX_THREADS, MIN_CW, MAX_CW = 40, 30, 48
 POSIX_KEYS = {"[A": "up", "[B": "down", "[C": "right", "[D": "left", "[5~": "pgup", "[6~": "pgdn", "[H": "home", "[F": "end",
@@ -70,6 +71,7 @@ def build(path):
         if not fails and key not in aft: continue    # nothing to say about this prompt
         rec = aft.get(key) or {}
         extra = advisor.lines(rec["advice"], 200) if rec.get("advice") else [("after", l) for l in coach._after_lines(rec["text"], 200)] if rec.get("text") else []
+        if rec.get("discovery"): extra += discover.lines(rec["discovery"], 200)
         per.setdefault(sid, []).append({"ts": ts, "score": 5 - len(fails), "text": coach.redact(text).replace("\n", " ")[:400],
                                         "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "extra": extra})
     def thread(sid, current):
@@ -107,7 +109,7 @@ def new_ui():
 
 
 CODE = {"head5": "32", "head4": "32", "head3": "33", "head2": "31", "head1": "31", "head0": "31", "text": "0", "dim": "2", "after": "36", "blank": "0",
-        "task": "1;35", "use": "32", "get": "34", "tip": "33", "flow": "2;37", "why": "2"}
+        "task": "1;35", "use": "32", "get": "34", "tip": "33", "flow": "2;37", "why": "2", "better": "1;36", "src": "2;36"}
 
 
 def render(st, ui, W, H, color=True):

@@ -179,9 +179,9 @@ def llm_off(proj):
     except OSError:
         return False
 
-def ask_claude(prompt, model="haiku", timeout=180):
-    """One-shot question to the user's own Claude subscription via `claude -p`. No API key, no tools,
-    no settings, no session saved. The prompt goes over stdin (no argv length limit, not visible in `ps`).
+def ask_claude(prompt, model="haiku", timeout=180, web=False):
+    """One-shot question to the user's own Claude subscription via `claude -p`. No API key, no settings, no session
+    saved, and no tools, except that web=True allows exactly two read-only ones: WebSearch and WebFetch. The prompt goes over stdin (no argv length limit, not visible in `ps`).
     COACHLINE_CLAUDE overrides the command (used by the tests). Returns text; raises RuntimeError on failure."""
     import shlex
     cmd = shlex.split(os.environ.get("COACHLINE_CLAUDE") or "claude") or ["claude"]  # use forward slashes in COACHLINE_CLAUDE
@@ -189,7 +189,8 @@ def ask_claude(prompt, model="haiku", timeout=180):
         raise RuntimeError("`claude` CLI not on PATH")
     try:
         r = subprocess.run(cmd + ["-p", "--model", model, "--no-session-persistence", "--disable-slash-commands",
-                                  "--tools", "", "--setting-sources", ""],
+                                  "--tools", "WebSearch,WebFetch" if web else "", "--setting-sources", ""]
+                                 + (["--allowedTools", "WebSearch,WebFetch"] if web else []),
                            input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
                            cwd=tempfile.gettempdir())
     except subprocess.TimeoutExpired:
@@ -197,6 +198,14 @@ def ask_claude(prompt, model="haiku", timeout=180):
     if r.returncode != 0 or not r.stdout.strip():
         raise RuntimeError((r.stderr or r.stdout or "claude returned nothing").strip()[:300])
     return r.stdout.strip()
+
+_ESC = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.")
+
+def clean(s, keep_newlines=False):
+    """Text from a model or the web goes to a terminal: strip escape sequences and control characters first."""
+    s = _ESC.sub("", str(s))
+    s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]" if keep_newlines else r"[\x00-\x1f\x7f-\x9f]", " ", s)
+    return s if keep_newlines else re.sub(r"\s+", " ", s).strip()
 
 def advisable(text, fails):
     """Worth an LLM call: a rule fired, or it is long enough to be a real task (not 'continue' or 'yes')."""
@@ -252,6 +261,14 @@ def spawn_bg(key):
     subprocess.Popen([sys.executable, os.path.abspath(__file__), "--bg-rewrite"], stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
 
+def _save(key, res):
+    if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
+    if res["status"] == "done":  # keep every result so watch.py can show this and earlier threads' advice; later lines win
+        os.makedirs(STATE, exist_ok=True)
+        rec = {"key": key, "text": res["text"], "advice": res["advice"]}
+        if res.get("discovery"): rec["discovery"] = res["discovery"]
+        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
+
 def bg_rewrite(path):
     rows = load(path); i, fails = last_eval(rows)
     if i is None or not advisable(rows[i][2], fails) or llm_off(rows[i][1]): return
@@ -261,10 +278,11 @@ def bg_rewrite(path):
         adv = advisor.advise(redact(rows[i][2]), fails, timeout=90)
         res = {"key": key, "status": "done", "advice": adv, "text": "AFTER: " + adv.get("after", "")}
     except (RuntimeError, ValueError) as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
-    if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
-    if res["status"] == "done":  # keep every rewrite so watch.py can show this and earlier threads' AFTERs
-        os.makedirs(STATE, exist_ok=True)
-        with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps({"key": key, "text": res["text"], "advice": res["advice"]}) + "\n")
+    _save(key, res)
+    if res["status"] == "done" and setting("discover", False):
+        import discover
+        items = discover.for_advice(res["advice"])  # cached per topic for 24h; verified locally; never raises
+        if items: _save(key, {**res, "discovery": items})
 
 def _after_lines(text, width=96):
     import textwrap
@@ -287,6 +305,9 @@ def auto_after(rows, i, fails):
         adv = c.get("advice")
         if not adv: return _after_lines(c.get("text", ""))
         lines = advisor.compact(adv)
+        if c.get("discovery"):
+            import discover
+            lines += discover.compact(c["discovery"])
         if adv.get("after"): lines += [t for _k, t in advisor.lines({"after": adv["after"]}, 96)][:6]
         return lines
     if c.get("status") == "pending" and age < 150: return ["advice: (working on it...)"]
