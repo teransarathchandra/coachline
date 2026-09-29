@@ -29,6 +29,12 @@ def ours(sl):
     script = coach.script_of(sl.get("command", "")) if isinstance(sl, dict) else None
     return bool(script) and (os.path.isfile(os.path.join(os.path.dirname(script), "coach.py")) or "coachline" in script.lower())
 
+def entry(cur):
+    """A fresh statusLine entry that keeps the user's refreshInterval (set by --auto-rewrite on)."""
+    e = {"type": "command", "command": command()}
+    if isinstance(cur, dict) and "refreshInterval" in cur: e["refreshInterval"] = cur["refreshInterval"]
+    return e
+
 def write(s):
     if os.path.exists(SETTINGS): shutil.copyfile(SETTINGS, SETTINGS + ".coach-bak")
     os.makedirs(CONFIG, exist_ok=True)
@@ -43,9 +49,21 @@ def main(argv):
         if "--refresh" in argv: return  # never fail a session start over this
         sys.exit(f"{SETTINGS} is not valid JSON; fix it first (nothing was changed)")
     cur = s.get("statusLine")
+    if "--auto-rewrite" in argv:
+        k = argv.index("--auto-rewrite"); v = argv[k + 1] if k + 1 < len(argv) else ""
+        if v not in ("on", "off"): sys.exit("usage: setup.py --auto-rewrite on|off")
+        coach.set_setting("auto_rewrite", v == "on")
+        if ours(cur):  # refresh on a timer so a finished rewrite appears without waiting for the next message
+            if v == "on": cur["refreshInterval"] = 10
+            else: cur.pop("refreshInterval", None)
+            write(s)
+        print("Auto-rewrite ON: each prompt that fails a rule is redacted and sent, in the background, to `claude -p` "
+              "(Haiku, your subscription). Projects in llm-off.txt are never sent. Turn off: setup.py --auto-rewrite off"
+              if v == "on" else "Auto-rewrite OFF.")
+        return
     if "--refresh" in argv:
         if ours(cur) and coach.script_of(cur["command"]) != SCRIPT.replace("\\", "/"):
-            s["statusLine"] = {"type": "command", "command": command()}; write(s)
+            s["statusLine"] = entry(cur); write(s)
         return
     if "--uninstall" in argv:
         if not ours(cur): print("no coachline statusLine set; nothing to do"); return
@@ -53,7 +71,7 @@ def main(argv):
     else:
         if cur and not ours(cur) and "--force" not in argv:
             sys.exit(f"a different statusLine is already set:\n  {cur}\nRe-run with --force to replace it.")
-        s["statusLine"] = {"type": "command", "command": command()}
+        s["statusLine"] = entry(cur)
     write(s)
     print("removed coachline statusLine" if "--uninstall" in argv else f"statusLine set: {s['statusLine']['command']}")
 
