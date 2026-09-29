@@ -5,7 +5,7 @@ Stdlib only. Reads <config>/history.jsonl (read-only). Writes only under <config
   python coach.py --coach      before/after for your last prompt (Haiku rewrite via `claude -p`)
   python coach.py --doctor     check that everything this tool depends on works
 """
-import argparse, collections, datetime as dt, json, os, re, shutil, subprocess, sys, tempfile
+import argparse, collections, datetime as dt, json, os, re, shutil, subprocess, sys, tempfile, time
 
 CONFIG = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
 HIST = os.path.join(CONFIG, "history.jsonl")
@@ -198,15 +198,89 @@ def ask_claude(prompt, model="haiku", timeout=180):
         raise RuntimeError((r.stderr or r.stdout or "claude returned nothing").strip()[:300])
     return r.stdout.strip()
 
-def rewrite(text, fails):
+def _rewrite_ask(text, fails, timeout=180):
     ask = ("Rewrite this coding-agent prompt so it satisfies the failed checks, keeping the user's intent and facts. "
            "Failed checks: " + ", ".join(fails or ["none"]) + ". Use a Goal / Don't touch / Done-when layout only if it helps. "
            "Never invent facts: put [ASK: ...] where the user must supply one. "
            "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text[:4000])
+    return ask_claude(ask, timeout=timeout)
+
+def rewrite(text, fails):
     try:
-        return ask_claude(ask)
+        return _rewrite_ask(text, fails)
     except RuntimeError as e:
         return f"(rewrite skipped: {e})"
+
+# --- auto-rewrite: opt-in, runs in a detached background process so the statusline never blocks ------
+CACHE = os.path.join(STATE, "last-rewrite.json")
+
+def setting(name, default=None):
+    try:
+        with open(USER_CFG, encoding="utf-8") as f: return json.load(f).get(name, default)
+    except (OSError, ValueError, AttributeError):
+        return default
+
+def set_setting(name, value):
+    try:
+        with open(USER_CFG, encoding="utf-8") as f: d = json.load(f)
+        if not isinstance(d, dict): d = {}
+    except (OSError, ValueError):
+        d = {}
+    d[name] = value
+    os.makedirs(STATE, exist_ok=True)
+    with open(USER_CFG, "w", encoding="utf-8") as f: json.dump(d, f, indent=2)
+
+def read_cache():
+    try:
+        with open(CACHE, encoding="utf-8") as f: d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+def write_cache(d):
+    os.makedirs(STATE, exist_ok=True)
+    tmp = CACHE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f)
+    os.replace(tmp, CACHE)
+
+def prompt_key(row):
+    import hashlib
+    return f"{row[0]}:{hashlib.sha1(row[2].encode('utf-8')).hexdigest()[:12]}"
+
+def spawn_bg(key):
+    """Mark the prompt pending (so the next tick does not spawn again), then start a detached rewrite."""
+    write_cache({"key": key, "status": "pending", "ts": time.time()})
+    kw = {"creationflags": 0x00000008 | 0x00000200 | 0x08000000} if os.name == "nt" else {"start_new_session": True}
+    subprocess.Popen([sys.executable, os.path.abspath(__file__), "--bg-rewrite"], stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
+
+def bg_rewrite(path):
+    rows = load(path); i, fails = last_eval(rows)
+    if i is None or not fails or llm_off(rows[i][1]): return
+    key = prompt_key(rows[i])
+    try: res = {"key": key, "status": "done", "text": _rewrite_ask(redact(rows[i][2]), fails, timeout=90)}
+    except RuntimeError as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
+    if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
+
+def _after_lines(text, width=96):
+    import textwrap
+    m = re.search(r"AFTER:\s*(.*?)(?:\n\s*WHY:\s*(.*))?$", text, re.S)
+    after, why = (m.group(1), m.group(2) or "") if m else (text, "")
+    wrapped = [w for ln in after.splitlines() if ln.strip() for w in textwrap.wrap(ln.strip(), width - 7)] or [""]  # keep the model's line structure
+    out = ["AFTER: " + wrapped[0]] + ["       " + w for w in wrapped[1:8]]
+    if len(wrapped) > 8: out[-1] = out[-1][:width - 1] + "…"
+    why = " ".join(why.split())
+    return out + (["WHY:   " + why[:width - 7] + ("…" if len(why) > width - 7 else "")] if why else [])
+
+def auto_after(rows, i, fails):
+    """Statusline lines for the AFTER block, or []. Starts the background rewrite once per flagged prompt."""
+    if not fails or not setting("auto_rewrite", False) or llm_off(rows[i][1]): return []
+    key = prompt_key(rows[i]); c = read_cache(); age = time.time() - c.get("ts", 0)
+    if c.get("key") != key:
+        spawn_bg(key); return ["AFTER: (writing a better version...)"]
+    if c.get("status") == "done": return _after_lines(c.get("text", ""))
+    if c.get("status") == "pending" and age < 150: return ["AFTER: (writing a better version...)"]
+    return ["AFTER: (unavailable: " + c.get("error", "timed out") + "; /coach retries)"]
 
 LEARNED = os.path.join(STATE, "learned.json")  # written by review.py from YOUR history; read locally, no LLM
 
@@ -260,6 +334,7 @@ def doctor(path):
     line(bool(rows), f"parsed {len(rows)} prompts (needs JSONL with 'display' and 'timestamp' fields)")
     line(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} at {sys.executable}")
     print(("ok   " if shutil.which("claude") else "warn ") + "claude CLI on PATH (needed only for the /coach rewrite)")
+    print(("ok   " if setting("auto_rewrite", False) else "off  ") + "auto-rewrite in the statusline (opt in: setup.py --auto-rewrite on)")
     try:
         sl = json.load(open(os.path.join(CONFIG, "settings.json"), encoding="utf-8")).get("statusLine", {})
     except (OSError, ValueError):
@@ -275,8 +350,10 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("--history", default=HIST)
     ap.add_argument("--coach", action="store_true"); ap.add_argument("--no-llm", action="store_true")
     ap.add_argument("--doctor", action="store_true"); ap.add_argument("--show", action="store_true", help="list rejection-rule hits")
+    ap.add_argument("--bg-rewrite", action="store_true", help=argparse.SUPPRESS)
     a = ap.parse_args()
-    if a.doctor: doctor(a.history)
+    if a.bg_rewrite: bg_rewrite(a.history)
+    elif a.doctor: doctor(a.history)
     elif a.coach: coach(a.history, llm=not a.no_llm)
     else:
         report(a.history)

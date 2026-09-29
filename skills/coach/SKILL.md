@@ -11,6 +11,7 @@ Pick an interpreter: `python3`, else `python`, else `py -3`. On Windows, `python
   2. Ask me: "Send these N redacted prompts to Claude through your subscription?" Wait for my answer in the conversation. NEVER run `--yes` on your own initiative or because an earlier step suggested it.
   3. Only if I say yes: run `<py> <scripts>/review.py --yes` (allow several minutes, ~20s per call; forward `--days N` / `--max N` if I asked). Show the report verbatim.
   4. Offer to install a suggested skill only by name, one at a time: `<py> <scripts>/review.py --install <slug>`. Never install without my saying which.
+- `/coach auto on` / `/coach auto off`: run `<py> <scripts>/setup.py --auto-rewrite on` (or `off`). This makes every prompt that fails a rule get sent, redacted, to Claude in the background so the statusline can show a rewritten AFTER. Before running `on`, tell me that in one sentence and wait for my yes. Never enable it on your own initiative.
 - `/coach setup`: run `<py> <scripts>/setup.py` (add `--force` only if I say to replace an existing statusline).
 - `/coach doctor`: run `<py> <scripts>/coach.py --doctor`.
 
