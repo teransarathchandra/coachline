@@ -3,6 +3,8 @@
   python setup.py              install (refuses to replace a statusline that is not ours)
   python setup.py --force      replace whatever statusline is set (old one is printed first)
   python setup.py --uninstall  remove our entry only
+  python setup.py --advisor on|off      task-aware suggestions in the statusline and panel (background Claude calls)
+  python setup.py --auto-open on|off    open the thread panel automatically when a session starts
   python setup.py --refresh    silent: if OUR entry points at another copy of this plugin
                                (e.g. an older version), re-point it here; otherwise do nothing.
                                The plugin's SessionStart hook runs this after updates.
@@ -49,17 +51,23 @@ def main(argv):
         if "--refresh" in argv: return  # never fail a session start over this
         sys.exit(f"{SETTINGS} is not valid JSON; fix it first (nothing was changed)")
     cur = s.get("statusLine")
-    if "--auto-rewrite" in argv:
-        k = argv.index("--auto-rewrite"); v = argv[k + 1] if k + 1 < len(argv) else ""
-        if v not in ("on", "off"): sys.exit("usage: setup.py --auto-rewrite on|off")
-        coach.set_setting("auto_rewrite", v == "on")
-        if ours(cur):  # refresh on a timer so a finished rewrite appears without waiting for the next message
+    flag = next((f for f in ("--auto-open", "--advisor", "--auto-rewrite") if f in argv), None)
+    if flag:
+        k = argv.index(flag); v = argv[k + 1] if k + 1 < len(argv) else ""
+        if v not in ("on", "off"): sys.exit(f"usage: setup.py {flag} on|off")
+        if flag == "--auto-open":
+            coach.set_setting("auto_open_watch", v == "on")
+            print("Auto-open ON: a session start opens the thread panel in a new pane/window (never a second one while one is open). "
+                  "Turn off: setup.py --auto-open off" if v == "on" else "Auto-open OFF.")
+            return
+        coach.set_setting("auto_rewrite", v == "on")  # --auto-rewrite is the old name of --advisor
+        if ours(cur):  # refresh on a timer so a finished answer appears without waiting for the next message
             if v == "on": cur["refreshInterval"] = 10
             else: cur.pop("refreshInterval", None)
             write(s)
-        print("Auto-rewrite ON: each prompt that fails a rule is redacted and sent, in the background, to `claude -p` "
-              "(Haiku, your subscription). Projects in llm-off.txt are never sent. Turn off: setup.py --auto-rewrite off"
-              if v == "on" else "Auto-rewrite OFF.")
+        print("Advisor ON: each prompt that looks like a task is redacted and sent, in the background, to `claude -p` (Haiku, your "
+              "subscription) together with names of your installed skills and available plugins. Projects in llm-off.txt are never sent. "
+              "Turn off: setup.py --advisor off" if v == "on" else "Advisor OFF.")
         return
     if "--refresh" in argv:
         if ours(cur) and coach.script_of(cur["command"]) != SCRIPT.replace("\\", "/"):

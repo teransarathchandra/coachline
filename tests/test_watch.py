@@ -72,6 +72,23 @@ class Layout(Base):
         self.assertIn("Goal: make checkout faster.", out)
         self.assertIn("Done when: p95 under 300ms.", out)
 
+    def test_advice_shows_for_a_prompt_that_passed_every_rule(self):
+        clean = "rename the variable total to grandTotal in cart.js and run the unit tests until they pass"
+        history(self.cfg, [("now", "p", clean)])
+        os.makedirs(os.path.join(self.cfg, "coach"))
+        key = coach.prompt_key((float(T0) / 1000, "p", clean))
+        advice = {"task": "refactoring", "summary": "renaming a variable", "use": [{"name": "simplify", "why": "clean up after the rename"}],
+                  "get": [{"name": "shiny@mk", "why": "codemods"}], "tips": ["Ask for a search of every usage first."],
+                  "workflow": ["Search", "Rename", "Test"], "after": "Rename total to grandTotal everywhere and run the tests."}
+        with open(os.path.join(self.cfg, "coach", "rewrites.jsonl"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"key": key, "text": "AFTER: x", "advice": advice}) + "\n")
+        out = once(self.cfg, 150, 40)
+        self.assertIn("[5/5]", out)                                  # no rule fired, yet the prompt is listed because it has advice
+        flat = " ".join(out.replace("│", "").split())
+        for want in ("task: refactoring", "use: /simplify", "get: /plugin install shiny@mk", "tip: Ask for a search of every usage first.",
+                     "flow: 1) Search 2) Rename 3) Test", "AFTER: Rename total to grandTotal everywhere"):
+            self.assertIn(want, flat)
+
     def test_clean_and_empty_history_do_not_crash(self):
         history(self.cfg, [("now", "p", "rename the variable total to grandTotal in cart.js and run the unit tests until they pass")])
         self.assertIn("nothing flagged yet", once(self.cfg))

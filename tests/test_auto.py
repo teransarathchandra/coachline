@@ -3,7 +3,8 @@ import json, os, tempfile, time, unittest
 from test_review import run, write_history, read
 
 FLAGGED = "please handle this carefully and make it work for every customer in the system"
-AFTER = "AFTER: Fix the parser and verify with the test suite.\n\nWHY: adds a done-when so success is checkable."
+AFTER = json.dumps({"task": "frontend", "summary": "polishing a page", "use": [], "get": [], "tips": ["Name the style: modern and polished."],
+                    "workflow": ["Sketch it", "Build it"], "after": "Fix the parser and verify with the test suite."})
 
 
 class AutoSuggestions(unittest.TestCase):
@@ -39,7 +40,7 @@ class AutoSuggestions(unittest.TestCase):
         r = run(self.cfg, "setup.py", "--auto-rewrite", "on"); self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(json.loads(read(os.path.join(self.cfg, "settings.json")))["statusLine"]["refreshInterval"], 10)
         first = run(self.cfg, "statusline.py", FAKE_JSON=AFTER).stdout
-        self.assertIn("writing a better version", first)
+        self.assertIn("working on it", first)
         self.wait_cache("done")
         with open(os.path.join(self.state, "rewrites.jsonl"), encoding="utf-8") as f:  # watch.py reads this log
             logged = [json.loads(l) for l in f]
@@ -47,7 +48,8 @@ class AutoSuggestions(unittest.TestCase):
         self.assertIn("Fix the parser", logged[0]["text"])
         shown =run(self.cfg, "statusline.py", FAKE_JSON=AFTER).stdout
         self.assertIn("AFTER: Fix the parser and verify with the test suite.", shown)
-        self.assertIn("WHY:", shown)
+        self.assertIn("task: frontend", shown)
+        self.assertIn("tip: Name the style: modern and polished.", shown)
         run(self.cfg, "statusline.py", FAKE_JSON=AFTER)
         self.assertEqual(self.calls(), 1, "one Claude call per prompt, however many refreshes")
         run(self.cfg, "setup.py", "--auto-rewrite", "off")
@@ -69,7 +71,7 @@ class AutoSuggestions(unittest.TestCase):
         run(self.cfg, "statusline.py", FAKE_MODE="fail")
         self.wait_cache("failed")
         out = run(self.cfg, "statusline.py", FAKE_MODE="fail").stdout
-        self.assertIn("AFTER: (unavailable", out)
+        self.assertIn("advice: (unavailable", out)
         run(self.cfg, "statusline.py", FAKE_MODE="fail")
         self.assertEqual(self.calls(), 1)
 
