@@ -21,7 +21,7 @@ The five rules: **done-when** (long prompt with no completion criterion), **dont
 ## Install
 
 ```
-/plugin marketplace add <owner>/coachline
+/plugin marketplace add teransarathchandra/coachline
 /plugin install coachline@coachline
 /coach setup
 ```
