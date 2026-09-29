@@ -1,0 +1,2 @@
+# Store text as LF whatever tool or OS wrote it, so diffs show real changes only.
+* text=auto eol=lf
