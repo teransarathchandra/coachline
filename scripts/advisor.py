@@ -99,12 +99,12 @@ def _pick(raw, allowed, limit):
     out = []
     for x in raw if isinstance(raw, list) else []:
         if isinstance(x, dict) and x.get("name") in allowed and x["name"] not in [o["name"] for o in out]:
-            out.append({"name": x["name"], "why": re.sub(r"\s+", " ", str(x.get("why", "")))[:120]})
+            out.append({"name": x["name"], "why": coach.clean(x.get("why", ""))[:120]})
     return out[:limit]
 
 
 def _strs(raw, limit, width=160):
-    return [re.sub(r"\s+", " ", str(s)).strip()[:width] for s in (raw if isinstance(raw, list) else []) if str(s).strip()][:limit]
+    return [coach.clean(s)[:width] for s in (raw if isinstance(raw, list) else []) if coach.clean(s)][:limit]
 
 
 def validate(d, inst, avail):
@@ -113,9 +113,9 @@ def validate(d, inst, avail):
     use, get = _pick(d.get("use"), i_names, MAX_USE), _pick(d.get("get"), a_names, MAX_GET)
     dropped = sum(1 for x in (d.get("use") or []) + (d.get("get") or []) if isinstance(x, dict)) - len(use) - len(get)
     task = re.sub(r"[^a-z-]", "", str(d.get("task", "other")).lower())[:16] or "other"
-    return {"task": task, "summary": re.sub(r"\s+", " ", str(d.get("summary", "")))[:100], "use": use, "get": get,
+    return {"task": task, "summary": coach.clean(d.get("summary", ""))[:100], "use": use, "get": get,
             "tips": _strs(d.get("tips"), MAX_TIPS), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
-            "after": str(d.get("after", "")).strip()[:800], "dropped": max(dropped, 0)}
+            "after": coach.clean(d.get("after", ""), keep_newlines=True).strip()[:800], "dropped": max(dropped, 0)}
 
 
 def advise(text, fails, timeout=120, model="haiku"):

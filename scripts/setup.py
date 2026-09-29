@@ -4,6 +4,7 @@
   python setup.py --force      replace whatever statusline is set (old one is printed first)
   python setup.py --uninstall  remove our entry only
   python setup.py --advisor on|off      task-aware suggestions in the statusline and panel (background Claude calls)
+  python setup.py --discover on|off     web search for better tools per kind of task (inside the advisor; verified locally)
   python setup.py --auto-open on|off    open the thread panel automatically when a session starts
   python setup.py --refresh    silent: if OUR entry points at another copy of this plugin
                                (e.g. an older version), re-point it here; otherwise do nothing.
@@ -51,10 +52,17 @@ def main(argv):
         if "--refresh" in argv: return  # never fail a session start over this
         sys.exit(f"{SETTINGS} is not valid JSON; fix it first (nothing was changed)")
     cur = s.get("statusLine")
-    flag = next((f for f in ("--auto-open", "--advisor", "--auto-rewrite") if f in argv), None)
+    flag = next((f for f in ("--auto-open", "--advisor", "--auto-rewrite", "--discover") if f in argv), None)
     if flag:
         k = argv.index(flag); v = argv[k + 1] if k + 1 < len(argv) else ""
         if v not in ("on", "off"): sys.exit(f"usage: setup.py {flag} on|off")
+        if flag == "--discover":
+            coach.set_setting("discover", v == "on")
+            print("Discovery ON (it runs inside the advisor, so keep --advisor on): once per kind of task, Claude searches the web for "
+                  "better tools/skills/plugins and every suggestion is verified here before it is shown. Only a generic description of "
+                  "the kind of task is used in searches, never your prompt. Nothing is installed. Turn off: setup.py --discover off"
+                  if v == "on" else "Discovery OFF.")
+            return
         if flag == "--auto-open":
             coach.set_setting("auto_open_watch", v == "on")
             print("Auto-open ON: a session start opens the thread panel in a new pane/window (never a second one while one is open). "
