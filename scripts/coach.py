@@ -179,20 +179,57 @@ def llm_off(proj):
     except OSError:
         return False
 
+def ask_claude(prompt, model="haiku", timeout=180):
+    """One-shot question to the user's own Claude subscription via `claude -p`. No API key, no tools,
+    no settings, no session saved. The prompt goes over stdin (no argv length limit, not visible in `ps`).
+    COACHLINE_CLAUDE overrides the command (used by the tests). Returns text; raises RuntimeError on failure."""
+    import shlex
+    cmd = shlex.split(os.environ.get("COACHLINE_CLAUDE") or "claude") or ["claude"]  # use forward slashes in COACHLINE_CLAUDE
+    if not os.environ.get("COACHLINE_CLAUDE") and not shutil.which(cmd[0]):
+        raise RuntimeError("`claude` CLI not on PATH")
+    try:
+        r = subprocess.run(cmd + ["-p", "--model", model, "--no-session-persistence", "--disable-slash-commands",
+                                  "--tools", "", "--setting-sources", ""],
+                           input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
+                           cwd=tempfile.gettempdir())
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"claude timed out after {timeout}s")
+    if r.returncode != 0 or not r.stdout.strip():
+        raise RuntimeError((r.stderr or r.stdout or "claude returned nothing").strip()[:300])
+    return r.stdout.strip()
+
 def rewrite(text, fails):
-    if not shutil.which("claude"):
-        return "(rewrite skipped: `claude` CLI not on PATH)"
     ask = ("Rewrite this coding-agent prompt so it satisfies the failed checks, keeping the user's intent and facts. "
            "Failed checks: " + ", ".join(fails or ["none"]) + ". Use a Goal / Don't touch / Done-when layout only if it helps. "
            "Never invent facts: put [ASK: ...] where the user must supply one. "
-           "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text[:4000])  # keep the argv under Windows' 32k limit
+           "Output exactly: AFTER: <prompt> then WHY: <2 short lines>.\n\nPROMPT:\n" + text[:4000])
     try:
-        r = subprocess.run(["claude", "-p", "--model", "haiku", "--no-session-persistence", "--disable-slash-commands",
-                            "--tools", "", "--setting-sources", "", ask],
-                           capture_output=True, text=True, encoding="utf-8", timeout=90, cwd=tempfile.gettempdir())
-    except subprocess.TimeoutExpired:
-        return "(rewrite timed out after 90s)"
-    return (r.stdout or r.stderr).strip()
+        return ask_claude(ask)
+    except RuntimeError as e:
+        return f"(rewrite skipped: {e})"
+
+LEARNED = os.path.join(STATE, "learned.json")  # written by review.py from YOUR history; read locally, no LLM
+
+def has_kw(text, kw):
+    """Whole-word/phrase match on lowercased text, so 'diff' does not fire on 'different'."""
+    return re.search(r"(?<!\w)" + re.escape(kw) + r"(?!\w)", text) is not None
+
+def learned():
+    try:
+        with open(LEARNED, encoding="utf-8") as f: d = json.load(f)
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+def habit_note(text):
+    """One line if the prompt matches a mistake or repeated request that review.py learned from your history."""
+    low = text.lower(); d = learned()
+    for m in d.get("mistakes", []):
+        if any(has_kw(low, k) for k in m.get("keywords", [])): return f"habit: {m['name']} - {m.get('fix', '')}"[:160]
+    for r in d.get("requests", []):
+        if any(has_kw(low, k) for k in r.get("keywords", [])):
+            return f"repeat request: {r['name']} (asked {r.get('count', '?')}x; /coach review can draft a skill)"
+    return None
 
 def coach(path, llm=True):
     rows = load(path); i, fails = last_eval(rows)
