@@ -1,97 +1,189 @@
-import json, os, re, subprocess, sys, tempfile, unittest
+import json, os, subprocess, sys, tempfile, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
-import coach  # noqa: E402
+import coach, watch  # noqa: E402
 
 T0 = 1750000000000
-OLD_A = "still not working after the merge, try something else entirely please"
-OLD_B = "deploy it to the release environment and revert whatever breaks"
-CUR_BAD = "handle this carefully and make it good for all the customers we have"
-CUR_OK = "rename the variable total to grandTotal in cart.js and run the unit tests until they pass"
-EMAIL = "mail a.b@example.org the release notes and deploy them carefully to the site please"
+VAGUE = "handle this carefully and make it good for all the customers we have"
 
 
 def history(cfg, rows):
+    """rows: (session, project, text); 90 seconds apart."""
     with open(os.path.join(cfg, "history.jsonl"), "w", encoding="utf-8") as f:
-        for i, (sid, text) in enumerate(rows):
-            f.write(json.dumps({"display": text, "timestamp": str(T0 + i * 90000), "project": "p", "sessionId": sid}) + "\n")
+        for i, (sid, proj, text) in enumerate(rows):
+            f.write(json.dumps({"display": text, "timestamp": str(T0 + i * 90000), "project": proj, "sessionId": sid}) + "\n")
 
 
-def frames(cfg, n=3, w=100, h=30):
+def once(cfg, w=150, h=40):
     env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8"}
-    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--frames", str(n), "--width", str(w), "--height", str(h)],
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--once", "--width", str(w), "--height", str(h)],
                        capture_output=True, text=True, encoding="utf-8", env=env)
     assert r.returncode == 0, r.stderr
-    return [p for p in re.split(r"=== frame \d+ ===\n", r.stdout) if p.strip()]
+    return r.stdout
 
 
-class Watch(unittest.TestCase):
+class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.cfg = self.tmp.name
-        history(self.cfg, [("old-1", OLD_A), ("old-1", OLD_B), ("old-2", OLD_A + " again"),
-                           ("now", CUR_OK), ("now", CUR_BAD)])
+        self.path = os.path.join(self.cfg, "history.jsonl")
+        self._env = os.environ.get("CLAUDE_CONFIG_DIR"); os.environ["CLAUDE_CONFIG_DIR"] = self.cfg
 
-    def tearDown(self): self.tmp.cleanup()
+    def tearDown(self):
+        self.tmp.cleanup()
+        if self._env is None: os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        else: os.environ["CLAUDE_CONFIG_DIR"] = self._env
 
-    def test_current_thread_is_permanent_and_separate_from_earlier(self):
-        fs = frames(self.cfg, 4)
-        self.assertEqual(len(fs), 4)
-        for f in fs:
-            top, bottom = f.split("EARLIER THREADS")
-            self.assertIn("THIS THREAD", top)
-            self.assertIn("handle this carefully", top)      # the current thread's flagged prompt, every frame
-            self.assertIn("no-vague", top)
-            self.assertNotIn("still not working", top)       # earlier threads never leak into the permanent panel
-            self.assertNotIn("handle this carefully", bottom)
+    def drive(self, keys, W=100, H=30):
+        """Run the real loop with injected keys; return every frame that was drawn."""
+        frames, it = [], iter(keys)
+        watch.loop(lambda t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (W, H), lambda: watch.build(self.path))
+        return frames
 
-    def test_earlier_threads_scroll_upward_one_line_at_a_time(self):
-        f0, f1 = frames(self.cfg, 2)
-        e0 = f0.split("EARLIER THREADS")[1].splitlines()[1:]
-        e1 = f1.split("EARLIER THREADS")[1].splitlines()[1:]
-        self.assertNotEqual(e0, e1)
-        self.assertEqual(e1[:6], e0[1:7])  # every line moved up exactly one row
 
-    def test_prompt_text_is_redacted_on_screen(self):
-        history(self.cfg, [("old-1", EMAIL), ("now", CUR_BAD)])
-        out = "\n".join(frames(self.cfg, 2))
+class Layout(Base):
+    def test_threads_are_columns_and_the_current_one_is_pinned_left(self):
+        history(self.cfg, [("a", "D:/work/alpha", VAGUE + " alpha"), ("b", "D:/work/beta", VAGUE + " beta"), ("now", "D:/x/mine", VAGUE + " current")])
+        out = once(self.cfg); head = out.splitlines()[1]
+        self.assertIn("> THIS THREAD", head)
+        self.assertLess(head.index("THIS THREAD"), head.index("beta"))
+        self.assertLess(head.index("beta"), head.index("alpha"))     # newest earlier thread first
+        self.assertEqual(head.count("│"), 2)                          # three columns, two separators
+        self.assertIn("no-vague", out)
+
+    def test_full_text_is_never_truncated(self):
+        long = "still not working after the change " + "look at the parser module and " * 8 + "ZEBRA-END"
+        history(self.cfg, [("a", "D:/w/alpha", "warm up the thing first please now"), ("a", "D:/w/alpha", long), ("now", "D:/x/mine", VAGUE)])
+        self.assertIn("ZEBRA-END", once(self.cfg, 100, 60).replace("│", ""))
+
+    def test_prompt_text_is_redacted(self):
+        history(self.cfg, [("now", "p", "mail a.b@example.org the notes carefully and deploy them to the whole site")])
+        out = once(self.cfg)
         self.assertNotIn("a.b@example.org", out)
         self.assertIn("<email>", out)
 
-    def test_finished_rewrites_show_as_after(self):
-        rows = [("old-1", OLD_A), ("now", CUR_BAD)]; history(self.cfg, rows)
+    def test_finished_rewrites_show_in_full(self):
+        history(self.cfg, [("now", "p", VAGUE)])
         os.makedirs(os.path.join(self.cfg, "coach"))
-        key = coach.prompt_key((float(T0 + 90000) / 1000, "p", CUR_BAD))
+        key = coach.prompt_key((float(T0) / 1000, "p", VAGUE))
         with open(os.path.join(self.cfg, "coach", "rewrites.jsonl"), "w", encoding="utf-8") as f:
             f.write(json.dumps({"key": key, "text": "AFTER: Goal: make checkout faster.\nDone when: p95 under 300ms.\n\nWHY: adds a done-when."}) + "\n")
-        top = frames(self.cfg, 1)[0].split("EARLIER THREADS")[0]
-        self.assertIn("AFTER: Goal: make checkout faster.", top)
-        self.assertIn("Done when: p95 under 300ms.", top)
+        out = once(self.cfg)
+        self.assertIn("Goal: make checkout faster.", out)
+        self.assertIn("Done when: p95 under 300ms.", out)
 
-    def test_clean_thread_and_empty_history_do_not_crash(self):
-        history(self.cfg, [("old-1", OLD_A), ("now", CUR_OK)])
-        self.assertIn("nothing flagged in this thread yet", frames(self.cfg, 1)[0])
-        os.remove(os.path.join(self.cfg, "history.jsonl"))
-        self.assertIn("no prompts in this thread yet", frames(self.cfg, 1)[0])
+    def test_clean_and_empty_history_do_not_crash(self):
+        history(self.cfg, [("now", "p", "rename the variable total to grandTotal in cart.js and run the unit tests until they pass")])
+        self.assertIn("nothing flagged yet", once(self.cfg))
+        os.remove(self.path)
+        self.assertIn("no prompts yet", once(self.cfg))
 
-    def test_live_loop_uses_the_alternate_screen_redraws_and_restores_the_terminal(self):
-        env = {**os.environ, "CLAUDE_CONFIG_DIR": self.cfg, "PYTHONIOENCODING": "utf-8"}
-        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--ticks", "4", "--speed", "0.05",
-                            "--width", "90", "--height", "24"], capture_output=True, text=True, encoding="utf-8", env=env, timeout=30)
+    def test_not_a_terminal_falls_back_to_one_frame(self):
+        history(self.cfg, [("now", "p", VAGUE)])
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py")], capture_output=True, text=True, encoding="utf-8",
+                           env=env, stdin=subprocess.DEVNULL, timeout=20)
         self.assertEqual(r.returncode, 0, r.stderr)
-        out = r.stdout
-        self.assertTrue(out.startswith("\033[?1049h\033[?25l"))          # alternate screen on, cursor hidden
-        self.assertTrue(out.endswith("\033[?25h\033[?1049l"))            # both restored on exit
-        self.assertEqual(out.count("\033[H"), 4)                          # one in-place redraw per tick
-        self.assertIn("handle this carefully", out)
+        self.assertIn("THIS THREAD", r.stdout)
 
-    def test_render_fits_any_terminal_size(self):
-        st = __import__("watch").build(os.path.join(self.cfg, "history.jsonl"))
-        w = __import__("watch")
-        for W, H in [(30, 10), (60, 12), (120, 50), (10, 5)]:
-            lines = w.render(st, W, H, 3, color=False)
-            self.assertLessEqual(len(lines), max(H, 10) - 1)
-            self.assertTrue(all(len(l) <= max(W, 30) for l in lines), (W, H))
+    def test_every_frame_fits_the_terminal(self):
+        history(self.cfg, [("a", "D:/w/alpha", VAGUE + " a"), ("now", "D:/x/mine", VAGUE + " b")])
+        st = watch.build(self.path)
+        for W, H in [(24, 8), (40, 12), (60, 20), (61, 20), (100, 30), (200, 60)]:
+            lines = watch.render(st, watch.new_ui(), W, H, color=False)
+            self.assertLessEqual(len(lines), H - 1, (W, H))
+            self.assertTrue(all(len(l) <= max(W, 24) for l in lines), (W, H, [len(l) for l in lines]))
+
+
+class Navigation(Base):
+    def test_arrows_move_focus_and_pan_the_view_sideways(self):
+        rows = [(f"s{i}", f"D:/w/p{i}", VAGUE + f" MARK{i}") for i in range(1, 7)] + [("now", "D:/x/mine", VAGUE + " current")]
+        history(self.cfg, rows)
+        f = self.drive(["right"] * 4 + ["left"] * 3)     # 100 columns wide: the pinned column plus one scrollable column
+        self.assertIn("MARK6", f[0])
+        self.assertNotIn("MARK3", f[0])                  # the newest earlier thread sits next to the pinned one
+        self.assertIn("MARK3", f[4])
+        self.assertNotIn("MARK6", f[4])                  # panned three threads to the right
+        self.assertIn("current", f[4])                   # the pinned thread never leaves
+        self.assertIn("MARK6", f[7])                     # and back again
+
+    def test_vertical_scroll_follows_the_newest_until_you_scroll_up(self):
+        history(self.cfg, [("now", "p", VAGUE + f" P{i:02d}") for i in range(1, 13)])
+        f = self.drive(["home", "end", "up"], W=100, H=14)
+        self.assertIn("P12", f[0])
+        self.assertNotIn("P01", f[0])                    # newest visible by default
+        self.assertIn("P01", f[1])
+        self.assertNotIn("P12", f[1])                    # home: oldest
+        self.assertIn("P12", f[2])                       # end: newest again
+        self.assertNotEqual(f[2], f[3])                  # up: moved one line
+
+    def test_no_animation_redraws_only_on_a_key_or_new_data(self):
+        history(self.cfg, [("now", "p", VAGUE)])
+        t, n, writes = [0], [0], []
+
+        def clock():
+            t[0] += 3
+            return t[0]
+
+        def keys(_timeout):
+            n[0] += 1
+            return None if n[0] <= 8 else "q"
+
+        watch.loop(keys, lambda rows: writes.append(rows), lambda: (100, 30), lambda: watch.build(self.path), clock=clock)
+        self.assertEqual(len(writes), 1)                 # eight idle polls, one draw
+        writes.clear(); n[0] = 0; calls = [0]
+
+        def load():
+            calls[0] += 1
+            if calls[0] > 1: history(self.cfg, [("now", "p", VAGUE), ("now", "p", VAGUE + " a newer prompt")])
+            return watch.build(self.path)
+
+        watch.loop(keys, lambda rows: writes.append(rows), lambda: (100, 30), load, clock=clock)
+        self.assertEqual(len(writes), 2)                 # new data means exactly one more draw
+
+    @unittest.skipIf(os.name == "nt", "needs a POSIX pty; the Windows msvcrt path is not covered by tests")
+    def test_real_keyboard_in_a_pty(self):
+        import pty, select, time
+        history(self.cfg, [("a", "D:/w/alpha", VAGUE + " earlier"), ("now", "D:/x/mine", VAGUE + " current")])
+        pid, fd = pty.fork()
+        if pid == 0:  # child: the real watch.py on the pty's slave side
+            os.environ.update({"CLAUDE_CONFIG_DIR": self.cfg, "TERM": "xterm", "PYTHONIOENCODING": "utf-8"})
+            os.execv(sys.executable, [sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--width", "100", "--height", "30"])
+        buf = ""
+
+        def read_until(marker, timeout=15):
+            nonlocal buf
+            end = time.time() + timeout
+            while marker not in buf and time.time() < end:
+                if select.select([fd], [], [], 0.2)[0]:
+                    try: buf += os.read(fd, 65536).decode("utf-8", "ignore")
+                    except OSError: break
+            return marker in buf
+
+        try:
+            self.assertTrue(read_until("thread 1 of 2"), buf[-300:])
+            self.assertIn("\033[?1049h", buf)                  # alternate screen
+            os.write(fd, b"\x1b[C")                            # the right-arrow key, as a terminal sends it
+            self.assertTrue(read_until("thread 2 of 2"), buf[-300:])
+            os.write(fd, b"q")
+            self.assertTrue(read_until("\033[?1049l"), buf[-200:])   # terminal restored on quit
+            _, status = os.waitpid(pid, 0)
+            self.assertEqual(os.WEXITSTATUS(status), 0)
+        finally:
+            try: os.kill(pid, 9)
+            except OSError: pass
+
+    def test_key_tables_and_quit(self):
+        self.assertEqual(watch.POSIX_KEYS["[A"], "up")
+        self.assertEqual(watch.POSIX_KEYS["[6~"], "pgdn")
+        self.assertEqual(watch.WIN_KEYS["M"], "right")
+        history(self.cfg, [("a", "p", VAGUE), ("now", "p", VAGUE)])
+        st, ui = watch.build(self.path), watch.new_ui()
+        self.assertFalse(watch.handle(ui, st, "l")); self.assertEqual(ui["focus"], 1)
+        self.assertFalse(watch.handle(ui, st, "l")); self.assertEqual(ui["focus"], 1)   # clamps at the last thread
+        self.assertFalse(watch.handle(ui, st, "h")); self.assertEqual(ui["focus"], 0)
+        self.assertTrue(watch.handle(ui, st, "q"))
+        self.assertTrue(watch.handle(ui, st, "\x03"))
 
 
 if __name__ == "__main__":
