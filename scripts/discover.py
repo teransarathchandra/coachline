@@ -10,7 +10,7 @@ Unverifiable suggestions are dropped. Nothing is ever installed. Text is strippe
 It runs once per kind of task (cached 24h). Opt in with: setup.py --discover on
   python discover.py --last        run it now for your last prompt's kind of task (ignores the cache)
 """
-import datetime as dt, ipaddress, json, os, re, socket, sys, time, urllib.error, urllib.parse, urllib.request
+import argparse, datetime as dt, ipaddress, json, os, re, socket, sys, time, urllib.error, urllib.parse, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import coach
@@ -184,6 +184,11 @@ def compact(items):
 
 
 def main(argv):
+    ap = argparse.ArgumentParser(prog="discover.py", description="Search the web for better tools for your last prompt's kind of task. "
+                                 "Sends a generic task description to a web search through your Claude subscription.")
+    ap.add_argument("--last", action="store_true", help="do it now (nothing runs without this flag)")
+    if not ap.parse_args(argv).last:
+        ap.print_help(); return 2
     import advisor
     rows = coach.load(coach.HIST); i, fails = coach.last_eval(rows)
     if i is None: sys.exit("no prompt to look at; run `coach.py --doctor`")
@@ -201,10 +206,11 @@ def main(argv):
     except (RuntimeError, ValueError) as e: sys.exit(f"advice failed: {e}")
     print(f"kind of task: {adv['task']} - {adv['summary']}\nsearching the web (up to ~2 min)...")
     items = for_advice(adv, fresh=True)
-    if not items: print("nothing verifiable found (suggestions that fail the checks are dropped)."); return
+    if not items: print("nothing verifiable found (suggestions that fail the checks are dropped)."); return 0
     for _k, t in lines(items, 100): print(t)
+    return 0
 
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))
