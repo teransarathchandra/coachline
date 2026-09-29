@@ -1,4 +1,4 @@
-import json, os, subprocess, sys, tempfile, unittest
+import json, os, shutil, subprocess, sys, tempfile, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -67,6 +67,13 @@ class Loading(unittest.TestCase):
         self.assertEqual(coach.clusters(hits)["c"][:2], (4, 3))
         self.assertEqual(coach.clusters({"c": [(0, "x"), (60 * day, "x")]}), {})
 
+    def test_repeat_note_counts_the_last_14_days_only(self):
+        day = 86400; msg = "write a commit message for this"
+        rows = [(i * day, "p", msg) for i in (0, 1, 30, 31, 32)]
+        self.assertEqual(coach.repeat_note(rows, 4), "'commit/PR/ticket text' asked 3x in the last 14 days")
+        self.assertIsNone(coach.repeat_note(rows, 1))  # only 2 in the 14 days up to it
+        self.assertIsNone(coach.repeat_note([(0, "p", "hello world friend")], 0))
+
     def test_gold_labels_parse(self):
         r = gold.parse("### 1 gap=none\nhello there friend\nyours: ok\n\n### 2 gap=30\nfix it carefully\n"
                        "yours: no-vague, done-when\n\n### 3 gap=1\nx\nyours: \n")
@@ -90,6 +97,46 @@ class Scripts(unittest.TestCase):
             with open(sp, "w") as f: json.dump({"statusLine": {"type": "command", "command": "other"}}, f)
             self.assertNotEqual(run("setup.py", cfg).returncode, 0)
             self.assertEqual(read(sp)["statusLine"]["command"], "other")
+
+    def test_doctor_and_reinstall_work_from_a_folder_with_a_space_and_any_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = os.path.join(tmp, "cfg"); os.makedirs(cfg)
+            for name in ("with space", "renamed"):
+                dst = os.path.join(tmp, name, "scripts")
+                shutil.copytree(os.path.join(ROOT, "scripts"), dst, ignore=shutil.ignore_patterns("__pycache__"))
+                env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg}
+                def cmd(script, *a):
+                    return subprocess.run([sys.executable, os.path.join(dst, script), *a],
+                                          capture_output=True, text=True, env=env)
+                self.assertEqual(cmd("setup.py").returncode, 0, name + " setup")
+                out = cmd("coach.py", "--doctor")
+                self.assertIn("statusline script exists", out.stdout, name)
+                self.assertNotIn("FAIL statusline", out.stdout, name)
+
+    def test_refresh_repoints_only_our_own_stale_entry(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            sp = os.path.join(cfg, "settings.json")
+            stale = {"type": "command", "command": "python /gone/plugins/cache/coachline/coachline/0.1.0/scripts/statusline.py"}
+            with open(sp, "w") as f: json.dump({"statusLine": stale}, f)
+            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)
+            self.assertIn(os.path.join(ROOT, "scripts").replace("\\", "/"), read(sp)["statusLine"]["command"])
+            foreign = {"type": "command", "command": "other-tool"}
+            with open(sp, "w") as f: json.dump({"statusLine": foreign}, f)
+            run("setup.py", cfg, "--refresh"); self.assertEqual(read(sp)["statusLine"], foreign)
+            os.remove(sp); run("setup.py", cfg, "--refresh"); self.assertFalse(os.path.exists(sp))
+            with open(sp, "w") as f: f.write("{broken")
+            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)  # never fail a session start
+
+    def test_statusline_stays_fast_on_a_huge_history(self):
+        import time
+        with tempfile.TemporaryDirectory() as cfg:
+            with open(os.path.join(cfg, "history.jsonl"), "w") as f:
+                for i in range(30000):
+                    f.write(json.dumps({"display": "write a commit message for this change please",
+                                        "timestamp": 1750000000000 + i * 60000, "project": "p"}) + "\n")
+            t = time.time(); r = run("statusline.py", cfg)
+            self.assertEqual(r.returncode, 0)
+            self.assertLess(time.time() - t, 5, "was 13s before the O(n) fix")
 
     def test_statusline_never_fails_on_empty_config(self):
         with tempfile.TemporaryDirectory() as cfg:

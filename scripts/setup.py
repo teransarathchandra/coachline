@@ -3,11 +3,16 @@
   python setup.py              install (refuses to replace a statusline that is not ours)
   python setup.py --force      replace whatever statusline is set (old one is printed first)
   python setup.py --uninstall  remove our entry only
-Re-run after a plugin update: the plugin folder path can change per version.
+  python setup.py --refresh    silent: if OUR entry points at another copy of this plugin
+                               (e.g. an older version), re-point it here; otherwise do nothing.
+                               The plugin's SessionStart hook runs this after updates.
 """
 import json, os, shutil, sys
 
-CONFIG = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import coach
+
+CONFIG = coach.CONFIG
 SETTINGS = os.path.join(CONFIG, "settings.json")
 SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "statusline.py")
 
@@ -19,7 +24,15 @@ def command():
     return f"{q(sys.executable)} {q(SCRIPT)}"
 
 def ours(sl):
-    return isinstance(sl, dict) and "statusline.py" in sl.get("command", "") and "coach" in sl.get("command", "").lower()
+    """True if this statusLine runs a coachline script: a sibling coach.py exists, or the path says coachline
+    (an old plugin version's folder may already be gone)."""
+    script = coach.script_of(sl.get("command", "")) if isinstance(sl, dict) else None
+    return bool(script) and (os.path.isfile(os.path.join(os.path.dirname(script), "coach.py")) or "coachline" in script.lower())
+
+def write(s):
+    if os.path.exists(SETTINGS): shutil.copyfile(SETTINGS, SETTINGS + ".coach-bak")
+    os.makedirs(CONFIG, exist_ok=True)
+    with open(SETTINGS, "w", encoding="utf-8") as f: json.dump(s, f, indent=2)
 
 def main(argv):
     try:
@@ -27,8 +40,13 @@ def main(argv):
     except FileNotFoundError:
         s = {}
     except ValueError:
+        if "--refresh" in argv: return  # never fail a session start over this
         sys.exit(f"{SETTINGS} is not valid JSON; fix it first (nothing was changed)")
     cur = s.get("statusLine")
+    if "--refresh" in argv:
+        if ours(cur) and coach.script_of(cur["command"]) != SCRIPT.replace("\\", "/"):
+            s["statusLine"] = {"type": "command", "command": command()}; write(s)
+        return
     if "--uninstall" in argv:
         if not ours(cur): print("no coachline statusLine set; nothing to do"); return
         del s["statusLine"]
@@ -36,9 +54,7 @@ def main(argv):
         if cur and not ours(cur) and "--force" not in argv:
             sys.exit(f"a different statusLine is already set:\n  {cur}\nRe-run with --force to replace it.")
         s["statusLine"] = {"type": "command", "command": command()}
-    if os.path.exists(SETTINGS): shutil.copyfile(SETTINGS, SETTINGS + ".coach-bak")
-    os.makedirs(CONFIG, exist_ok=True)
-    with open(SETTINGS, "w", encoding="utf-8") as f: json.dump(s, f, indent=2)
+    write(s)
     print("removed coachline statusLine" if "--uninstall" in argv else f"statusLine set: {s['statusLine']['command']}")
 
 if __name__ == "__main__":
