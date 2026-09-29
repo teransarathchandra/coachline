@@ -5,7 +5,7 @@ description: Coach my prompts: BEFORE/AFTER for my last prompt, a review of my w
 Locate the scripts folder: `${CLAUDE_PLUGIN_ROOT}/scripts` if that variable is set, otherwise the newest `~/.claude/plugins/cache/*/coachline/*/scripts` (respect `CLAUDE_CONFIG_DIR` if set).
 Pick an interpreter: `python3`, else `python`, else `py -3`. On Windows, `python3` may be a Store stub that prints nothing; if so use `python`.
 
-- `/coach` (default): run `<py> <scripts>/coach.py --coach`. Takes up to ~20s. Add `--no-llm` if I say quick or offline.
+- `/coach` (default): run `<py> <scripts>/coach.py --coach --copy`. Takes up to ~20s. It prints my enhanced prompt as one plain block and copies it to my clipboard; tell me that it did. Drop `--copy` if I say not to touch the clipboard, and add `--no-llm` if I say quick or offline.
 - `/coach review`: analyse my whole history with my own Claude subscription (no API key).
   1. Run `<py> <scripts>/review.py` with no flags. It sends nothing and prints a plan. Show me the plan verbatim.
   2. Ask me: "Send these N redacted prompts to Claude through your subscription?" Wait for my answer in the conversation. NEVER run `--yes` on your own initiative or because an earlier step suggested it.
