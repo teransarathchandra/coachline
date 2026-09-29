@@ -1,22 +1,30 @@
-"""watch.py - a live terminal panel for a second pane.
+"""watch.py - a readable, keyboard-driven panel for a second terminal pane. No animation.
 
-  THIS THREAD      every flagged prompt of the current Claude Code session, kept on screen (newest at the bottom)
-  EARLIER THREADS  flagged prompts from your other sessions, scrolling upward one line at a time
+One column per thread (a thread = one Claude Code session). THIS THREAD is pinned on the left; earlier threads sit
+to its right, newest first. Every prompt is shown in full with the fix for each failed rule and any AFTER rewrite.
 
-  python watch.py                run it (Ctrl+C quits); --speed 0.7 is seconds per scrolled line
-  python watch.py --frames 5     print 5 plain frames and exit (demo / tests)
+  <- / -> (h / l, Tab)   move between threads; the view pans horizontally to keep the focused one visible
+  up / down (k / j)      scroll the focused thread     PgUp / PgDn   a page      g / G   top / newest
+  q or Ctrl+C            quit
 
-Suggestions are the local rule fixes, plus any AFTER rewrites the statusline's auto-rewrite already produced.
-Nothing here calls an LLM. A "thread" is a sessionId from history.jsonl. Prompt text is redacted before display.
+  python watch.py            interactive
+  python watch.py --once     print one plain frame and exit (also used when stdin is not a terminal)
+
+Reads local history only, calls no LLM, redacts prompt text. The screen redraws only on a key or when new data arrives.
 """
-import argparse, datetime as dt, json, os, shutil, sys, time
+import argparse, datetime as dt, json, os, shutil, sys, textwrap, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import coach
 
-MAX_EARLIER = 80
+MAX_THREADS, MIN_CW, MAX_CW = 40, 30, 48
+POSIX_KEYS = {"[A": "up", "[B": "down", "[C": "right", "[D": "left", "[5~": "pgup", "[6~": "pgdn", "[H": "home", "[F": "end",
+              "[1~": "home", "[4~": "end", "OA": "up", "OB": "down", "OC": "right", "OD": "left", "OH": "home", "OF": "end"}
+WIN_KEYS = {"H": "up", "P": "down", "K": "left", "M": "right", "I": "pgup", "Q": "pgdn", "G": "home", "O": "end"}
+ALIASES = {"h": "left", "l": "right", "\t": "right", "k": "up", "j": "down", "g": "home", "G": "end", "\x03": "q", "Q": "q"}
 
 
+# ---------------------------------------------------------------- data
 def load_full(path):
     """(unix_seconds, project, text, session_id) rows, oldest first. Malformed lines are skipped."""
     rows = []
@@ -47,98 +55,176 @@ def rewrites():
 
 
 def build(path):
-    """State for render(): current session id, its entries, earlier entries (newest first), counts."""
+    """{"threads": [...]}: the current thread first (always), then earlier threads that have flagged prompts, newest first."""
     rows = load_full(path); aft = rewrites()
-    if not rows: return {"cur": "", "current": [], "earlier": [], "scored": 0}
-    cur_sid = rows[-1][3]; per = {}; scored = 0; prev = None
+    if not rows: return {"threads": [{"sid": "", "current": True, "label": "THIS THREAD", "sub": "no prompts yet", "entries": [], "scored": 0}]}
+    cur_sid = rows[-1][3]; per = {}; meta = {}; prev = None
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
+        m = meta.setdefault(sid, {"first": ts, "last": ts, "proj": proj, "scored": 0}); m["last"] = ts; m["proj"] = proj or m["proj"]
         if not coach.scorable(text) or text.startswith("/coach"): continue
-        if sid == cur_sid: scored += 1
+        m["scored"] += 1
         fails = [n for n, fn in coach.RULES if not fn(text, gap)]
         if not fails: continue
-        e = {"ts": ts, "sid": sid, "score": 5 - len(fails), "text": coach.redact(text).replace("\n", " ")[:70],
-             "fixes": [f"{n}: {coach.FIX[n]}" for n in fails[:3]], "after": []}
-        if coach.prompt_key((ts, proj, text)) in aft: e["after"] = coach._after_lines(aft[coach.prompt_key((ts, proj, text))], 90)[:4]
-        per.setdefault(sid, []).append(e)
-    earlier = sorted((e for sid, es in per.items() if sid != cur_sid for e in es), key=lambda e: -e["ts"])[:MAX_EARLIER]
-    return {"cur": cur_sid, "current": per.get(cur_sid, []), "earlier": earlier, "scored": scored}
+        key = coach.prompt_key((ts, proj, text))
+        per.setdefault(sid, []).append({"ts": ts, "score": 5 - len(fails), "text": coach.redact(text).replace("\n", " ")[:400],
+                                        "fixes": [f"{n}: {coach.FIX[n]}" for n in fails],
+                                        "after": coach._after_lines(aft[key], 200) if key in aft else []})
+    def thread(sid, current):
+        m = meta[sid]; d = lambda t: dt.datetime.fromtimestamp(t).strftime("%m-%d")
+        span = d(m["first"]) if d(m["first"]) == d(m["last"]) else f"{d(m['first'])}>{d(m['last'])}"
+        proj = os.path.basename(m["proj"].replace("\\", "/").rstrip("/")) or "-"
+        n = len(per.get(sid, []))
+        return {"sid": sid, "current": current, "label": "THIS THREAD" if current else f"{span}  {proj}"[:40],
+                "sub": f"{n} flagged of {m['scored']}", "entries": per.get(sid, []), "scored": m["scored"]}
+    others = sorted((s for s in per if s != cur_sid), key=lambda s: -meta[s]["last"])[:MAX_THREADS]
+    return {"threads": [thread(cur_sid, True)] + [thread(s, False) for s in others]}
 
 
-def entry_lines(e):
-    """[(kind, text)] for one entry; kind is header/fix/after/blank."""
-    d = dt.datetime.fromtimestamp(e["ts"]).strftime("%m-%d %H:%M")
-    return ([("header", f"{e['score']}/5  {d}  \"{e['text']}\"")] + [("fix", "    - " + f) for f in e["fixes"]]
-            + [("after", "    " + a) for a in e["after"]] + [("blank", "")])
+def signature(st):
+    return tuple((t["sid"], len(t["entries"]), sum(len(e["after"]) for e in t["entries"])) for t in st["threads"])
 
 
-def _clip(s, w): return s if len(s) <= w else s[:max(w - 1, 0)] + "…"
+# ---------------------------------------------------------------- rendering
+def column_lines(t, iw):
+    """[(kind, text)] for one thread, wrapped to iw. Nothing is truncated."""
+    out = []
+    if not t["entries"]:
+        return [("dim", "nothing flagged yet" if t["scored"] else "no prompts yet")]
+    for e in t["entries"]:
+        out.append(("head%d" % e["score"], f"[{e['score']}/5] " + dt.datetime.fromtimestamp(e["ts"]).strftime("%m-%d %H:%M")))
+        out += [("text", w) for w in textwrap.wrap('"' + e["text"] + '"', iw)]
+        for f in e["fixes"]: out += [("dim", w) for w in textwrap.wrap("- " + f, iw, subsequent_indent="  ")]
+        for a in e["after"]: out += [("after", w) for w in textwrap.wrap(a, iw, subsequent_indent="       ") or [""]]
+        out.append(("blank", ""))
+    return out[:-1]
 
 
-def render(st, W, H, tick, color=True):
-    """The frame as a list of lines (no trailing newline). Pure: same input, same output."""
-    def c(code, s): return f"\033[{code}m{s}\033[0m" if color else s
-    W = max(W, 30); H = max(H, 10)
-    cur = [ln for e in st["current"] for ln in entry_lines(e)]
-    while cur and cur[-1][0] == "blank": cur.pop()
-    L = [ln for e in st["earlier"] for ln in entry_lines(e)]
-    avail = H - 1 - 4  # title, two panel titles, footer; one spare row so the last line never scrolls the screen
-    a_h = min(max(len(cur), 2), max(avail // 2, 3)); b_h = max(avail - a_h, 0)
-    def seg(*parts):  # coloured pieces of one line, clipped as a whole so narrow panes never wrap
-        left, res = W - 1, ""
-        for code, text in parts:
-            text = _clip(text, left); left -= len(text); res += c(code, text)
-        return res
-    out = [seg(("1", "coachline"), ("2", f"  live suggestions  {dt.datetime.now().strftime('%H:%M:%S')}"))]
-    out.append(seg(("36", f"THIS THREAD  {len(st['current'])} flagged of {st['scored']} prompts"), ("2", "  (stays on screen)")))
-    if not cur:
-        body = [("fix", "  nothing flagged in this thread yet" if st["scored"] else "  no prompts in this thread yet")]
-    else:
-        body = cur if len(cur) <= a_h else [("fix", f"  ... {len(cur) - a_h + 1} earlier lines")] + cur[-(a_h - 1):]
-    col = {"header": None, "fix": "2", "after": "36", "blank": "2"}
-    for kind, text in body[-a_h:]:
-        if kind == "header":
-            sc = int(text[0]); code = "32" if sc >= 4 else "33" if sc == 3 else "31"
-            out.append(c(code, _clip(text, W - 1)))
-        else: out.append(c(col[kind], _clip(text, W - 1)))
-    out += [""] * (a_h - len(body[-a_h:]))
-    out.append(seg(("35", f"EARLIER THREADS  {len(st['earlier'])} suggestions"), ("2", "  (scrolling up)")))
-    if not L:
-        out.append(c("2", "  no flagged prompts in earlier threads")); out += [""] * (b_h - 1)
-    else:
-        L = L + [("blank", "")] * max(0, b_h + 2 - len(L))  # short lists still scroll
-        for r in range(b_h):
-            kind, text = L[(tick + r) % len(L)]
-            shade = 238 + round(14 * r / max(b_h - 1, 1))  # dark at the top (leaving), lighter where entries arrive
-            out.append(f"\033[38;5;{shade}m{_clip(text, W - 1)}\033[0m" if color else _clip(text, W - 1))
-    out.append(seg(("2", "Ctrl+C to quit")))
-    return out[:H - 1]
+def new_ui():
+    return {"focus": 0, "vs": 0, "off": {}, "follow": True, "lens": {}, "body_h": 10}
+
+
+CODE = {"head5": "32", "head4": "32", "head3": "33", "head2": "31", "head1": "31", "head0": "31", "text": "0", "dim": "2", "after": "36", "blank": "0"}
+
+
+def render(st, ui, W, H, color=True):
+    """The frame as a list of lines. Pure apart from writing scroll bookkeeping into ui."""
+    def c(code, s): return f"\033[{code}m{s}\033[0m" if color and code != "0" else s
+    W = max(W, 24); H = max(H, 8)
+    th = st["threads"]; n = len(th)
+    ui["focus"] = min(max(ui["focus"], 0), n - 1)
+    cw = max(MIN_CW, min(MAX_CW, (W - 1) // 2))
+    if W >= 2 * MIN_CW + 1:                      # pinned current thread + as many scrollable columns as fit
+        n_vis = max(1, (W + 1) // (cw + 1) - 1); shown = [0]; m = n - 1
+        if m:
+            f = ui["focus"] - 1 if ui["focus"] >= 1 else None
+            if f is not None: ui["vs"] = min(max(ui["vs"], f - n_vis + 1), f)
+            ui["vs"] = min(max(ui["vs"], 0), max(m - n_vis, 0))
+            shown += [1 + ui["vs"] + i for i in range(min(n_vis, m - ui["vs"]))]
+    else:                                        # too narrow for two columns: show only the focused thread
+        cw = W - 1; shown = [ui["focus"]]
+    body_h = H - 1 - 1 - 2 - 1                   # spare row, title, 2 header rows, footer
+    ui["body_h"] = body_h; cells = []
+    for idx in shown:
+        t = th[idx]; lines = column_lines(t, cw - 2); ui["lens"][t["sid"] or "cur"] = len(lines)
+        bottom = max(len(lines) - body_h, 0)
+        if t["current"] and ui["follow"]: off = bottom
+        else: off = min(max(ui["off"].get(t["sid"] or "cur", 0), 0), bottom)
+        ui["off"][t["sid"] or "cur"] = off
+        pos = f"lines {off + 1}-{min(off + body_h, len(lines))} of {len(lines)}" if len(lines) > body_h else t["sub"]
+        arrows = ("^" if off > 0 else " ") + ("v" if off < bottom else " ")
+        head1 = ("> " if idx == ui["focus"] else "  ") + t["label"]
+        cells.append(([head1[:cw], (t["sub"] if len(lines) <= body_h else f"{t['sub']} | {pos}")[:cw - 3] + " " + arrows],
+                      [(k, x) for k, x in lines[off:off + body_h]], idx == ui["focus"]))
+    rows = [c("1", "coachline"[:W - 1]) + c("2", ("  suggestions by thread  " + dt.datetime.now().strftime("%H:%M:%S"))[:max(W - 10, 0)])]
+    def join(parts): return c("2", "│").join(parts)
+    rows.append(join([c("7;1" if foc else "1", (" " + h1).ljust(cw)[:cw]) for (h1, _), _b, foc in [(x[0], x[1], x[2]) for x in cells]]))
+    rows.append(join([c("2", (" " + h2).ljust(cw)[:cw]) for (_, h2), _b, _f in cells]))
+    for r in range(body_h):
+        parts = []
+        for _h, body, _f in cells:
+            k, x = body[r] if r < len(body) else ("blank", "")
+            parts.append(c(CODE.get(k, "0"), (" " + x).ljust(cw)[:cw]))
+        rows.append(join(parts))
+    where = f"thread {ui['focus'] + 1} of {n}"
+    rows.append(c("2", f"</> h/l move between threads   ^/v j/k PgUp/PgDn scroll   g/G top/newest   q quit   ({where})"[:W - 1]))
+    return rows[:H - 1]
+
+
+# ---------------------------------------------------------------- input
+def handle(ui, st, key):
+    """Apply one key to ui. True = quit."""
+    key = ALIASES.get(key, key); n = len(st["threads"]); t = st["threads"][min(ui["focus"], n - 1)]; sid = t["sid"] or "cur"
+    cur_off = ui["off"].get(sid, 0); bottom = max(ui["lens"].get(sid, 0) - ui["body_h"], 0); page = max(ui["body_h"] - 1, 1)
+    if key == "q": return True
+    if key == "left": ui["focus"] = max(ui["focus"] - 1, 0)
+    elif key == "right": ui["focus"] = min(ui["focus"] + 1, n - 1)
+    elif key in ("up", "down", "pgup", "pgdn", "home", "end"):
+        new = {"up": cur_off - 1, "down": cur_off + 1, "pgup": cur_off - page, "pgdn": cur_off + page, "home": 0, "end": bottom}[key]
+        ui["off"][sid] = min(max(new, 0), bottom)
+        if t["current"]: ui["follow"] = ui["off"][sid] >= bottom  # scrolling up stops auto-follow; reaching the newest resumes it
+    return False
+
+
+def read_key(timeout):
+    """One key name ('left', 'q', 'j', ...) or None on timeout. Stdlib only: msvcrt on Windows, termios elsewhere."""
+    if os.name == "nt":
+        import msvcrt
+        end = time.time() + timeout
+        while time.time() < end:
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                return WIN_KEYS.get(msvcrt.getwch()) if ch in ("\x00", "\xe0") else ch
+            time.sleep(0.03)
+        return None
+    import select
+    fd = sys.stdin.fileno()
+    if not select.select([fd], [], [], timeout)[0]: return None
+    ch = os.read(fd, 1).decode("utf-8", "ignore")
+    if ch != "\x1b": return ch
+    seq = ""
+    while len(seq) < 3 and select.select([fd], [], [], 0.03)[0]: seq += os.read(fd, 1).decode("utf-8", "ignore")
+    return POSIX_KEYS.get(seq, "esc")
+
+
+def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0):
+    """Draw only when something changed: a key, a new size, or new data. next_key(timeout) -> key|None."""
+    ui = new_ui(); st = load_state(); last_load = clock(); last_size = None; dirty = True
+    while True:
+        W, H = size()
+        if dirty or (W, H) != last_size:
+            write(render(st, ui, W, H)); last_size = (W, H); dirty = False
+        k = next_key(0.25)
+        if k is None:
+            if clock() - last_load >= reload_every:
+                new = load_state(); last_load = clock()
+                if signature(new) != signature(st): st = new; dirty = True
+            continue
+        if handle(ui, st, k): return
+        dirty = True
 
 
 def main(argv):
     ap = argparse.ArgumentParser(); ap.add_argument("--history", default=coach.HIST)
-    ap.add_argument("--speed", type=float, default=0.7); ap.add_argument("--frames", type=int, default=0)
-    ap.add_argument("--width", type=int); ap.add_argument("--height", type=int)
-    ap.add_argument("--ticks", type=int, default=0, help="live mode: exit after N redraws (tests)"); a = ap.parse_args(argv)
-    if a.frames:  # plain, deterministic output: no ANSI, no sleeping
-        st = build(a.history); W, H = a.width or 100, a.height or 30
-        for t in range(a.frames):
-            print(f"=== frame {t} ===\n" + "\n".join(render(st, W, H, t, color=False)))
-        return
+    ap.add_argument("--once", action="store_true"); ap.add_argument("--width", type=int); ap.add_argument("--height", type=int)
+    a = ap.parse_args(argv)
+    if a.once or not (sys.stdin.isatty() and sys.stdout.isatty()):
+        if not a.once: print("(not a terminal: printing one frame; run watch.py in a real terminal pane for the interactive view)")
+        print("\n".join(render(build(a.history), new_ui(), a.width or 120, a.height or 40, color=False))); return
     if os.name == "nt": os.system("")  # switches the Windows console to ANSI mode
-    sys.stdout.write("\033[?1049h\033[?25l"); tick = 0; st = None; nxt = 0
+    else:
+        import termios, tty
+        fd = sys.stdin.fileno(); old = termios.tcgetattr(fd); tty.setcbreak(fd)
+    sys.stdout.write("\033[?1049h\033[?25l")
     try:
-        while True:
-            if time.time() >= nxt: st = build(a.history); nxt = time.time() + 2
-            W, H = shutil.get_terminal_size((100, 30))
-            sys.stdout.write("\033[H" + "\033[K\n".join(render(st, a.width or W, a.height or H, tick)) + "\033[K\033[J"); sys.stdout.flush()
-            tick += 1
-            if a.ticks and tick >= a.ticks: break
-            time.sleep(a.speed)
+        loop(read_key, lambda rows: (sys.stdout.write("\033[H" + "\033[K\n".join(rows) + "\033[K\033[J"), sys.stdout.flush()),
+             lambda: (a.width or shutil.get_terminal_size((100, 30)).columns, a.height or shutil.get_terminal_size((100, 30)).lines),
+             lambda: build(a.history))
     except KeyboardInterrupt:
         pass
     finally:
         sys.stdout.write("\033[?25h\033[?1049l"); sys.stdout.flush()
+        if os.name != "nt": termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
 
 if __name__ == "__main__":
