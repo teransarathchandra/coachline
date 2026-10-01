@@ -189,7 +189,7 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual([d["name"] for d in recs[1]["discovery"]], ["GreatKit"])      # 'Ghost' 404s in verification
             panel = run(cfg, "watch.py", "--once", "--width", "150", "--height", "40").stdout
             flat = " ".join(panel.split())
-            self.assertIn("web-found, not installed", flat); self.assertIn("better: GreatKit (tool)", flat)
+            self.assertIn("found on the web, not installed", flat); self.assertIn("better: GreatKit (tool)", flat)
             self.assertIn("install: npm i greatkit", flat)
             self.assertNotIn("\x1b[31m", panel)                                 # model/web text is cleaned of escape codes
 

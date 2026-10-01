@@ -1,19 +1,22 @@
 """watch.py - the coachline panel: THIS THREAD only, one column, analysed by Claude. No animation.
 
-Your prompts are white. What can be improved is blue. At the top, "from your history": things Claude found by reading your
-past chats (requests you repeat, mistakes you keep making) that also show up in this thread. Under each prompt: Claude's
-improvements and an enhanced prompt you can copy.
+Top: the prompt you are looking at (the newest by default) in white, then what can be improved in blue, then the
+ENHANCED PROMPT as a block you copy with `c`. Below: a one-line summary of patterns Claude found in your past chats
+(`i` to read), and a compact list of this thread's prompts with a status glyph each. Up/Down move through the list.
 
-  n / p        select the next / previous prompt (marked with *)
-  Enter        open the selected prompt full width as plain text (Esc closes)
-  c            copy the selected prompt's enhanced prompt to the clipboard, exactly as written
-  e            have Claude analyse the selected prompt now
-  s            install the skill Claude drafted for a request you keep repeating (never overwrites)
-  j / k        scroll     PgUp / PgDn   a page      g / G   top / newest
-  q or Ctrl+C  quit
+  Up / Down (k / j, p / n)  select an earlier / later prompt          g / G   oldest / newest
+  PgUp / PgDn (b / space)   scroll the card when it is taller than the pane
+  Enter                     open the selected prompt full width as plain text (Esc closes)
+  c                         copy the enhanced prompt to the clipboard, exactly as written
+  e                         have Claude analyse the selected prompt now
+  i                         read / hide the patterns from your past chats
+  s                         install the skill Claude drafted for a request you keep repeating (never overwrites)
+  q or Ctrl+C               quit
 
   python watch.py            interactive
   python watch.py --once     print one plain frame and exit (also used when stdin is not a terminal)
+
+Status glyphs: ✓ analysed   … analysing or queued   ! can be improved (local hints)   × analysis failed   – opted out   · nothing to add
 
 With Claude analysis on (setup.py --panel-ai on) the panel itself starts the background `claude -p` jobs on your subscription:
 the newest unanalysed prompts of this thread, and a review of your history every ~2 days. Redacted; llm-off.txt projects never sent.
@@ -30,14 +33,18 @@ import review
 POSIX_KEYS = {"[A": "up", "[B": "down", "[5~": "pgup", "[6~": "pgdn", "[H": "home", "[F": "end", "[1~": "home", "[4~": "end",
               "OA": "up", "OB": "down", "OH": "home", "OF": "end"}
 WIN_KEYS = {"H": "up", "P": "down", "I": "pgup", "Q": "pgdn", "G": "home", "O": "end"}
-ALIASES = {"k": "up", "j": "down", "g": "home", "G": "end", "\x03": "q", "Q": "q", "n": "next", "]": "next", "p": "prev", "[": "prev",
-           "c": "copy", "e": "enhance", "s": "skill", "\r": "enter", "\n": "enter", "\x1b": "esc"}
+ALIASES = {"k": "up", "j": "down", "p": "up", "n": "down", "b": "pgup", " ": "pgdn", "g": "home", "G": "end", "\x03": "q", "Q": "q",
+           "c": "copy", "e": "enhance", "s": "skill", "i": "patterns", "\r": "enter", "\n": "enter", "\x1b": "esc"}
 IO = type("IO", (), {"copy": staticmethod(coach.copy_text), "enhance": staticmethod(coach.spawn_key),
                      "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill)})  # swapped for fakes in tests
-# colours: your words white, what can be improved blue (bright blue reads on dark and light terminals)
-CODE = {"title": "1", "time": "90", "prompt": "1;97", "head": "1;94", "blue": "94", "bluedim": "2;94", "rule": "2", "blank": "0",
-        "task": "1;94", "use": "94", "get": "94", "tip": "94", "flow": "2;94", "better": "1;94", "src": "2;94", "dim": "2;94", "enh": "94"}
+# your words white; what can be improved blue (bright blue reads on dark and light terminals); structure in grey
+CODE = {"title": "1", "meta": "90", "prompt": "1;97", "label": "1;94", "blue": "94", "bluedim": "2;94", "enh": "94", "rule": "90", "blank": "0",
+        "ok": "92", "warn": "93", "bad": "91", "key": "1;97", "task": "2;94", "better": "1;94", "src": "2;94", "dim": "2;94", "use": "94",
+        "get": "94", "tip": "94", "flow": "2;94", "head": "1;94", "after": "94", "sel": "7"}
 PENDING_SECONDS = 150
+MAX_WIDTH = 100                      # lines longer than this are hard to read, however wide the pane is
+GLYPHS = {"done": ("✓", "ok"), "pending": ("…", "warn"), "error": ("×", "bad"), "off": ("–", "meta"),
+          "local": ("!", "blue"), "quiet": ("·", "meta")}
 
 
 # ---------------------------------------------------------------- data
@@ -77,15 +84,13 @@ def insights(entries, rows, L):
         slug = r["name"]
         drafted = os.path.isfile(os.path.join(coach.STATE, "drafts", slug, "SKILL.md"))
         installed = os.path.isfile(os.path.join(coach.CONFIG, "skills", slug, "SKILL.md"))
-        text = f"You have asked for \"{slug}\" {past}x in past chats and {here}x in this thread -> " + (
-            f"you already have /{slug}: use it" if installed else
-            f"make it a skill, /{slug}" + (" (a draft is ready: press s to install it)" if drafted else " (draft it with /coach review)"))
-        out.append({"kind": "request", "text": text, "slug": slug if drafted and not installed else None})
+        out.append({"kind": "request", "name": slug, "past": past, "here": here, "drafted": drafted, "installed": installed,
+                    "slug": slug if drafted and not installed else None})
     for m in L.get("mistakes", []):
         here = _matches(here_txt, m.get("keywords", []))
         if not here: continue
-        past = max(_matches(all_txt, m.get("keywords", [])) - here, 0)
-        out.append({"kind": "mistake", "text": f"Recurring gap ({past}x before, {here}x here), {m['name']}: {m.get('fix', '')}", "slug": None})
+        out.append({"kind": "mistake", "name": m["name"], "past": max(_matches(all_txt, m.get("keywords", [])) - here, 0), "here": here,
+                    "fix": m.get("fix", ""), "slug": None})
     return out
 
 
@@ -114,116 +119,221 @@ def signature(st):
             st["learned"].get("generated"), st["review_running"], st["ai"])
 
 
-def status_text(st):
-    if not st["ai"]: return "Claude analysis is OFF. Turn it on: " + coach.py_cmd("setup.py", "--panel-ai", "on")
-    if st["review_running"]: return "Claude is analysing your past chats right now..."
-    L = st["learned"]
-    if L.get("generated"): return f"Claude analysed {L.get('prompts', 'your')} prompts from your past chats on {L['generated']}"
-    return "Claude will analyse your past chats in the background"
+# ---------------------------------------------------------------- presentation helpers
+def clip(s, w):
+    return s if len(s) <= w else s[:max(w - 1, 0)] + "…"
 
 
-# ---------------------------------------------------------------- rendering
-def _wrap(s, w, indent=""):
-    return textwrap.wrap(s, w, subsequent_indent=indent) or [""]
+def wrap(s, w, indent=""):
+    return textwrap.wrap(s, max(w, 8), subsequent_indent=indent) or [""]
 
 
-def cur_entry(ui, st):
-    """(index, entry) of the selected prompt: the newest unless n / p chose another. (None, None) when there are none."""
-    es = st["entries"]
-    if not es: return None, None
-    i = min(max(ui["sel"] if ui["sel"] is not None else len(es) - 1, 0), len(es) - 1)
-    return i, es[i]
+def bullet(s, w, maxlines=2):
+    """'• text' wrapped with a hanging indent, cut after maxlines with an ellipsis so one long tip cannot crowd out the rest."""
+    lines = wrap("• " + s, w, "  ")
+    if len(lines) > maxlines: lines = lines[:maxlines]; lines[-1] = clip(lines[-1] + " ", w - 1) + "…"
+    return lines
 
 
-def improvement_lines(e, iw, pending, ai):
-    """[(kind, text)] for the blue part under a prompt."""
+def stamp(ts):
+    d = dt.datetime.fromtimestamp(ts)
+    return d.strftime("%H:%M") if d.date() == dt.date.today() else d.strftime("%b %d %H:%M")
+
+
+def status(e, st, ui):
+    """(state, glyph, colour kind, words) for one prompt."""
+    if e["advice"]: return ("done",) + GLYPHS["done"] + ("analysed",)
+    if e["error"]: return ("error",) + GLYPHS["error"] + ("analysis failed",)
+    if e["off"]: return ("off",) + GLYPHS["off"] + ("opted out of Claude",)
+    if time.time() - ui["pending"].get(e["key"], 0) < PENDING_SECONDS: return ("pending",) + GLYPHS["pending"] + ("analysing",)
+    if e["key"] in ui["tried"]: return ("error",) + GLYPHS["error"] + ("no answer yet, press e to retry",)    # started, never finished
+    if st["ai"] and e["advisable"] and any(x is e for x in st["entries"][-5:]): return ("pending",) + GLYPHS["pending"] + ("queued for analysis",)
+    if e["fails"]: return ("local",) + GLYPHS["local"] + ("can be improved",)
+    return ("quiet",) + GLYPHS["quiet"] + ("nothing to add",)
+
+
+def pattern_texts(st):
+    """Plain-English one-liners about patterns from your past chats that also appear in this thread."""
     out = []
-    if e["advice"]:
-        out.append(("head", "can be improved:"))
-        out += [(k, "  " + x) for k, x in advisor.lines(e["advice"], iw - 2) if k != "after"]
-        out += [(k, "  " + w) for k, x in e["disc"] for w in _wrap(x, iw - 2, "   ")]
-    elif e["error"]: out.append(("bluedim", f"Claude's analysis failed ({str(e['error'])[:80]}). Press e to try again."))
-    elif e["key"] in pending and time.time() - pending[e["key"]] < PENDING_SECONDS: out.append(("bluedim", "Claude is analysing this prompt... (about 20s)"))
-    elif e["off"]: out.append(("bluedim", "this project is in llm-off.txt: never sent to Claude"))
-    elif e["fails"]:
-        out.append(("head", "can be improved:"))
-        out += [("blue", "  " + w) for f in e["fixes"] for w in _wrap("- " + f, iw - 2, "  ")]
-        out.append(("bluedim", "  (Claude's analysis is queued)" if ai and e["advisable"] else "  (press e for Claude's analysis and an enhanced prompt)"))
+    for x in st["insights"]:
+        total = x["past"] + x["here"]
+        if x["kind"] == "request":
+            head = f'You have asked for "{x["name"]}" {total} times' + (f" ({x['past']} before this thread)" if x["past"] else "")
+            tail = (f"you already have /{x['name']}, use it" if x["installed"] else
+                    f"press s to install the drafted skill /{x['name']}" if x["drafted"] else "/coach review can draft a skill for it")
+            out.append(f"{head}: {tail}")
+        else:
+            fix = re.split(r"(?<=[.!?])\s", x.get("fix", "").strip(), maxsplit=1)[0][:110]
+            out.append(f"Habit: {x['name'].replace('-', ' ')}, seen {total} times. {fix}".rstrip())
     return out
 
 
-def body_layout(st, ui, iw, sel):
-    """([(kind, text)], [start line of each entry]) for all of this thread's prompts."""
-    if not st["entries"]: return [("bluedim", "no prompts in this thread yet")], []
-    out, starts = [], []
-    for n, e in enumerate(st["entries"]):
-        starts.append(len(out))
-        out.append(("time", ("* " if n == sel else "") + dt.datetime.fromtimestamp(e["ts"]).strftime("%H:%M")))
-        out += [("prompt", w) for w in _wrap(e["text"], iw)]
-        out += improvement_lines(e, iw, ui["pending"], st["ai"])
-        if e["advice"] and e["after"]:
-            out.append(("head", "enhanced prompt (press c to copy):"))
-            for ln in e["after"].splitlines(): out += [("enh", "  " + w) for w in _wrap(ln, iw - 2)]
+def cur_entry(ui, st):
+    """(index, entry) of the selected prompt: the newest unless Up / Down chose an earlier one. (None, None) when there are none."""
+    es = st["entries"]
+    if not es: return None, None
+    i = len(es) - 1 if ui["sel"] is None else min(max(ui["sel"], 0), len(es) - 1)
+    return i, es[i]
+
+
+def card_lines(st, ui, i, e, iw, level=0):
+    """[(kind, text)]: the prompt you are looking at, what to improve, the enhanced prompt.
+    level 0 = everything, 1 = fewer tips, 2 = one tip and no extras: used to keep the enhanced prompt on screen in a short pane."""
+    out = []
+    _s, glyph, kind, words = status(e, st, ui)
+    older = ui["sel"] is not None and i != len(st["entries"]) - 1
+    out.append(("meta", f"{stamp(e['ts'])}  ·  {words}" + ("   (an earlier prompt: G = newest)" if older else "")))
+    pl = wrap(e["text"], iw)
+    cut = len(pl) > 5
+    if cut: pl = pl[:5]; pl[-1] = clip(pl[-1] + " ", iw - 1) + "…"
+    out += [("prompt", w) for w in pl] + ([("meta", "Enter shows the whole prompt")] if cut else []) + [("blank", "")]
+    adv = e["advice"]
+    if adv:
+        if adv.get("summary") and level == 0: out.append(("task", clip(f"{adv.get('task', 'other')} · {adv['summary']}", iw)))
+        bullets = list(adv.get("tips", [])[:(3, 2, 1)[level]])
+        bullets += [f"use /{u['name']}" + (f": {u['why']}" if u.get("why") else "") for u in adv.get("use", [])[:(2, 2, 0)[level]]]
+        bullets += [f"get {g['name']}" + (f": {g['why']}" if g.get("why") else "") for g in adv.get("get", [])[:(1, 0, 0)[level]]]
+        if bullets:
+            out.append(("label", "Improve"))
+            for b in bullets: out += [("blue", w) for w in bullet(b, iw)]
+            out.append(("blank", ""))
+        if e["after"]:
+            copied = time.time() - ui["copied"].get(e["key"], 0) < 8
+            out.append(("label", "Enhanced prompt  ✓ copied" if copied else "Enhanced prompt  ·  c to copy"))
+            for ln in e["after"].splitlines(): out += [("enh", w) for w in wrap(ln, iw)]
+        found = [(k, x) for k, x in e["disc"] if k != "dim"]
+        if found:
+            out += [("blank", ""), ("label", "Worth a look  (found on the web, not installed)")]
+            for k, x in found: out += [(k, w) for w in wrap(x, iw, "  ")]
+        return out
+    if e["error"]:
+        out.append(("bluedim", f"Claude's analysis failed ({str(e['error'])[:80]}). Press e to try again."))
+        return out
+    if e["off"]:
+        out.append(("bluedim", "This project is in llm-off.txt, so it is never sent to Claude."))
+        return out
+    if kind == "warn":
+        out.append(("bluedim", "Claude is analysing this prompt, usually about 20 seconds. This updates by itself."))
+    hints = [f.split(": ", 1)[1] for f in e["fixes"]]
+    if hints:
+        out.append(("label", "While you wait" if kind == "warn" else "Improve"))
+        for h in hints: out += [("blue", w) for w in bullet(h, iw)]
+    elif kind != "warn":
+        out.append(("bluedim", "Nothing to improve here."))
+    if not st["ai"]:
         out.append(("blank", ""))
-    return out[:-1], starts
+        out.append(("bluedim", "Press e for Claude's analysis and an enhanced prompt."))
+        out += [("bluedim", w) for w in wrap("Analyse every prompt automatically: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ")]
+    return out
 
 
+# ---------------------------------------------------------------- rendering
 def new_ui():
-    return {"sel": None, "off": 0, "follow": True, "lens": 0, "body_h": 10, "detail": False, "dscroll": 0, "pending": {}, "tried": set(),
-            "review_after": 0.0, "msg": "", "reveal": False}
+    return {"sel": None, "lo": 0, "cs": 0, "detail": False, "dscroll": 0, "pending": {}, "tried": set(), "review_after": 0.0, "msg": "",
+            "patterns": False, "copied": {}}
+
+
+def footer_text(W, detail):
+    items = ([("Esc", "back"), ("c", "copy"), ("e", "analyse"), ("↑↓", "scroll"), ("q", "quit")] if detail else
+             [("↑↓", "prompt"), ("c", "copy"), ("e", "analyse"), ("Enter", "full"), ("i", "patterns"), ("s", "skill"), ("q", "quit")])
+    out, used = [], 1
+    for key, label in items:
+        need = len(key) + 1 + len(label) + (2 if out else 0)
+        if used + need > W - 1: break
+        out.append((key, label)); used += need
+    return out
 
 
 def render(st, ui, W, H, color=True):
     """The frame as a list of lines. Pure apart from scroll bookkeeping written into ui."""
-    def c(code, s): return f"\033[{code}m{s}\033[0m" if color and code != "0" else s
+    def c(kind, s): return f"\033[{CODE[kind]}m{s}\033[0m" if color and CODE[kind] != "0" else s
     W = max(W, 30); H = max(H, 10)
     i, e = cur_entry(ui, st)
     if ui["detail"] and e is not None: return detail_frame(st, ui, i, e, W, H, color)
-    iw = W - 3
-    pinned = [("title", "coachline  this thread  " + dt.datetime.now().strftime("%H:%M:%S")), ("bluedim" if st["ai"] else "head", status_text(st))]
-    ins = [(("blue", w) if True else None) for x in st["insights"] for w in _wrap("- " + x["text"], iw, "  ")]
-    cap = max(3, H // 3)
-    if len(ins) > cap: ins = ins[:cap - 1] + [("bluedim", "  ...")]
-    pinned.append(("head", "FROM YOUR PAST CHATS"))
-    pinned += ins or [("bluedim", "  (nothing you repeated in past chats shows up in this thread yet)")]
-    pinned.append(("rule", "-" * (W - 2)))
-    pinned = [(k, w) for k, t in pinned for w in (_wrap(t, W - 2) if k in ("title", "bluedim", "head") else [t])]
-    body_h = max(H - 1 - len(pinned) - 1, 3)
-    sel = i if e is not None else None
-    lines, starts = body_layout(st, ui, iw, sel)
-    ui["body_h"] = body_h; ui["lens"] = len(lines)
-    bottom = max(len(lines) - body_h, 0)
-    off = bottom if ui["follow"] else min(max(ui["off"], 0), bottom)
-    if ui["reveal"] and starts:                       # n / p moved the selection: scroll so the whole prompt is visible
-        s0 = starts[i]; e0 = starts[i + 1] - 1 if i + 1 < len(starts) else len(lines)
-        if s0 < off or e0 > off + body_h: off = min(s0, bottom)
-    ui["off"] = off; ui["reveal"] = False
-    rows = [c(CODE[k], (" " + t)[:W - 1]) for k, t in pinned]
-    shown = lines[off:off + body_h]
-    rows += [c(CODE.get(k, "0"), (" " + t)[:W - 1]) for k, t in shown] + [""] * (body_h - len(shown))
-    rows.append(c("1;33", ui["msg"][:W - 1]) if ui["msg"] else
-                c("2", "n/p prompt  Enter open  c copy  e analyse  s skill  j/k scroll  q quit"[:W - 1]))
+    iw = min(W - 3, MAX_WIDTH)
+    es = st["entries"]; n = len(es); narrow = W < 64
+    # header: where you are, and whether Claude is on
+    working = st["review_running"] or any(status(x, st, ui)[0] == "pending" for x in es)
+    word, kind, dot = (("Claude off", "meta", "○") if not st["ai"] else ("Claude working…", "warn", "●") if working else ("Claude on", "ok", "●"))
+    left = f" coachline · this thread · {n} prompt{'s' if n != 1 else ''}"
+    right = f"{dot} {word} "
+    if len(left) + len(right) + 2 > W - 1: left = " coachline"
+    if len(left) + len(right) + 1 > W - 1: right = f"{dot} "
+    head = c("title", left) + " " * max(W - 1 - len(left) - len(right), 1) + c(kind, right)
+    rule = c("rule", " " + "─" * (W - 3))
+    # patterns: one line, or the list when expanded
+    pats = pattern_texts(st); pat_rows = []
+    if pats and ui["patterns"]:
+        L = st["learned"]; seen = f" ({L['prompts']} prompts, {L['generated']})" if L.get("generated") and L.get("prompts") else ""
+        pat_rows.append(("label", clip(f" Patterns from your past chats{seen}  ·  i hides", W - 1)))
+        cap = max(4, H // 3)
+        body = [("blue", " " + w) for p in pats for w in wrap("• " + p, iw, "  ")]
+        pat_rows += body[:cap] + ([("bluedim", " …")] if len(body) > cap else [])
+    elif pats:
+        skill = " · s installs a skill" if any(x.get("slug") for x in st["insights"]) else ""
+        pat_rows.append(("blue", clip(f" {len(pats)} pattern{'s' if len(pats) != 1 else ''} from your past chats · i to read{skill}", W - 1)))
+    elif st["review_running"]: pat_rows.append(("bluedim", clip(" Claude is analysing your past chats now…", W - 1)))
+    elif st["ai"] and not st["learned"].get("generated"): pat_rows.append(("bluedim", clip(" Claude will analyse your past chats in the background", W - 1)))
+    # the card first: it gets every row the header, patterns, footer and the two list rows do not need
+    fixed = 1 + 1 + 1 + (1 + len(pat_rows) if pat_rows else 0) + 1            # header, rule, rule under the card, patterns + rule, footer
+    min_list, pref_list = min(n, 2), (min(n, max(2, (H - 12) // 4)) if n else 0)
+    room = max(H - 1 - fixed - ((1 + min_list) if n else 0), 3)               # the most rows the card can ever have
+    if e is None:
+        card = [("bluedim", "No prompts in this thread yet."), ("blank", ""), ("bluedim", "Send a prompt in Claude Code and it appears here."),
+                *([("bluedim", w) for w in wrap("Analysis is off. Turn it on: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ")] if not st["ai"] else [])]
+    else:                                                                      # shrink the improvements, never the enhanced prompt
+        for level in ((1, 2) if narrow else (0, 1, 2)):
+            card = card_lines(st, ui, i, e, iw, level)
+            if len(card) <= room: break
+    card_h = max(min(len(card), room), 3)
+    list_n = min(pref_list, max(H - 1 - fixed - card_h - 1, min_list)) if n else 0   # leftover rows go to the list, up to its preferred size
+    ui["cs"] = min(max(ui["cs"], 0), max(len(card) - card_h, 0))
+    shown = card[ui["cs"]:ui["cs"] + card_h]
+    if ui["cs"] > 0 and shown: shown[0] = ("meta", "▴ PgUp for the start")
+    if ui["cs"] + card_h < len(card) and shown: shown[-1] = ("meta", "▾ PgDn for more")
+    rows = [head, rule] + [c(k, (" " + t)[:W - 1]) if k != "blank" else "" for k, t in shown] + [""] * (card_h - len(shown))
+    rows.append(rule)
+    if pat_rows: rows += [c(k, t[:W - 1]) for k, t in pat_rows] + [rule]
+    # the list
+    if n:
+        lo = ui["lo"]; lo = i if i < lo else (i - list_n + 1 if i >= lo + list_n else lo); lo = min(max(lo, 0), max(n - list_n, 0)); ui["lo"] = lo
+        more = ("▴" if lo > 0 else " ") + ("▾" if lo + list_n < n else " ")
+        rows.append(c("meta", f" Prompts in this thread  {more}"))
+        sw = max(len(stamp(x["ts"])) for x in es[lo:lo + list_n])
+        for idx in range(lo, lo + list_n):
+            x = es[idx]; _s, glyph, gk, _w = status(x, st, ui)
+            text = clip(x["text"], max(W - 8 - sw, 8))
+            if idx == i: rows.append(c("sel", f" › {glyph} {stamp(x['ts']):<{sw}}  {text}".ljust(W - 1)[:W - 1]))
+            else: rows.append(" " + "  " + c(gk, glyph) + " " + c("meta", f"{stamp(x['ts']):<{sw}}  ") + text)
+    # footer: a message, or the keys that fit
+    if ui["msg"]: rows.append(c("warn", (" " + ui["msg"])[:W - 1]))
+    else: rows.append(" " + "  ".join(c("key", k) + " " + c("meta", lab) for k, lab in footer_text(W, False)))
     return rows[:H - 1]
 
 
 def detail_frame(st, ui, i, e, W, H, color=True):
-    """One prompt, full width, as plain text: what you wrote, what can be improved, the ENHANCED PROMPT to copy."""
-    def c(code, s): return f"\033[{code}m{s}\033[0m" if color and code != "0" else s
-    iw = max(W - 4, 20)
-    L = [("head", "YOUR PROMPT")] + [("prompt", w) for w in _wrap(e["text"], iw)] + [("blank", "")]
-    imp = improvement_lines(e, iw, ui["pending"], st["ai"])
-    if imp: L += [("head", "CAN BE IMPROVED")] + [(k, x) for k, x in imp if k != "head"] + [("blank", "")]
-    L.append(("head", "ENHANCED PROMPT" + ("   (press c to copy it; [ASK: ...] and <email> placeholders are yours to fill in)" if e["after"] else "")))
+    """One prompt, full width, as plain text: what you wrote, what can be improved, the task and workflow, the ENHANCED PROMPT to copy."""
+    def c(kind, s): return f"\033[{CODE[kind]}m{s}\033[0m" if color and CODE[kind] != "0" else s
+    iw = max(min(W - 4, MAX_WIDTH), 20)
+    L = [("label", "YOUR PROMPT")] + [("prompt", w) for w in wrap(e["text"], iw)] + [("blank", "")]
+    adv = e["advice"]
+    if adv:
+        L += [("label", "CAN BE IMPROVED")] + [(k, w) for k, x in advisor.lines(adv, iw - 2) if k != "after" for w in [x]] + [("blank", "")]
+        L += [(k, w) for k, x in e["disc"] for w in wrap(x, iw, "   ")] + ([("blank", "")] if e["disc"] else [])
+    elif e["fixes"]:
+        L += [("label", "CAN BE IMPROVED")] + [("blue", w) for f in e["fixes"] for w in wrap("• " + f.split(": ", 1)[1], iw, "  ")] + [("blank", "")]
+    L.append(("label", "ENHANCED PROMPT" + ("   (press c to copy it; [ASK: ...] and <email> placeholders are yours to fill in)" if e["after"] else "")))
     if e["after"]:
-        for ln in e["after"].splitlines(): L += [("enh", w) for w in _wrap(ln, iw)]
-    elif not e["advice"]:
-        L.append(("bluedim", "none yet. Press e to have Claude write one for this prompt (sends this redacted prompt to your Claude subscription)."))
+        for ln in e["after"].splitlines(): L += [("enh", w) for w in wrap(ln, iw)]
+    elif e["error"]: L.append(("bluedim", f"Analysis failed ({str(e['error'])[:80]}). Press e to try again."))
+    elif e["off"]: L.append(("bluedim", "This project is in llm-off.txt, so it is never sent to Claude."))
+    else: L.append(("bluedim", "None yet. Press e to have Claude write one for this prompt (sends this redacted prompt to your Claude subscription)."))
     body_h = H - 3
     ui["dscroll"] = min(max(ui["dscroll"], 0), max(len(L) - body_h, 0))
-    rows = [c("1", "coachline") + c("2", f"  prompt {i + 1} of {len(st['entries'])}   " + dt.datetime.fromtimestamp(e["ts"]).strftime("%H:%M"))[:max(W - 10, 0)]]
+    rows = [c("title", " coachline") + c("meta", f"  prompt {i + 1} of {len(st['entries'])}  ·  {stamp(e['ts'])}")[:max(W - 10, 0)]]
     part = L[ui["dscroll"]:ui["dscroll"] + body_h]
-    rows += [c(CODE.get(k, "0"), ("  " + x)[:W - 1]) for k, x in part] + [""] * (body_h - len(part))
-    rows.append(c("1;33", ui["msg"][:W - 1]) if ui["msg"] else c("2", "Enter/Esc back  c copy enhanced prompt  e analyse  n/p other prompt  j/k scroll  q quit"[:W - 1]))
+    rows += [c(k, ("  " + x)[:W - 1]) if k != "blank" else "" for k, x in part] + [""] * (body_h - len(part))
+    rows.append(c("warn", (" " + ui["msg"])[:W - 1]) if ui["msg"] else " " + "  ".join(c("key", k) + " " + c("meta", lab) for k, lab in footer_text(W, True)))
     return rows[:H - 1]
 
 
@@ -232,21 +342,19 @@ def handle(ui, st, key, io=None):
     """Apply one key to ui. True = quit. `io` (copy, enhance, review, install) is swapped for fakes in tests."""
     io = io or IO
     key = ALIASES.get(key, key); ui["msg"] = ""
-    i, e = cur_entry(ui, st)
+    n = len(st["entries"]); i, e = cur_entry(ui, st)
     if key == "q": return True
-    if key in ("next", "prev") and e is not None:
-        j = min(max(i + (1 if key == "next" else -1), 0), len(st["entries"]) - 1)
-        ui["sel"] = j; ui["reveal"] = True; ui["dscroll"] = 0; ui["follow"] = j == len(st["entries"]) - 1
-        return False
     if key == "enter":
         if e is not None: ui["detail"] = not ui["detail"]; ui["dscroll"] = 0
         return False
     if key == "esc": ui["detail"] = False; return False
+    if key == "patterns": ui["patterns"] = not ui["patterns"]; return False
     if key == "copy":
         if e is None: ui["msg"] = "no prompt selected"
         elif not e["after"]: ui["msg"] = "no enhanced prompt yet: press e to have Claude write one for this prompt"
         else:
             m = io.copy(e["after"])
+            if m: ui["copied"][e["key"]] = time.time()
             ui["msg"] = f"copied the enhanced prompt ({len(e['after'])} characters) via {m}" if m else "no clipboard available here: press Enter and select the text"
         return False
     if key == "enhance":
@@ -256,19 +364,25 @@ def handle(ui, st, key, io=None):
         elif time.time() - ui["pending"].get(e["key"], 0) < PENDING_SECONDS: ui["msg"] = "already asking Claude about this prompt..."
         else:
             io.enhance(e["key"]); ui["pending"][e["key"]] = time.time()
-            ui["msg"] = "asking Claude in the background (about 20s); the panel updates by itself"
+            ui["msg"] = "asking Claude in the background (about 20 seconds); the panel updates by itself"
         return False
     if key == "skill":
         slugs = [x["slug"] for x in st["insights"] if x.get("slug")]
-        ui["msg"] = io.install(slugs[0])[1] if slugs else "no drafted skill to install yet (it appears after Claude analyses your past chats)"
+        if not slugs: ui["msg"] = "no drafted skill to install yet (it appears after Claude analyses your past chats)"; return False
+        ok, ui["msg"] = io.install(slugs[0])
+        for x in st["insights"]:
+            if ok and x.get("slug") == slugs[0]: x["installed"] = True; x["slug"] = None      # the pattern stops offering it at once
         return False
-    page = max(ui["body_h"] - 1, 1)
-    delta = {"up": -1, "down": 1, "pgup": -page, "pgdn": page, "home": -10 ** 6, "end": 10 ** 6}.get(key)
-    if delta is None: return False
-    if ui["detail"]: ui["dscroll"] = max(0, ui["dscroll"] + delta)
-    else:
-        bottom = max(ui["lens"] - ui["body_h"], 0)
-        ui["off"] = min(max(ui["off"] + delta, 0), bottom); ui["follow"] = ui["off"] >= bottom  # scrolling up stops auto-follow; the newest resumes it
+    if ui["detail"]:
+        delta = {"up": -1, "down": 1, "pgup": -10, "pgdn": 10, "home": -10 ** 6, "end": 10 ** 6}.get(key)
+        if delta is not None: ui["dscroll"] = max(0, ui["dscroll"] + delta)
+        return False
+    if key in ("up", "down", "home", "end") and n:
+        j = {"up": i - 1, "down": i + 1, "home": 0, "end": n - 1}[key]
+        j = min(max(j, 0), n - 1)
+        ui["sel"] = None if j == n - 1 else j; ui["cs"] = 0                # the newest is "following": new prompts take over the card
+    elif key in ("pgup", "pgdn"):
+        ui["cs"] = max(0, ui["cs"] + (-6 if key == "pgup" else 6))
     return False
 
 
@@ -353,10 +467,12 @@ def main(argv):
     ap = argparse.ArgumentParser(); ap.add_argument("--history", default=coach.HIST)
     ap.add_argument("--exit-after", type=float, default=0, help=argparse.SUPPRESS)
     ap.add_argument("--once", action="store_true"); ap.add_argument("--width", type=int); ap.add_argument("--height", type=int)
+    ap.add_argument("--patterns", action="store_true", help="with --once: show the patterns from your past chats expanded")
     a = ap.parse_args(argv)
     if a.once or not (sys.stdin.isatty() and sys.stdout.isatty()):
         if not a.once: print("(not a terminal: printing one frame; run watch.py in a real terminal pane for the interactive view)")
-        print("\n".join(render(build(a.history), new_ui(), a.width or 100, a.height or 40, color=False))); return
+        ui = new_ui(); ui["patterns"] = a.patterns
+        print("\n".join(render(build(a.history), ui, a.width or 100, a.height or 40, color=False))); return
     if os.name == "nt": os.system("")  # switches the Windows console to ANSI mode
     else:
         import termios, tty
