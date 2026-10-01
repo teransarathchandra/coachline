@@ -442,6 +442,49 @@ class Mouse(Base):
         self.assertIn("mouse off: select and copy text", frames[1]); self.assertIn("mouse on: wheel scrolls", frames[2])
 
 
+class PaneSize(unittest.TestCase):
+    """A pane inherits COLUMNS / LINES from whatever opened it (Claude Code's hook), so they describe some other window. Drawing for that
+    width and letting the real, narrower pane cut the lines mid-word was the 'panel is broken' report."""
+
+    def test_the_size_comes_from_the_terminal_not_from_the_environment(self):
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"COLUMNS": "100", "LINES": "30"}), \
+                mock.patch.object(watch.os, "get_terminal_size", lambda fd: os.terminal_size((51, 28))):
+            self.assertEqual(watch.term_size(), (51, 28))
+
+    def test_when_nothing_can_be_asked_it_is_a_standard_small_terminal_not_the_environment(self):
+        from unittest import mock
+
+        def boom(*a): raise OSError("not a terminal")
+        with mock.patch.dict(os.environ, {"COLUMNS": "200", "LINES": "70"}), mock.patch.object(watch.os, "get_terminal_size", boom), \
+                mock.patch.object(watch.os, "open", boom), mock.patch.object(watch.os, "name", "posix"):
+            self.assertEqual(watch.term_size(), (80, 24))
+
+    def test_a_real_pty_of_51_columns_is_drawn_for_51_even_with_columns_set_to_100(self):
+        if os.name == "nt": self.skipTest("needs a POSIX pty; the Windows path was checked in a real Windows Terminal split")
+        import fcntl, pty, select, struct, termios
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("now", "p", "Create a modern luxury premium website for shoe selling with astro frontend " * 2)])
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.environ.update({"CLAUDE_CONFIG_DIR": cfg, "TERM": "xterm", "COLUMNS": "100", "LINES": "30", "PYTHONIOENCODING": "utf-8"})
+                os.execv(sys.executable, [sys.executable, os.path.join(ROOT, "scripts", "watch.py")])
+            fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 51, 0, 0))      # the pane is 51 columns wide
+            buf, end = "", time.time() + 10
+            try:
+                while "Prompts in this thread" not in buf and time.time() < end:
+                    if select.select([fd], [], [], 0.2)[0]:
+                        try: buf += os.read(fd, 65536).decode("utf-8", "ignore")
+                        except OSError: break
+                os.write(fd, b"q")
+            finally:
+                try: os.kill(pid, 9)
+                except OSError: pass
+            frame = buf.split("\x1b[H")[1] if "\x1b[H" in buf else buf                  # the first full frame
+            lines = [re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", l) for l in frame.split("\x1b[K\r\n")]      # the pty turns \n into \r\n
+            self.assertTrue(lines and all(watch.dw(l) <= 50 for l in lines), [watch.dw(l) for l in lines])      # nothing is wider than the pane
+
+
 class Navigation(Base):
     def setUp(self):
         super().setUp()
