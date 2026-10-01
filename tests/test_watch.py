@@ -42,7 +42,7 @@ def flat(s):
 
 def card_of(frame):
     """The text between the first and second rule: the card for the selected prompt."""
-    lines = plain(frame).splitlines()
+    lines = plain(frame).replace("\u2503", " ").splitlines()                 # the coloured gutter bars are decoration
     rules = [n for n, l in enumerate(lines) if l.strip().startswith("\u2500")]
     return " ".join(" ".join(lines[rules[0] + 1:rules[1]]).split())
 
@@ -156,7 +156,7 @@ class TheCard(Base):
         self.analyse(11, "P12 " + VAGUE)
         for W, H in [(56, 34), (70, 26), (90, 40), (120, 50)]:
             card = card_of(once(self.cfg, W, H))
-            self.assertIn("Enhanced prompt", card, (W, H)); self.assertIn("c to copy", card, (W, H))
+            self.assertIn("Enhanced prompt", card, (W, H)); self.assertIn("c Copy", card, (W, H))
             self.assertIn("Done when: the unit tests pass.", card, (W, H))           # the whole thing, not just its first line
 
     def test_a_short_pane_shrinks_the_improvements_before_the_enhanced_prompt(self):
@@ -205,17 +205,19 @@ class Colours(Base):
     def test_your_prompt_is_white_and_what_can_be_improved_is_blue(self):
         rows = self.rows()
         prompt = next(r for r in rows if "UNIQUEPROMPT" in r and "\u203a" not in r)
-        self.assertTrue(prompt.startswith("\x1b[1;97m"), repr(prompt[:20]))              # bright white
+        self.assertIn("\x1b[1;97mUNIQUEPROMPT", prompt)                                   # bright white, after a white gutter bar
+        self.assertIn("\x1b[97m\u2503", prompt)
         label = next(r for r in rows if "Improve" in r)
-        self.assertTrue(label.startswith("\x1b[1;94m"), repr(label[:20]))                # bright blue
-        hint = next(r for r in rows if "swap 'carefully" in r or "carefully/best/clean" in r)
-        self.assertTrue(hint.startswith("\x1b[94m"), repr(hint[:20]))
+        self.assertIn("\x1b[1;94mImprove", label)                                         # bright blue title and gutter
+        hint = next(r for r in rows if "carefully/best/clean" in r)
+        self.assertIn("\x1b[94m\u2022", hint)
 
     def test_claudes_advice_and_the_enhanced_prompt_are_blue_too(self):
         self.analyse(0, "UNIQUEPROMPT " + VAGUE)
         rows = self.rows()
         for needle in ("Ask for every usage first.", "Rework the tax code"):
-            self.assertTrue(next(r for r in rows if needle in r).startswith("\x1b[94m"), needle)
+            row = next(r for r in rows if needle in r)
+            self.assertIn("\x1b[94m", row.split(needle)[0].split("┃")[-1])             # the text after the gutter bar is blue
 
     def test_structure_is_grey_and_the_selected_row_is_marked_even_without_colour(self):
         rows = self.rows()
@@ -333,9 +335,9 @@ class Analysis(Base):
         self.analyse(0, SOLID, discovery=[{"name": "GreatKit", "kind": "tool", "why": "better", "url": "https://x.example.com/g", "install": "npm i g",
                                            "stars": 1200, "pushed": "2026-08-01"}])
         card = card_of(once(self.cfg, 100, 50))
-        for want in ("refactoring \u00b7 tax rework", "Improve", "\u2022 Ask for every usage first.", "\u2022 use /simplify: clean up after", "\u2022 get shiny@mk: codemods",
-                     "Enhanced prompt \u00b7 c to copy", "Rework the tax code in the invoice module.", "Done when: the unit tests pass.",
-                     "Worth a look (found on the web, not installed)", "better: GreatKit (tool)", "install: npm i g"):
+        for want in ("Improve refactoring", "tax rework", "\u2022 Ask for every usage first.", "\u2022 use /simplify: clean up after", "\u2022 get shiny@mk: codemods",
+                     "Enhanced prompt c Copy", "Rework the tax code in the invoice module.", "Done when: the unit tests pass.",
+                     "Worth a look found on the web, not installed", "better: GreatKit (tool)", "install: npm i g"):
             self.assertIn(want, card)
 
     def test_the_full_view_adds_the_task_and_the_workflow(self):
@@ -343,6 +345,101 @@ class Analysis(Base):
         d = flat(self.drive(["enter"], W=100, H=40)[1])
         for want in ("YOUR PROMPT", "CAN BE IMPROVED", "task: refactoring", "flow: 1) Search 2) Rename 3) Test", "ENHANCED PROMPT", "press c to copy"):
             self.assertIn(want, d)
+
+
+class WideText(Base):
+    """CJK and emoji take two terminal columns; counting them as one makes lines wrap and the screen glitch."""
+    def test_display_width_and_clipping_count_wide_characters_as_two(self):
+        self.assertEqual((watch.dw("abc"), watch.dw("日本"), watch.dw("\U0001F680 go"), watch.dw("é")), (3, 4, 5, 1))
+        self.assertEqual(watch.dw(watch.clip("日本語のテスト", 7)), 7)           # 3 wide characters plus the ellipsis
+        self.assertTrue(all(watch.dw(l) <= 10 for l in watch.wrap("日本語 " * 12 + "x" * 30, 10)))
+        self.assertEqual(watch.tidy("a\tb\x07c"), "a b c")                                          # no control characters reach the screen
+
+    def test_a_prompt_full_of_wide_characters_never_overflows_the_pane(self):
+        text = "これを直してください \U0001F680 " * 14 + "please make the invoice page faster for everyone"
+        history(self.cfg, [("now", "p", text), ("now", "p", text + " again")])
+        for W, H in [(40, 20), (56, 34), (90, 30)]:
+            lines = watch.render(watch.build(self.path), watch.new_ui(), W, H, color=False)
+            self.assertTrue(all(watch.dw(l) <= W - 1 for l in lines), (W, H, [watch.dw(l) for l in lines]))
+
+
+class Mouse(Base):
+    def setUp(self):
+        super().setUp()
+        history(self.cfg, [("now", "p", f"P{i:02d} " + VAGUE) for i in range(1, 13)])
+        self.analyse(11, "P12 " + VAGUE)
+
+    def frame(self, ui, st, W=90, H=40):
+        return watch.render(st, ui, W, H, color=False)
+
+    def test_the_input_parser_reads_keys_and_sgr_mouse_events(self):
+        self.assertEqual(watch.parse_input("\x1b[A\x1b[B\x1b[5~q"), ["up", "down", "pgup", "q"])
+        self.assertEqual(watch.parse_input("\x1bOA\x1b[H"), ["up", "home"])
+        self.assertEqual(watch.parse_input("\x1b[<0;12;7M\x1b[<0;12;7m\x1b[<64;3;4M"), [("mouse", 0, 12, 7, True), ("mouse", 0, 12, 7, False), ("mouse", 64, 3, 4, True)])
+        self.assertEqual(watch.parse_input("\x1b"), ["\x1b"])                            # a lone Escape (ALIASES turns it into 'esc')
+        self.assertEqual(watch.parse_input("\x1b[<0;1"), [])                             # an unfinished sequence is dropped, not misread
+        self.assertEqual(watch.parse_input("\x1b[1;5A\x1b[?1;2cx"), ["x"])              # modified arrows and terminal replies are ignored
+
+    def test_input_that_arrives_in_pieces_is_put_back_together(self):
+        p = watch.InputParser()
+        got = []
+        for piece in ("\x1b", "[", "<", "0;", "2", "0", ";1", "3M", "\x1b[<64;", "20;13", "M", "q"):               # how Windows delivered one click
+            got += p.feed(piece)
+        self.assertEqual(got, [("mouse", 0, 20, 13, True), ("mouse", 64, 20, 13, True), "q"])
+        self.assertEqual(p.feed("\x1b"), []); self.assertEqual(p.flush(), ["\x1b"])                      # a lone ESC waits, then is Escape
+        self.assertEqual(p.feed("\x1b[A"), ["up"])                                                        # ...but not when an arrow follows it
+        self.assertEqual(p.feed("\x1b[<0;1"), []); self.assertEqual(p.flush(), [])                        # an unfinished report is dropped
+
+    def test_only_the_press_of_a_wheel_notch_scrolls(self):
+        st = watch.build(self.path); ui = watch.new_ui(); self.frame(ui, st, 60, 16)
+        r = ui["list_rows"][0] + 1
+        watch.handle(ui, st, ("mouse", 64, 10, r, True)); watch.handle(ui, st, ("mouse", 64, 10, r, False))
+        self.assertEqual(ui["sel"], 10)                                                  # one notch, one step
+
+    def test_a_click_on_a_list_row_selects_that_prompt(self):
+        st = watch.build(self.path); ui = watch.new_ui(); f = self.frame(ui, st)
+        row = next(n for n, l in enumerate(f) if "P09" in l and "›" not in l)
+        self.assertFalse(watch.handle(ui, st, ("mouse", 0, 21, row + 1, True)))
+        self.assertIn("P09", card_of("\n".join(self.frame(ui, st))))
+        f = self.frame(ui, st)
+        newest = next(n for n, l in enumerate(f) if "P12" in l and l.startswith("   "))
+        watch.handle(ui, st, ("mouse", 0, 21, newest + 1, True))
+        self.assertIsNone(ui["sel"])                                                     # back on the newest: it follows new prompts again
+
+    def test_the_copy_button_and_the_footer_buttons_are_clickable(self):
+        class IO:
+            copied = []
+            def copy(self, t): self.copied.append(t); return "test clipboard"
+        io = IO(); st = watch.build(self.path); ui = watch.new_ui(); f = self.frame(ui, st)
+        row = next(n for n, l in enumerate(f) if "Enhanced prompt" in l); col = f[row].index("c Copy") + 1
+        watch.handle(ui, st, ("mouse", 0, col + 1, row + 1, True), io)
+        self.assertEqual(io.copied, [ADVICE["after"]])
+        self.assertIn("copied the enhanced prompt", ui["msg"])
+        ui = watch.new_ui(); f = self.frame(ui, st)
+        foot = len(f) - 1; col = f[foot].index("i patterns")
+        watch.handle(ui, st, ("mouse", 0, col + 1, foot + 1, True), io)
+        self.assertTrue(ui["patterns"])                                                  # the footer button did what the key does
+        watch.handle(ui, st, ("mouse", 0, 1, foot + 1, True), io)                        # a click on empty space does nothing
+        watch.handle(ui, st, ("mouse", 2, col + 1, foot + 1, True), io)                  # nor does a right click
+        self.assertTrue(ui["patterns"])
+
+    def test_the_wheel_moves_the_selection_over_the_list_and_scrolls_the_card_elsewhere(self):
+        st = watch.build(self.path); ui = watch.new_ui(); self.frame(ui, st, 60, 16)
+        lr = ui["list_rows"]
+        watch.handle(ui, st, ("mouse", 64, 10, lr[0] + 1, True))                         # wheel up over the list
+        self.assertEqual(ui["sel"], 10)
+        watch.handle(ui, st, ("mouse", 65, 10, lr[0] + 1, True))
+        self.assertIsNone(ui["sel"])
+        watch.handle(ui, st, ("mouse", 65, 10, 4, True))                                 # wheel down over the card
+        self.assertGreater(ui["cs"], 0)
+        watch.handle(ui, st, ("mouse", 64, 10, 4, True))
+        self.assertEqual(ui["cs"], 0)
+
+    def test_m_switches_mouse_reporting_so_you_can_select_text(self):
+        emitted, it, frames = [], iter(["m", "m"]), []
+        watch.loop(lambda t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (100, 30), lambda: watch.build(self.path), emit=emitted.append)
+        self.assertEqual(emitted, [watch.MOUSE_OFF, watch.MOUSE_ON])
+        self.assertIn("mouse off: select and copy text", frames[1]); self.assertIn("mouse on: wheel scrolls", frames[2])
 
 
 class Navigation(Base):
@@ -354,7 +451,7 @@ class Navigation(Base):
         f = self.drive(["up", "up", "down"])
         self.assertIn("P12", card_of(f[0]))
         self.assertIn("P11", card_of(f[1])); self.assertIn("P10", card_of(f[2])); self.assertIn("P11", card_of(f[3]))
-        self.assertIn("an earlier prompt: G = newest", card_of(f[1]))
+        self.assertIn("earlier prompt, G = newest", card_of(f[1]))
 
     def test_home_and_end_jump_to_the_oldest_and_the_newest(self):
         f = self.drive(["home", "end"])
@@ -446,11 +543,21 @@ class Navigation(Base):
             self.assertTrue(read_until("this thread"), buf[-300:])
             self.assertIn("\033[?1049h", buf)                  # alternate screen
             os.write(fd, b"\x1b[A")                            # the up-arrow key, as a terminal sends it
-            self.assertTrue(read_until("an earlier prompt"), buf[-300:])
+            self.assertIn("\033[?1000h\033[?1006h", buf)       # mouse reporting is on
+            self.assertTrue(read_until("earlier prompt, G = newest"), buf[-300:])
             os.write(fd, b"c")                                 # copy with no enhanced prompt yet: a message, proving the key was read
             self.assertTrue(read_until("no enhanced prompt yet"), buf[-300:])
-            os.write(fd, b"q")
-            self.assertTrue(read_until("\033[?1049l"), buf[-200:])   # terminal restored on quit
+            os.write(fd, b"m")                                 # mouse off, so the terminal's own text selection works again
+            self.assertTrue(read_until("mouse off: select and copy text"), buf[-300:])
+            self.assertIn("\033[?1000l", buf)
+            os.write(fd, b"m"); self.assertTrue(read_until("mouse on: wheel scrolls"), buf[-300:])
+            os.write(fd, b"\x1b[<65;5;5M")                     # a wheel notch over the card (SGR mouse report, as the terminal sends it)
+            os.write(fd, b"j")                                 # down to the newest prompt; the footer is back
+            # click the footer's "q quit" button at the place the layout says it is
+            ui = watch.new_ui(); watch.render(watch.build(self.path), ui, 100, 30, color=False)
+            row, c0, c1, _a = next(h for h in ui["hits"] if h[3] == "q")
+            os.write(fd, f"\x1b[<0;{c0 + 2};{row + 1}M".encode())
+            self.assertTrue(read_until("\033[?1049l"), buf[-200:])   # terminal restored on quit, by a click
             _, status = os.waitpid(pid, 0)
             self.assertEqual(os.WEXITSTATUS(status), 0)
         finally:
