@@ -1,7 +1,7 @@
 import json, os, re, subprocess, sys, tempfile, unittest
 
 from test_review import run, read
-from test_watch import Base, history, once, flat, T0, VAGUE
+from test_watch import Base, history, once, flat, card_of, T0, VAGUE
 import coach, watch
 
 FAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_claude.py").replace("\\", "/")
@@ -37,7 +37,7 @@ def key_for(i, text, proj="p"):
 class Panel(Base):
     def setUp(self):
         super().setUp()
-        self.prompts = [VAGUE + f" P{i:02d}" for i in range(1, 4)]
+        self.prompts = [f"P{i:02d} " + VAGUE for i in range(1, 4)]
         history(self.cfg, [("now", "p", t) for t in self.prompts])
         self.io = Fake()
 
@@ -52,9 +52,8 @@ class Panel(Base):
             f.write(json.dumps({"key": key_for(i, self.prompts[i]), "text": "AFTER: " + advice["after"], "advice": advice}) + "\n")
 
     def marked(self, frame):
-        """The prompt text under the '* HH:MM' marker."""
-        lines = re.sub(r"\x1b\[[0-9;]*m", "", frame).splitlines(); n = next(i for i, l in enumerate(lines) if re.search(r"\* \d\d:\d\d", l))
-        return " ".join(lines[n + 1:n + 4])
+        """What the card shows: the selected prompt and its analysis."""
+        return card_of(frame)
 
     def test_the_newest_prompt_is_selected_and_n_p_move_the_marker(self):
         f = self.frames(["p", "p", "n"])
@@ -64,7 +63,7 @@ class Panel(Base):
         self.assertIn("P02", self.marked(f[3]))
 
     def test_moving_the_selection_scrolls_it_into_view(self):
-        history(self.cfg, [("now", "p", VAGUE + f" Q{i:02d}") for i in range(1, 13)])
+        history(self.cfg, [("now", "p", f"Q{i:02d} " + VAGUE) for i in range(1, 13)])
         f = self.frames(["p"] * 11, W=100, H=14)
         self.assertNotIn("Q01", f[0])                         # oldest is off screen at first
         self.assertIn("Q01", f[-1])                           # ...and visible once selected
@@ -83,7 +82,7 @@ class Panel(Base):
 
     def test_detail_view_says_what_to_do_when_there_is_no_enhanced_prompt(self):
         f = self.frames(["enter"])
-        self.assertIn("none yet. Press e", f[1])
+        self.assertIn("None yet. Press e", flat(f[1]))
 
     def test_c_copies_the_enhanced_prompt_exactly_as_written(self):
         self.add_advice(2)
@@ -105,7 +104,7 @@ class Panel(Base):
         self.assertEqual(self.io.enhanced, [key_for(1, self.prompts[1])])
         self.assertIn("asking Claude in the background", f[2])
         self.assertIn("already asking Claude", f[3])
-        self.assertIn("Claude is analysing this prompt... (about 20s)", f[2])
+        self.assertIn("Claude is analysing this prompt, usually about 20 seconds", flat(f[2]))
 
     def test_e_refuses_projects_in_the_opt_out_list_and_already_enhanced_prompts(self):
         os.makedirs(os.path.join(self.cfg, "coach"))
@@ -129,9 +128,15 @@ class EnhanceOneJob(Base):
 
     def setUp(self):
         super().setUp()
-        self.text = VAGUE + " Z01"
-        history(self.cfg, [("now", "p", "warm up the earlier thing first please now"), ("now", "p", self.text), ("now", "p", VAGUE + " Z02")])
+        self.text = "Z01 " + VAGUE
+        history(self.cfg, [("now", "p", "warm up the earlier thing first please now"), ("now", "p", self.text), ("now", "p", "Z02 " + VAGUE)])
         self.key = key_for(1, self.text)
+
+    def card_for(self, marker):
+        """The card the panel shows when the prompt containing `marker` is selected."""
+        st = watch.build(self.path); ui = watch.new_ui()
+        ui["sel"] = next(i for i, e in enumerate(st["entries"]) if marker in e["text"])
+        return card_of("\n".join(watch.render(st, ui, 130, 40, color=False)))
 
     def job(self, key, **env):
         return run(self.cfg, "coach.py", "--bg-rewrite", "--key", key, **env)
@@ -141,7 +146,7 @@ class EnhanceOneJob(Base):
         with open(os.path.join(self.cfg, "coach", "rewrites.jsonl"), encoding="utf-8") as f: recs = [json.loads(l) for l in f]
         self.assertEqual([r["key"] for r in recs], [self.key])
         self.assertEqual(recs[0]["advice"]["after"], AFTER)
-        self.assertIn("Goal: make checkout faster", once(self.cfg, 130, 40).replace("│", ""))
+        self.assertIn("Goal: make checkout faster", self.card_for("Z01"))
         with open(os.path.join(self.cfg, "sent.log"), encoding="utf-8") as f: sent = f.read()
         self.assertIn("Z01", sent); self.assertNotIn("Z02", sent)                  # only the chosen prompt was sent
         self.assertIn("Never ask for it again", sent)                               # the paste-marker rule is part of the request
@@ -150,7 +155,7 @@ class EnhanceOneJob(Base):
         self.job(self.key, FAKE_MODE="fail")
         with open(os.path.join(self.cfg, "coach", "rewrites.jsonl"), encoding="utf-8") as f: rec = json.loads(f.readline())
         self.assertEqual(rec["key"], self.key); self.assertIn("boom", rec["error"])
-        self.assertIn("Claude's analysis failed", flat(once(self.cfg, 130, 40)))
+        self.assertIn("Claude's analysis failed", self.card_for("Z01"))
 
     def test_unknown_keys_and_opted_out_projects_never_reach_claude(self):
         self.assertEqual(self.job("123.0:deadbeefdead", FAKE_JSON=self.ADV).returncode, 0)
@@ -163,20 +168,21 @@ class EnhanceOneJob(Base):
 class AnalysisContext(Base):
     ADV = json.dumps(ADVICE)
 
-    def test_only_the_last_three_earlier_prompts_of_the_same_conversation_are_context(self):
+    def test_only_the_last_five_earlier_prompts_of_the_same_conversation_are_context(self):
         rows = [("other", "p", "OTHERSESSION write the invoice report for me today"), ("now", "p", "EARLIERONE build the landing page for shoes"),
                 ("now", "D:/w/secret", "SECRETPROMPT the confidential ledger migration plan"), ("now", "p", "EARLIERTWO make the hero section darker please"),
                 ("now", "p", "EARLIERTHREE add a size guide below the products"), ("now", "p", "EARLIERFOUR now do the same for the second page"),
+                ("now", "p", "EARLIERFIVE add reviews under the size guide"), ("now", "p", "EARLIERSIX and a newsletter box in the footer"),
                 ("now", "p", "TARGETPROMPT and also make it work on mobile too")]
         history(self.cfg, rows)
         os.makedirs(os.path.join(self.cfg, "coach"), exist_ok=True)
         with open(os.path.join(self.cfg, "coach", "llm-off.txt"), "w") as f: f.write("secret\n")
-        r = run(self.cfg, "coach.py", "--bg-rewrite", "--key", key_for(6, rows[6][2]), FAKE_JSON=self.ADV)
+        r = run(self.cfg, "coach.py", "--bg-rewrite", "--key", key_for(len(rows) - 1, rows[-1][2]), FAKE_JSON=self.ADV)
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(os.path.join(self.cfg, "sent.log"), encoding="utf-8") as f: sent = f.read()
         self.assertIn("EARLIER PROMPTS IN THIS CONVERSATION", sent)
-        for want in ("EARLIERTWO", "EARLIERTHREE", "EARLIERFOUR", "TARGETPROMPT"): self.assertIn(want, sent)
-        for never in ("EARLIERONE", "OTHERSESSION", "SECRETPROMPT"): self.assertNotIn(never, sent)   # 4th back, another conversation, opted out
+        for want in ("EARLIERTWO", "EARLIERTHREE", "EARLIERFOUR", "EARLIERFIVE", "EARLIERSIX", "TARGETPROMPT"): self.assertIn(want, sent)
+        for never in ("EARLIERONE", "OTHERSESSION", "SECRETPROMPT"): self.assertNotIn(never, sent)   # sixth back, another conversation, opted out
 
     def test_a_prose_answer_is_retried_automatically_and_the_panel_gets_the_result(self):
         history(self.cfg, [("now", "p", "TARGETPROMPT make the checkout faster for every customer please")])

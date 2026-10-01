@@ -3,27 +3,31 @@
 A panel in a split pane next to Claude Code. It shows **this thread's prompts** (white) and **what can be improved** (blue), analysed by Claude on your existing subscription (`claude -p`): **no API key**. It also reads your past chats, so it can tell you when something you keep asking for deserves a skill. Standard-library Python, no npm.
 
 ```
- coachline  this thread  15:33:41
- Claude analysed 65 prompts from your past chats on 2026-10-01
- FROM YOUR PAST CHATS
-   - You have asked for "merge-prs-and-update" 4x in past chats and 1x in this thread -> make it a skill,
-     /merge-prs-and-update (a draft is ready: press s to install it)
-   - Recurring gap (2x before, 1x here), vague-quality-feedback: describe what is wrong and show a reference
- ----------------------------------------------------------------------
- 15:28
+ coachline · this thread · 12 prompts                         ● Claude on
+ ───────────────────────────────────────────────────────────────────────
+ 15:28  ·  analysed
  <your prompt, in white>
- can be improved:                                   (blue from here)
-   task: frontend - ...
-   tip: ...
- enhanced prompt (press c to copy):
-   ...
+
+ Improve                                            (blue from here)
+ • tip, short and concrete
+ • use /skill-you-already-have: why
+
+ Enhanced prompt  ·  c to copy
+ <a complete prompt you can paste as it is>
+ ───────────────────────────────────────────────────────────────────────
+ 2 patterns from your past chats · i to read · s installs a skill
+ ───────────────────────────────────────────────────────────────────────
+ Prompts in this thread
+   ✓ 14:59  I just opened a new claude in a terminal, b…
+ › ✓ 15:28  No need to open a separate terminal, split p…
+ ↑↓ prompt  c copy  e analyse  Enter full  i patterns  s skill  q quit
 ```
 
 > **Status: early.** Claude's analysis is the engine; its output is checked locally (see [How it is checked](#how-it-is-checked)) but the quality of advice varies. The five local rules are keyword heuristics, shown only as a fallback when Claude analysis is off; their precision has not been measured. Developed and run on Windows; macOS and Linux are covered by CI only.
 
 ## What it does
 
-- **The panel** (`python ~/.claude/coach/panel.py`, or `python scripts/watch.py`): one column, this thread only (the session of your newest prompt). Your prompts are white, everything that can be improved is blue. No animation; it redraws on a key or when new data arrives. Keys: `n`/`p` select a prompt (marked `*`), **Enter** opens it full width as plain text, `c` copies its enhanced prompt, `e` has Claude analyse it now, `s` installs a drafted skill, `j`/`k`/PgUp/PgDn scroll, `g`/`G` top or newest, `q` quits.
+- **The panel** (`python ~/.claude/coach/panel.py`, or `python scripts/watch.py`): one column, this thread only (the session of your newest prompt). Your prompts are white, everything that can be improved is blue. No animation; it redraws on a key or when new data arrives. The newest prompt is shown first as a card (your prompt, what to improve, the enhanced prompt); the list below it has one line and one status glyph per prompt (✓ analysed, … analysing, ! can be improved, × failed, – opted out). Keys: `↑`/`↓` (or `j`/`k`) choose a prompt, `g`/`G` oldest/newest, `PgUp`/`PgDn` scroll a tall card, **Enter** opens it full width as plain text, `c` copies its enhanced prompt, `e` has Claude analyse it now, `i` expands the patterns from your past chats (one collapsed line otherwise), `s` installs a drafted skill, `q` quits. The footer drops the least important keys instead of wrapping on a narrow pane.
 - **From your past chats**: with Claude analysis on, Claude reads your last 90 days of prompts (redacted, a couple of calls) every ~2 days and finds the **requests you repeat** and the **mistakes you keep making**. The panel shows the ones that also appear in this thread, with counts computed on your machine: for example *you have asked for "merge-prs-and-update" 4x in past chats and 1x here -> make it a skill (a draft is ready: press `s`)*. Drafts are written to `~/.claude/coach/drafts/`; `s` copies one into your skills folder and never overwrites.
 - **Per-prompt analysis**: for each new prompt of this thread (the newest first, one at a time, up to the last five), Claude gets the prompt, its three earlier prompts as context, and the names of your installed skills and uninstalled marketplace plugins, and returns the kind of task, which of your skills to use, which plugins to get, prompt tips, a workflow and an **enhanced prompt**. Invented skill or plugin names are dropped. If the answer is not valid JSON it is asked once more.
 - **Claude analysis is opt-in**: `python scripts/setup.py --panel-ai on` (or `/coach panel-ai on`) lets the panel start these background jobs itself. Without it the panel still lists your prompts with local rule hints, and `e` analyses one prompt on demand (your key press is the consent). Turn it off with `--panel-ai off`.

@@ -346,8 +346,8 @@ def bg_rewrite(path, key):
     i = next((n for n, r in enumerate(rows) if prompt_key(r) == key), None)
     if i is None or llm_off(rows[i][1]): return
     fails = [n for n, fn in RULES if not fn(rows[i][2], rows[i][0] - rows[i - 1][0] if i else None)]
-    # the three earlier prompts of the same conversation: what "this" and "it" refer to (redacted; opted-out projects never included)
-    context = [redact(r[2]) for r in rows[max(0, i - 40):i] if r[3] == rows[i][3] and scorable(r[2]) and not r[2].startswith("/coach") and not llm_off(r[1])][-3:]
+    # the five earlier prompts of the same conversation: what "this" and "it" refer to (redacted; opted-out projects never included)
+    context = [redact(r[2]) for r in rows[max(0, i - 40):i] if r[3] == rows[i][3] and scorable(r[2]) and not r[2].startswith("/coach") and not llm_off(r[1])][-5:]
     import advisor
     try:
         adv = advisor.advise(redact(rows[i][2]), fails, timeout=90, context=context)

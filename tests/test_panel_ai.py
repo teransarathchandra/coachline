@@ -130,7 +130,7 @@ class EndToEnd(Base):
         self.assertTrue(coach.ai_on())
         coach.set_setting("panel_ai", False)                                              # the new name wins
         self.assertFalse(coach.ai_on())
-        self.assertIn("Claude analysis is OFF", flat(once(self.cfg)))
+        self.assertIn("Claude off", flat(once(self.cfg)))
 
 
 if __name__ == "__main__":
