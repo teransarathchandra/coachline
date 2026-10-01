@@ -31,7 +31,7 @@ class AutoSuggestions(unittest.TestCase):
 
     def test_fixes_show_by_default_with_no_llm_call(self):
         out = run(self.cfg, "statusline.py", FAKE_JSON=AFTER).stdout
-        self.assertIn("- no-vague:", out)
+        self.assertIn("last prompt: could be sharper -> swap 'carefully/best' for something checkable", out)
         self.assertNotIn("AFTER", out)
         self.assertEqual(self.calls(), 0)
 

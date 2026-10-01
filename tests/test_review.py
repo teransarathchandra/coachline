@@ -29,9 +29,11 @@ def write_history(cfg, texts, project="proj"):
 
 
 def run(cfg, script, *args, **env):
+    stdin_text = env.pop("STDIN", "")
     e = {**os.environ, "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8", "COACHLINE_CLAUDE": f'"{PY}" "{FAKE}"',
          "FAKE_LOG": os.path.join(cfg, "sent.log"), **env}
-    return subprocess.run([sys.executable, os.path.join(ROOT, "scripts", script), *args], capture_output=True, text=True, encoding="utf-8", env=e)
+    return subprocess.run([sys.executable, os.path.join(ROOT, "scripts", script), *args], capture_output=True, text=True, encoding="utf-8",
+                          env=e, input=stdin_text)
 
 
 def read(p):

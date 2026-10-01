@@ -13,7 +13,7 @@ def read(p):
 def run(script, cfg, *args):
     env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8"}
     return subprocess.run([sys.executable, os.path.join(ROOT, "scripts", script), *args],
-                          capture_output=True, text=True, encoding="utf-8", env=env)
+                          capture_output=True, text=True, encoding="utf-8", env=env, input="")
 
 
 class Rules(unittest.TestCase):
@@ -147,13 +147,15 @@ class Scripts(unittest.TestCase):
     def test_statusline_never_fails_on_empty_config(self):
         with tempfile.TemporaryDirectory() as cfg:
             r = run("statusline.py", cfg)
-            self.assertEqual((r.returncode, r.stdout.strip()), (0, ""))
+            self.assertEqual(r.returncode, 0)
+            self.assertNotIn("Traceback", r.stderr)
+            self.assertTrue(r.stdout.strip().startswith("\x1b[2mpanel not open ->") or r.stdout.strip().startswith("panel not open ->"), r.stdout)  # nothing about prompts, just how to open the panel
 
     def test_statusline_and_coach_on_real_shape_history(self):
         with tempfile.TemporaryDirectory() as cfg:
             with open(os.path.join(cfg, "history.jsonl"), "w") as f:
                 f.write(json.dumps({"display": "please deal with this carefully " + "word " * 5, "timestamp": 5000, "project": "p"}) + "\n")
-            self.assertIn("no-vague", run("statusline.py", cfg).stdout)
+            self.assertIn("swap 'carefully/best' for something checkable", run("statusline.py", cfg).stdout)
             out = run("coach.py", cfg, "--coach", "--no-llm").stdout
             self.assertIn("BEFORE (4/5)", out)
             self.assertNotEqual(run("coach.py", cfg, "--doctor").returncode, 2)

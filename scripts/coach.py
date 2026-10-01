@@ -163,14 +163,29 @@ def verdict(text, fails):
     A green 5/5 on a 6-word prompt is false praise: done-when only applies past 25 words."""
     return f"{5 - len(fails)}/5" if fails or len(body(text).split()) > 25 else "short"
 
-def repeat_note(rows, i):
-    """If prompt i is a category you asked 3+ times in the 14 days up to it, return a one-line note."""
+def repeat_info(rows, i):
+    """(category, count) if prompt i is a kind of request you made 3+ times in the 14 days up to it, else None."""
     ts = rows[i][0]
     recent = [r for r in rows[max(0, i - 5000):i + 1] if ts - r[0] <= 14 * 86400]
     for cat, xs in analyse(recent)[4].items():
-        if len(xs) >= 3 and any(x[0] == ts for x in xs):
-            return f"'{cat}' asked {len(xs)}x in the last 14 days"
+        if len(xs) >= 3 and any(x[0] == ts for x in xs): return cat, len(xs)
     return None
+
+def repeat_note(rows, i):
+    r = repeat_info(rows, i)
+    return f"'{r[0]}' asked {r[1]}x in the last 14 days" if r else None
+
+def last_session(path):
+    """sessionId of the newest history entry, reading only the end of the file."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2); size = f.tell(); f.seek(max(0, size - 16384)); tail = f.read().decode("utf-8", "ignore")
+    except OSError:
+        return ""
+    for line in reversed(tail.splitlines()):
+        try: return str(json.loads(line).get("sessionId") or "")
+        except (ValueError, AttributeError): continue
+    return ""
 
 def llm_off(proj):
     try:

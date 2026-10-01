@@ -5,6 +5,7 @@
   python setup.py --uninstall  remove our entry only
   python setup.py --advisor on|off      task-aware suggestions in the statusline and panel (background Claude calls)
   python setup.py --discover on|off     web search for better tools per kind of task (inside the advisor; verified locally)
+  python setup.py --panel-hint on|off   show/hide the statusline line with the command that opens the panel
   python setup.py --auto-open on|off    open the thread panel automatically when a session starts
   python setup.py --refresh    silent: if OUR entry points at another copy of this plugin
                                (e.g. an older version), re-point it here; otherwise do nothing.
@@ -43,7 +44,7 @@ def write(s):
     os.makedirs(CONFIG, exist_ok=True)
     with open(SETTINGS, "w", encoding="utf-8") as f: json.dump(s, f, indent=2)
 
-KNOWN = {"--force", "--uninstall", "--refresh", "--advisor", "--auto-rewrite", "--auto-open", "--discover"}
+KNOWN = {"--force", "--uninstall", "--refresh", "--advisor", "--auto-rewrite", "--auto-open", "--discover", "--panel-hint"}
 
 
 def main(argv):
@@ -58,10 +59,15 @@ def main(argv):
         if "--refresh" in argv: return  # never fail a session start over this
         sys.exit(f"{SETTINGS} is not valid JSON; fix it first (nothing was changed)")
     cur = s.get("statusLine")
-    flag = next((f for f in ("--auto-open", "--advisor", "--auto-rewrite", "--discover") if f in argv), None)
+    flag = next((f for f in ("--auto-open", "--advisor", "--auto-rewrite", "--discover", "--panel-hint") if f in argv), None)
     if flag:
         k = argv.index(flag); v = argv[k + 1] if k + 1 < len(argv) else ""
         if v not in ("on", "off"): sys.exit(f"usage: setup.py {flag} on|off")
+        if flag == "--panel-hint":
+            coach.set_setting("panel_hint", v == "on")
+            print("Panel hint ON: the statusline shows the command to open the panel whenever it is not open." if v == "on"
+                  else "Panel hint OFF: the statusline will not mention the panel.")
+            return
         if flag == "--discover":
             coach.set_setting("discover", v == "on")
             print("Discovery ON (it runs inside the advisor, so keep --advisor on): once per kind of task, Claude searches the web for "
