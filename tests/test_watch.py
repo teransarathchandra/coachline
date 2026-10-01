@@ -159,13 +159,24 @@ class TheCard(Base):
             self.assertIn("Enhanced prompt", card, (W, H)); self.assertIn("c Copy", card, (W, H))
             self.assertIn("Done when: the unit tests pass.", card, (W, H))           # the whole thing, not just its first line
 
-    def test_a_short_pane_shrinks_the_improvements_before_the_enhanced_prompt(self):
-        self.analyse(11, "P12 " + VAGUE)
-        full = card_of(once(self.cfg, 90, 40))
-        self.assertIn("get shiny@mk", full); self.assertIn("tax rework", full)       # roomy: task chip, tips, use, get
-        small = card_of(once(self.cfg, 70, 21))
-        self.assertIn("Enhanced prompt", small)                                      # tight: still there
-        self.assertNotIn("get shiny@mk", small)                                      # but the extras are dropped first
+    def test_improve_is_never_cut_and_what_does_not_fit_scrolls(self):
+        long_tip = "Describe the current layout and the target one, then name the width where the lines wrap and overlap so nothing is guessed " * 2
+        tips = [long_tip.strip(), "Name the files that must not change.", "Say what done looks like."]
+        self.analyse(11, "P12 " + VAGUE, advice={**ADVICE, "tips": tips})
+        want = {w for t in tips + ["use /simplify: clean up after", "get shiny@mk: codemods"] for w in t.split()}
+        for W, H in [(44, 22), (56, 34), (70, 21), (90, 40), (120, 50)]:
+            seen, ellipsis = set(), False
+            for frame in self.drive(["pgdn"] * 8, W=W, H=H):                                     # look at every scroll position
+                card = card_of(frame)
+                improve = (card.split("Improve", 1)[1] if "Improve" in card else card).split("Enhanced prompt")[0]     # the header itself may have scrolled off
+                seen |= set(improve.replace("PgUp for the start", " ").replace("PgDn for more", " ").split())
+                ellipsis = ellipsis or "…" in improve
+            self.assertFalse(want - seen, (W, H, want - seen))                                   # every word of every tip was shown
+            self.assertFalse(ellipsis, (W, H))                                                   # and nothing was ever cut with an ellipsis
+        for W, H in [(90, 40), (120, 50)]:                                                       # where it fits, nothing needs scrolling
+            self.assertFalse(want - set(card_of(once(self.cfg, W, H)).split()), (W, H))
+        self.assertIn("PgDn for more", once(self.cfg, 44, 22))                                   # a tall card says so at the bottom
+        self.assertIn("Enhanced prompt", card_of(self.drive(["pgdn"] * 4, W=44, H=22)[-1]))      # and PgDn reaches the enhanced prompt
 
     def test_long_prompts_are_cut_in_the_card_and_complete_in_the_full_view(self):
         long = "still not working after the change " + "look at the parser module and " * 8 + "ZEBRA-END"
