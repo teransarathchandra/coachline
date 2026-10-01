@@ -118,10 +118,10 @@ class Review(unittest.TestCase):
 
     def test_the_panel_shows_what_claude_found_when_this_thread_repeats_it(self):
         run(self.cfg, "review.py", "--yes", FAKE_JSON=GOOD_JSON)
-        out = " ".join(run(self.cfg, "watch.py", "--once", "--width", "120", "--height", "40").stdout.split())
+        out = " ".join(run(self.cfg, "watch.py", "--once", "--patterns", "--width", "120", "--height", "40").stdout.split())
         self.assertIn('You have asked for "commit-message"', out)
-        self.assertIn("make it a skill, /commit-message (a draft is ready: press s to install it)", out)
-        self.assertIn("Recurring gap", out)
+        self.assertIn("press s to install the drafted skill /commit-message", out)
+        self.assertIn("Habit: no reason correction", out)
 
     def test_install_skill_returns_a_message_instead_of_exiting(self):
         sys.path.insert(0, os.path.join(ROOT, "scripts"))

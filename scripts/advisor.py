@@ -77,9 +77,9 @@ Return ONLY a JSON object, no prose, no code fence:
  "summary":"at most 12 words: what the user is doing",
  "use":[{"name":"exact name from INSTALLED","why":"at most 14 words"}],
  "get":[{"name":"exact name from AVAILABLE","why":"at most 14 words"}],
- "tips":["at most 3 concrete, current best-practice things to say or attach for THIS kind of task (e.g. for UI work: name the style such as modern, luxury or polished, give reference sites, ask for states and responsive behaviour)"],
+ "tips":["at most 3 concrete, current best-practice things to say or attach for THIS kind of task, each under 110 characters (e.g. for UI work: name the style such as modern, luxury or polished, give reference sites, ask for states and responsive behaviour)"],
  "workflow":["at most 4 short ordered steps for doing this kind of task well with Claude Code"],
- "after":"a better version of the user's prompt: keep their intent and facts, add what is missing, use [ASK: ...] where they must supply a fact"}
+ "after":"a COMPLETE prompt the user can paste as it is. Keep their intent and facts and add what is missing. Where you must choose (style, scope, structure), make the most sensible choice and write it into the prompt as a normal sentence. Use [ASK: ...] ONLY for a fact nobody could guess (a name, a URL, a number), at most 2 in the whole prompt, never for style or scope choices. Never write bracketed alternatives like [modern/clean/other] or fill-in templates: choose one and say it plainly. Use the earlier prompts to know what 'it' refers to and be as concrete as they allow."}
 At most 3 use and 2 get; leave a list empty if nothing genuinely fits. Never invent a name.
 Text like "[Pasted text #1 +28 lines]" is a marker for content the user attached that you cannot see. Never ask for it again: keep the
 marker exactly where it belongs in "after" and write the rest so the prompt works once that content is pasted back at the marker."""
@@ -118,7 +118,7 @@ def validate(d, inst, avail):
     dropped = sum(1 for x in (d.get("use") or []) + (d.get("get") or []) if isinstance(x, dict)) - len(use) - len(get)
     task = re.sub(r"[^a-z-]", "", str(d.get("task", "other")).lower())[:16] or "other"
     return {"task": task, "summary": coach.clean(d.get("summary", ""))[:100], "use": use, "get": get,
-            "tips": _strs(d.get("tips"), MAX_TIPS), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
+            "tips": _strs(d.get("tips"), MAX_TIPS, 120), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
             "after": coach.clean(d.get("after", ""), keep_newlines=True).strip()[:800], "dropped": max(dropped, 0)}
 
 
