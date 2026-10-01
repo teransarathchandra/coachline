@@ -128,5 +128,14 @@ class Advise(AdvisorBase):
         self.assertTrue(c[1].startswith("tip: Name the style"))
 
 
+class Instructions(unittest.TestCase):
+    def test_the_enhanced_prompt_is_complete_and_not_a_questionnaire(self):
+        text = advisor.INSTRUCTIONS
+        self.assertIn("COMPLETE prompt", text)                       # pasteable as it is
+        self.assertIn("Never write bracketed alternatives", text)    # no [modern/clean/other] fill-in templates
+        self.assertIn("at most 2", text)                             # [ASK: ...] only for facts nobody could guess
+        self.assertIn("under 110 characters", text)                  # tips short enough for a narrow pane
+
+
 if __name__ == "__main__":
     unittest.main()

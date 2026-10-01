@@ -1,6 +1,6 @@
 {
   "name": "coachline",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "A split-pane panel for Claude Code: this thread's prompts in white, what can be improved in blue, analysed by Claude on your subscription (no API key) together with your past chats, so it can tell you what to turn into a skill.",
   "author": {
     "name": "Teran Sarathchandra"
