@@ -91,6 +91,29 @@ class Advise(AdvisorBase):
         os.environ["FAKE_MODE"] = "fail"
         with self.assertRaises(RuntimeError): advisor.advise("landing page please", [])
 
+    def test_earlier_prompts_are_context_after_the_catalog_and_before_the_prompt(self):
+        inst, avail = advisor.catalog()
+        with_ctx = advisor.build_prompt("do it again for the second page", [], inst, avail, context=["build a landing page for shoes", "make it dark"])
+        self.assertLess(with_ctx.index("AVAILABLE"), with_ctx.index("EARLIER PROMPTS IN THIS CONVERSATION"))
+        self.assertLess(with_ctx.index("- build a landing page for shoes"), with_ctx.index("- make it dark"))      # oldest first
+        self.assertLess(with_ctx.index("- make it dark"), with_ctx.index("USER PROMPT:"))
+        self.assertNotIn("EARLIER PROMPTS", advisor.build_prompt("x y z", [], inst, avail))
+
+    def test_a_prose_answer_is_retried_once_and_then_given_up_on(self):
+        marker = os.path.join(self.cfg, "bad-once")
+        os.environ["FAKE_BAD_ONCE"] = marker; os.environ["FAKE_JSON"] = "{}"
+        try:
+            a = advisor.advise("make my landing page look modern", [])
+            self.assertEqual(a["task"], "other")
+            with open(os.environ["FAKE_LOG"], encoding="utf-8") as f: log = f.read()
+            self.assertEqual(log.count("====="), 2)                                          # the first answer was prose: asked again
+            self.assertIn("Your previous answer was not a JSON object", log.split("=====")[1])
+            os.remove(os.environ["FAKE_LOG"]); os.environ.pop("FAKE_BAD_ONCE"); os.environ["FAKE_MODE"] = "bad"
+            with self.assertRaises(ValueError): advisor.advise("make my landing page look modern", [])
+            with open(os.environ["FAKE_LOG"], encoding="utf-8") as f: self.assertEqual(f.read().count("====="), 2)   # one retry, no more
+        finally:
+            os.environ.pop("FAKE_BAD_ONCE", None)
+
     def test_formatting(self):
         os.environ["FAKE_JSON"] = json.dumps(self.GOOD)
         a = advisor.advise("make my landing page look modern and luxury", [])
