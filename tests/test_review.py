@@ -105,13 +105,57 @@ class Review(unittest.TestCase):
         self.assertNotEqual(run(self.cfg, "review.py", "--install", "commit-message").returncode, 0)  # no overwrite
         self.assertNotEqual(run(self.cfg, "review.py", "--install", "../evil").returncode, 0)
 
-    def test_statusline_shows_learned_habit_without_any_llm(self):
+    def test_it_records_how_much_it_saw_and_holds_a_lock_only_while_it_runs(self):
+        lock = os.path.join(self.state, "review.running")
+        run(self.cfg, "review.py", "--yes", FAKE_JSON=GOOD_JSON, FAKE_LOCK=lock)
+        with open(self.log, encoding="utf-8") as f: self.assertIn("LOCK=True", f.read())      # held while Claude was being called
+        self.assertFalse(os.path.exists(lock))                                              # and released afterwards
+        with open(os.path.join(self.state, "learned.json"), encoding="utf-8") as f: d = json.load(f)
+        self.assertEqual(d["prompts"], 20)                                                   # what this review analysed
+        self.assertEqual(d["history_prompts"], 20)                                           # what the panel compares against later
+        run(self.cfg, "review.py", "--yes", FAKE_MODE="fail", FAKE_LOCK=lock)
+        self.assertFalse(os.path.exists(lock))                                              # released even when every call failed
+
+    def test_the_panel_shows_what_claude_found_when_this_thread_repeats_it(self):
         run(self.cfg, "review.py", "--yes", FAKE_JSON=GOOD_JSON)
-        os.remove(self.log)
-        write_history(self.cfg, ["still broken again after the last change, not sure why it fails"])
-        r = run(self.cfg, "statusline.py")
-        self.assertIn("habit: no-reason-correction", r.stdout)
-        self.assertFalse(os.path.exists(self.log))
+        out = " ".join(run(self.cfg, "watch.py", "--once", "--width", "120", "--height", "40").stdout.split())
+        self.assertIn('You have asked for "commit-message"', out)
+        self.assertIn("make it a skill, /commit-message (a draft is ready: press s to install it)", out)
+        self.assertIn("Recurring gap", out)
+
+    def test_install_skill_returns_a_message_instead_of_exiting(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import review
+        saved = (review.coach.STATE, review.coach.CONFIG)
+        review.coach.STATE, review.coach.CONFIG = self.state, self.cfg
+        try:
+            run(self.cfg, "review.py", "--yes", FAKE_JSON=GOOD_JSON)
+            ok, msg = review.install_skill("commit-message")
+            self.assertTrue(ok); self.assertIn("installed", msg)
+            ok, msg = review.install_skill("commit-message")
+            self.assertFalse(ok); self.assertIn("not overwriting", msg)
+            self.assertEqual(review.install_skill("../evil")[0], False)
+            self.assertEqual(review.install_skill("no-such-draft")[0], False)
+        finally:
+            review.coach.STATE, review.coach.CONFIG = saved
+
+
+class Quality(unittest.TestCase):
+    def test_requests_need_phrase_keywords_and_names_are_cut_at_a_word_boundary(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import review
+        items = [{"id": i, "ts": i, "proj": "P1", "gap": 5, "text": t.lower()} for i, t in enumerate(
+            ["merge the pr and update the install now", "merge the pr and update the install again", "merge the pr and update the install please",
+             "install this tool for me", "install that tool for me", "install another tool for me",
+             "explain the cache layer", "rename the user table", "write tests for billing", "profile the slow endpoint"], 1)]
+        res = [{"requests": [{"name": "merge-prs", "description": "d", "steps": "s", "keywords": ["merge the pr and update"], "evidence": [1, 2, 3]},
+                             {"name": "install-things", "description": "d", "steps": "s", "keywords": ["tool"], "evidence": [4, 5, 6]}], "mistakes": []}]
+        requests, _m, dropped = review.ground(res, items)
+        self.assertEqual([r["name"] for r in requests], ["merge-prs"])                       # a single generic word does not define a repeated task
+        self.assertTrue(any("only single-word keywords" in d for d in dropped))
+        slug = review._slug("merge-prs-and-update-the-install-for-iterative-plugin-releases")
+        self.assertLessEqual(len(slug), 32)
+        self.assertTrue("merge-prs-and-update-the-install-for-iterative-plugin-releases".startswith(slug + "-"))   # whole words only
 
 
 if __name__ == "__main__":

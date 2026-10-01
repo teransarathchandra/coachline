@@ -167,40 +167,39 @@ class EndToEnd(unittest.TestCase):
             time.sleep(0.2)
         self.fail(f"{want!r} never appeared in {path}")
 
-    def test_background_job_adds_verified_discoveries_to_statusline_and_panel(self):
+    TEXT = "make my shoe store website look modern and polished for every customer please"
+
+    def job(self, cfg, **env):
+        """What the panel starts for a prompt: `coach.py --bg-rewrite --key K`, run synchronously here."""
+        key = coach.prompt_key((1750000000.0, "proj", self.TEXT))
+        return run(cfg, "coach.py", "--bg-rewrite", "--key", key, **env)
+
+    def test_the_analysis_job_adds_verified_discoveries_that_the_panel_shows(self):
         with tempfile.TemporaryDirectory() as cfg:
-            write_history(cfg, ["make my shoe store website look modern and polished for every customer please"])
+            write_history(cfg, [self.TEXT])
             stub = os.path.join(cfg, "stub.json")
             with open(stub, "w") as f: json.dump({"https://tools.example.com/g": {"status": 200, "text": "GreatKit"}}, f)
-            env = dict(FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)
-            self.assertEqual(run(cfg, "setup.py").returncode, 0)
-            self.assertEqual(run(cfg, "setup.py", "--advisor", "on").returncode, 0)
             self.assertEqual(run(cfg, "setup.py", "--discover", "on").returncode, 0)
             self.assertTrue(json.loads(read(os.path.join(cfg, "coach", "config.json")))["discover"])
-            run(cfg, "statusline.py", **env)                                   # starts the detached job
-            log = os.path.join(cfg, "coach", "rewrites.jsonl")
-            self.wait(log, "discovery")
-            recs = [json.loads(l) for l in read(log).splitlines()]
+            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            recs = [json.loads(l) for l in read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()]
             self.assertEqual(len(recs), 2)                                     # advice first, then advice + discovery, same key
             self.assertEqual(recs[0]["key"], recs[1]["key"]); self.assertNotIn("discovery", recs[0])
-            self.assertEqual([d["name"] for d in recs[1]["discovery"]], ["GreatKit"])
-            shown = run(cfg, "statusline.py", **env).stdout
-            self.assertIn("better: GreatKit (tool)", shown)
-            self.assertNotIn("\x1b[31mbetter", shown)                          # model/web text is cleaned; our own colours remain
+            self.assertEqual([d["name"] for d in recs[1]["discovery"]], ["GreatKit"])      # 'Ghost' 404s in verification
             panel = run(cfg, "watch.py", "--once", "--width", "150", "--height", "40").stdout
-            flat = " ".join(panel.replace("│", "").split())
+            flat = " ".join(panel.split())
             self.assertIn("web-found, not installed", flat); self.assertIn("better: GreatKit (tool)", flat)
             self.assertIn("install: npm i greatkit", flat)
+            self.assertNotIn("\x1b[31m", panel)                                 # model/web text is cleaned of escape codes
 
     def test_discovery_stays_off_unless_enabled(self):
         with tempfile.TemporaryDirectory() as cfg:
-            write_history(cfg, ["make my shoe store website look modern and polished for every customer please"])
-            run(cfg, "setup.py"); run(cfg, "setup.py", "--advisor", "on")
-            env = dict(FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB)
-            run(cfg, "statusline.py", **env)
-            self.wait(os.path.join(cfg, "coach", "rewrites.jsonl"), "advice")
-            time.sleep(1)
-            self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))  # no web call was ever made
+            write_history(cfg, [self.TEXT])
+            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(len(read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()), 1)   # advice only
+            self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))                          # no web call was ever made
 
 
 if __name__ == "__main__":
