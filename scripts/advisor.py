@@ -118,7 +118,7 @@ def validate(d, inst, avail):
     dropped = sum(1 for x in (d.get("use") or []) + (d.get("get") or []) if isinstance(x, dict)) - len(use) - len(get)
     task = re.sub(r"[^a-z-]", "", str(d.get("task", "other")).lower())[:16] or "other"
     return {"task": task, "summary": coach.clean(d.get("summary", ""))[:100], "use": use, "get": get,
-            "tips": _strs(d.get("tips"), MAX_TIPS, 120), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
+            "tips": _strs(d.get("tips"), MAX_TIPS, 220), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
             "after": coach.clean(d.get("after", ""), keep_newlines=True).strip()[:800], "dropped": max(dropped, 0)}
 
 

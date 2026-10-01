@@ -104,11 +104,9 @@ def wrap(s, w, indent=""):
     return lines
 
 
-def bullet(s, w, maxlines=2):
-    """'• text' wrapped with a hanging indent, cut after maxlines with an ellipsis so one long tip cannot crowd out the rest."""
-    lines = wrap("• " + s, w, "  ")
-    if len(lines) > maxlines: lines = lines[:maxlines]; lines[-1] = clip(lines[-1] + " ", w - 1) + "…"
-    return lines
+def bullet(s, w):
+    """'• text' wrapped with a hanging indent. Never cut: the improvements are what you came to read."""
+    return wrap("• " + s, w, "  ")
 
 
 # ---------------------------------------------------------------- data
@@ -245,10 +243,10 @@ def cur_entry(ui, st):
     return i, es[i]
 
 
-def card_lines(st, ui, i, e, iw, level=0):
+def card_lines(st, ui, i, e, iw):
     """[(section, kind, text, right, action)]: the prompt you are looking at, what to improve, the enhanced prompt.
     section picks the gutter colour; kind 'head' is a section title with an optional right-hand label (a button when it has an action).
-    level 0 = everything, 1 = fewer tips, 2 = one tip and no extras: used to keep the enhanced prompt on screen in a short pane."""
+    Nothing in Improve is ever dropped or cut. When the card is taller than the pane the enhanced prompt, which is last, scrolls (PgDn, wheel)."""
     out = []
     _s, glyph, kind, words = status(e, st, ui)
     older = ui["sel"] is not None and i != len(st["entries"]) - 1
@@ -259,12 +257,12 @@ def card_lines(st, ui, i, e, iw, level=0):
     out += [("prompt", "prompt", w, "", None) for w in pl] + ([("prompt", "meta", "Enter shows the whole prompt", "", "enter")] if cut else [])
     adv = e["advice"]
     if adv:
-        bullets = list(adv.get("tips", [])[:(3, 2, 1)[level]])
-        bullets += [f"use /{u['name']}" + (f": {u['why']}" if u.get("why") else "") for u in adv.get("use", [])[:(2, 2, 0)[level]]]
-        bullets += [f"get {g['name']}" + (f": {g['why']}" if g.get("why") else "") for g in adv.get("get", [])[:(1, 0, 0)[level]]]
+        bullets = list(adv.get("tips", []))
+        bullets += [f"use /{u['name']}" + (f": {u['why']}" if u.get("why") else "") for u in adv.get("use", [])]
+        bullets += [f"get {g['name']}" + (f": {g['why']}" if g.get("why") else "") for g in adv.get("get", [])]
         if bullets:
-            out += [("", "blank", "", "", None), ("improve", "head", "Improve", adv.get("task", "") if level == 0 else "", None)]
-            if adv.get("summary") and level == 0: out.append(("improve", "task", clip(adv["summary"], iw), "", None))
+            out += [("", "blank", "", "", None), ("improve", "head", "Improve", adv.get("task", ""), None)]
+            if adv.get("summary"): out += [("improve", "task", w, "", None) for w in wrap(adv["summary"], iw)]
             for b in bullets: out += [("improve", "blue", w, "", None) for w in bullet(b, iw)]
         if e["after"]:
             copied = time.time() - ui["copied"].get(e["key"], 0) < 8
@@ -337,7 +335,7 @@ def render(st, ui, W, H, color=True):
     i, e = cur_entry(ui, st)
     if ui["detail"] and e is not None: return detail_frame(st, ui, i, e, W, H, color)
     iw = min(W - 4, MAX_WIDTH)
-    es = st["entries"]; n = len(es); narrow = W < 64
+    es = st["entries"]; n = len(es)
     # header: where you are, and whether Claude is on
     working = st["review_running"] or any(status(x, st, ui)[0] == "pending" for x in es)
     word, kind, dot = (("Claude off", "meta", "○") if not st["ai"] else ("Claude working…", "warn", "●") if working else ("Claude on", "ok", "●"))
@@ -368,10 +366,8 @@ def render(st, ui, W, H, color=True):
         card = [("info", "bluedim", "No prompts in this thread yet.", "", None), ("", "blank", "", "", None),
                 ("info", "bluedim", "Send a prompt in Claude Code and it appears here.", "", None),
                 *[("info", "bluedim", w, "", None) for w in (wrap("Analysis is off. Turn it on: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ") if not st["ai"] else [])]]
-    else:                                                                      # shrink the improvements, never the enhanced prompt
-        for level in ((1, 2) if narrow else (0, 1, 2)):
-            card = card_lines(st, ui, i, e, iw, level)
-            if len(card) <= room: break
+    else:
+        card = card_lines(st, ui, i, e, iw)
     card_h = max(min(len(card), room), 3)
     list_n = min(pref_list, max(H - 1 - fixed - card_h - 1, min_list)) if n else 0   # leftover rows go to the list, up to its preferred size
     ui["cs"] = min(max(ui["cs"], 0), max(len(card) - card_h, 0))
