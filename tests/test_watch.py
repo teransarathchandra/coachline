@@ -521,6 +521,26 @@ class Resume(Base):
         self.transcript("audit", 1); self.transcript("shoes", 300)                # then you resume the audit session
         self.assertEqual([t[:9] for t in self.entries()], ["AUDIT one", "AUDIT two"])
 
+    def test_a_fresh_session_announced_by_the_hook_is_empty_not_the_previous_conversation(self):
+        self.transcript("shoes", 100)                                             # an older conversation, last written 100 s ago
+        coach.record_session(json.dumps({"session_id": "fresh-session-1234", "source": "startup"}))
+        st = watch.build(self.path)
+        self.assertEqual((st["session"], st["entries"]), ("fresh-session-1234", []))
+        self.assertIn("No prompts in this thread yet.", "\n".join(watch.render(st, watch.new_ui(), 80, 20, color=False)))
+        self.transcript("shoes", -5)                                              # then you resume the shoe session: its transcript is written later
+        self.assertEqual(watch.build(self.path)["session"], "shoes")
+        coach.record_session(json.dumps({"session_id": "fresh-session-1234", "source": "clear"}))   # /clear starts another empty one
+        self.transcript("shoes", 300)
+        self.assertEqual(watch.build(self.path)["session"], "fresh-session-1234")
+
+    def test_the_hook_record_ignores_resume_events_and_bad_input(self):
+        for payload in ("not json", "[]", json.dumps({"session_id": "../../evil", "source": "startup"}), json.dumps({"session_id": "short", "source": "startup"}),
+                        json.dumps({"session_id": "abcd1234-aaaa-bbbb", "source": "resume"}), json.dumps({"session_id": "abcd1234-aaaa-bbbb"})):
+            coach.record_session(payload)
+            self.assertIsNone(coach.started_session(), payload)                    # a resumed session is found by its transcript instead
+        coach.record_session(json.dumps({"session_id": "abcd1234-aaaa-bbbb", "source": "startup"}))
+        self.assertEqual(coach.started_session()[0], "abcd1234-aaaa-bbbb")
+
     def test_a_session_with_no_transcript_is_never_chosen_over_one_with_a_transcript(self):
         self.transcript("audit", 100)                                             # 'throwaway' has no file, as in real life
         self.assertEqual(watch.build(self.path)["session"], "audit")

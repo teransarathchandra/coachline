@@ -157,10 +157,11 @@ def insights(entries, rows, L):
 
 
 def current_session(rows):
-    """The conversation you are in: the recent session whose transcript was written last.
+    """The conversation you are in: whichever happened last, the SessionStart hook announcing a session (a fresh one has no prompt and no
+    transcript yet) or a recent session's transcript being written (a resumed one, or a prompt sent).
     The newest history line is not enough. Resuming (or /clear, /exit) logs a command under a throwaway session id, and a resumed
     session logs nothing until you send a prompt, yet Claude Code writes to its transcript the moment it resumes.
-    With no transcripts to look at (a fresh install), the newest prompt that is not a /command."""
+    With neither to go on (a fresh install), the newest prompt that is not a /command."""
     seen, ids = set(), []
     for r in reversed(rows):
         if r[3] and r[3] not in seen: seen.add(r[3]); ids.append(r[3])
@@ -170,6 +171,8 @@ def current_session(rows):
             try: m = os.path.getmtime(p)
             except OSError: continue
             if best is None or m > best[0]: best = (m, sid)
+    started = coach.started_session()
+    if started and (not best or started[1] >= best[0]): return started[0]
     if best: return best[1]
     for r in reversed(rows):
         if not r[2].lstrip().startswith("/"): return r[3]
