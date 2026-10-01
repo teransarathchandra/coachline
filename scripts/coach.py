@@ -284,6 +284,30 @@ def panel_alive(max_age=6):
     try: return time.time() - os.path.getmtime(ALIVE) < max_age
     except OSError: return False
 
+def session_file():
+    return os.path.join(STATE, "current-session.json")
+
+def record_session(raw):
+    """The SessionStart hook's JSON (it names the session that just started or resumed) -> current-session.json, so the panel knows a fresh
+    session is the one you are in before it has a single prompt or transcript. Silent on anything unexpected."""
+    try:
+        d = json.loads(raw)
+        sid = d.get("session_id")
+        if not (isinstance(sid, str) and re.fullmatch(r"[0-9A-Za-z-]{8,64}", sid)): return
+        if d.get("source") not in ("startup", "clear"): return      # a resumed session is found by its transcript; only a brand-new one needs announcing
+        os.makedirs(STATE, exist_ok=True)
+        with open(session_file(), "w", encoding="utf-8") as f: json.dump({"id": sid, "ts": time.time(), "source": str(d.get("source", ""))[:20]}, f)
+    except (ValueError, AttributeError, OSError):
+        pass
+
+def started_session():
+    """(session id, when) the hook last recorded, or None."""
+    try:
+        with open(session_file(), encoding="utf-8") as f: d = json.load(f)
+        return (d["id"], float(d["ts"])) if isinstance(d["id"], str) else None
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
 def setting(name, default=None):
     try:
         with open(USER_CFG, encoding="utf-8") as f: return json.load(f).get(name, default)
