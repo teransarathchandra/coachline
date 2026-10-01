@@ -24,7 +24,7 @@ With Claude analysis on (setup.py --panel-ai on) the panel itself starts the bac
 the newest unanalysed prompts of this thread, and a review of your history every ~2 days. Redacted; llm-off.txt projects never sent.
 The screen redraws only on a key, a click or when new data arrives.
 """
-import argparse, datetime as dt, json, os, re, shutil, sys, time, unicodedata
+import argparse, datetime as dt, json, os, re, sys, time, unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import advisor
@@ -568,6 +568,35 @@ def review_due(st, now):
     return age >= 2 and review.count_prompts(coach.HIST) - st["learned"].get("history_prompts", 0) >= 15
 
 
+def term_size():
+    """(columns, rows) of the terminal this panel is drawn in, asked of the terminal itself.
+    Never the COLUMNS / LINES environment variables: a pane inherits them from the process that opened it (Claude Code's hook), so they
+    describe some other window, and lines drawn for that width are cut mid-word by the real, narrower pane."""
+    for f in (sys.__stdout__, sys.__stdin__, sys.__stderr__):
+        try: s = os.get_terminal_size(f.fileno())
+        except (OSError, ValueError, AttributeError): continue
+        if s.columns > 0 and s.lines > 0: return s.columns, s.lines
+    if os.name == "nt":                                                   # the console behind the handles, when they are redirected
+        try:
+            import ctypes
+            from ctypes import wintypes
+            k = ctypes.windll.kernel32; k.CreateFileW.restype = wintypes.HANDLE
+            h = k.CreateFileW("CONOUT$", 0xC0000000, 3, None, 3, 0, None)
+            info = ctypes.create_string_buffer(22)
+            if k.GetConsoleScreenBufferInfo(h, info):
+                import struct
+                l, t, r, b = struct.unpack("<hhhh", info.raw[10:18]); return r - l + 1, b - t + 1
+        except (OSError, ImportError, AttributeError, ValueError): pass
+    else:
+        try:
+            fd = os.open("/dev/tty", os.O_RDONLY)
+            try: s = os.get_terminal_size(fd)
+            finally: os.close(fd)
+            return s.columns, s.lines
+        except OSError: pass
+    return 80, 24
+
+
 _events = []           # parsed events not yet returned by read_key
 _parser = InputParser()
 _win = {}              # Windows: the VT-input reader thread's queue and console state
@@ -686,7 +715,7 @@ def main(argv):
     out.write("\033[?1049h\033[?25l" + MOUSE_ON); out.flush(); t0 = time.time()
     try:
         loop(read_key, lambda rows: (out.write("\033[?2026h\033[H" + "\033[K\n".join(rows) + "\033[K\033[J\033[?2026l"), out.flush()),    # one synchronised write: no tearing
-             lambda: (a.width or shutil.get_terminal_size((100, 30)).columns, a.height or shutil.get_terminal_size((100, 30)).lines),
+             lambda: (a.width or term_size()[0], a.height or term_size()[1]),
              lambda: build(a.history), stop=lambda: bool(a.exit_after) and time.time() - t0 > a.exit_after, heartbeat=beat,
              work=lambda st, ui: autopilot(st, ui), emit=lambda s: (out.write(s), out.flush()))
     except KeyboardInterrupt:
