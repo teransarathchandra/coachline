@@ -1,7 +1,7 @@
-import json, os, subprocess, sys, tempfile, unittest
+import json, os, re, subprocess, sys, tempfile, unittest
 
 from test_review import run, read
-from test_watch import Base, history, once, T0, VAGUE
+from test_watch import Base, history, once, flat, T0, VAGUE
 import coach, watch
 
 FAKE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fake_claude.py").replace("\\", "/")
@@ -22,6 +22,12 @@ class Fake:
 
     def enhance(self, key):
         self.enhanced.append(key)
+
+    def review(self):
+        self.reviews = getattr(self, "reviews", 0) + 1
+
+    def install(self, slug):
+        return True, "installed " + slug
 
 
 def key_for(i, text, proj="p"):
@@ -46,8 +52,8 @@ class Panel(Base):
             f.write(json.dumps({"key": key_for(i, self.prompts[i]), "text": "AFTER: " + advice["after"], "advice": advice}) + "\n")
 
     def marked(self, frame):
-        """The prompt text under the '* [' marker."""
-        lines = frame.splitlines(); n = next(i for i, l in enumerate(lines) if "* [" in l)
+        """The prompt text under the '* HH:MM' marker."""
+        lines = re.sub(r"\x1b\[[0-9;]*m", "", frame).splitlines(); n = next(i for i, l in enumerate(lines) if re.search(r"\* \d\d:\d\d", l))
         return " ".join(lines[n + 1:n + 4])
 
     def test_the_newest_prompt_is_selected_and_n_p_move_the_marker(self):
@@ -68,12 +74,12 @@ class Panel(Base):
         self.add_advice(2)
         f = self.frames(["enter", "esc"], W=110, H=34)
         d = f[1]
-        for want in ("YOUR PROMPT", "WHAT THE RULES SAY", "ADVICE", "task: backend", "ENHANCED PROMPT", "press c to copy"):
+        for want in ("YOUR PROMPT", "CAN BE IMPROVED", "task: backend", "ENHANCED PROMPT", "press c to copy"):
             self.assertIn(want, d)
         self.assertIn("Goal: make checkout faster [Pasted text #1 +28 lines].", d)   # the enhanced prompt, plain, marker kept
         self.assertNotIn("│", d)                                                     # no column separators to spoil a mouse selection
         self.assertNotIn("AFTER:", d)                                                # printed once, in its own block
-        self.assertIn("THIS THREAD", f[2]); self.assertNotIn("YOUR PROMPT", f[2])
+        self.assertIn("this thread", f[2]); self.assertNotIn("YOUR PROMPT", f[2])
 
     def test_detail_view_says_what_to_do_when_there_is_no_enhanced_prompt(self):
         f = self.frames(["enter"])
@@ -99,7 +105,7 @@ class Panel(Base):
         self.assertEqual(self.io.enhanced, [key_for(1, self.prompts[1])])
         self.assertIn("asking Claude in the background", f[2])
         self.assertIn("already asking Claude", f[3])
-        self.assertIn("(asking Claude... about 20s)", f[2])
+        self.assertIn("Claude is analysing this prompt... (about 20s)", f[2])
 
     def test_e_refuses_projects_in_the_opt_out_list_and_already_enhanced_prompts(self):
         os.makedirs(os.path.join(self.cfg, "coach"))
@@ -111,7 +117,7 @@ class Panel(Base):
         history(self.cfg, [("now", "p", t) for t in self.prompts]); self.add_advice(2)
         f = self.frames(["e"])
         self.assertEqual(self.io.enhanced, [])
-        self.assertIn("already enhanced", f[1])
+        self.assertIn("already analysed", f[1])
 
     def test_windows_raw_keys_map_to_actions(self):
         self.assertEqual((watch.ALIASES["\r"], watch.ALIASES["\x1b"], watch.ALIASES["c"], watch.ALIASES["e"]), ("enter", "esc", "copy", "enhance"))
@@ -144,7 +150,7 @@ class EnhanceOneJob(Base):
         self.job(self.key, FAKE_MODE="fail")
         with open(os.path.join(self.cfg, "coach", "rewrites.jsonl"), encoding="utf-8") as f: rec = json.loads(f.readline())
         self.assertEqual(rec["key"], self.key); self.assertIn("boom", rec["error"])
-        self.assertIn("advice failed", once(self.cfg, 130, 40).replace("│", ""))
+        self.assertIn("Claude's analysis failed", flat(once(self.cfg, 130, 40)))
 
     def test_unknown_keys_and_opted_out_projects_never_reach_claude(self):
         self.assertEqual(self.job("123.0:deadbeefdead", FAKE_JSON=self.ADV).returncode, 0)
@@ -152,6 +158,33 @@ class EnhanceOneJob(Base):
         with open(os.path.join(self.cfg, "coach", "llm-off.txt"), "w") as f: f.write("p\n")
         self.job(self.key, FAKE_JSON=self.ADV)
         self.assertFalse(os.path.exists(os.path.join(self.cfg, "sent.log")))
+
+
+class AnalysisContext(Base):
+    ADV = json.dumps(ADVICE)
+
+    def test_only_the_last_three_earlier_prompts_of_the_same_conversation_are_context(self):
+        rows = [("other", "p", "OTHERSESSION write the invoice report for me today"), ("now", "p", "EARLIERONE build the landing page for shoes"),
+                ("now", "D:/w/secret", "SECRETPROMPT the confidential ledger migration plan"), ("now", "p", "EARLIERTWO make the hero section darker please"),
+                ("now", "p", "EARLIERTHREE add a size guide below the products"), ("now", "p", "EARLIERFOUR now do the same for the second page"),
+                ("now", "p", "TARGETPROMPT and also make it work on mobile too")]
+        history(self.cfg, rows)
+        os.makedirs(os.path.join(self.cfg, "coach"), exist_ok=True)
+        with open(os.path.join(self.cfg, "coach", "llm-off.txt"), "w") as f: f.write("secret\n")
+        r = run(self.cfg, "coach.py", "--bg-rewrite", "--key", key_for(6, rows[6][2]), FAKE_JSON=self.ADV)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(os.path.join(self.cfg, "sent.log"), encoding="utf-8") as f: sent = f.read()
+        self.assertIn("EARLIER PROMPTS IN THIS CONVERSATION", sent)
+        for want in ("EARLIERTWO", "EARLIERTHREE", "EARLIERFOUR", "TARGETPROMPT"): self.assertIn(want, sent)
+        for never in ("EARLIERONE", "OTHERSESSION", "SECRETPROMPT"): self.assertNotIn(never, sent)   # 4th back, another conversation, opted out
+
+    def test_a_prose_answer_is_retried_automatically_and_the_panel_gets_the_result(self):
+        history(self.cfg, [("now", "p", "TARGETPROMPT make the checkout faster for every customer please")])
+        r = run(self.cfg, "coach.py", "--bg-rewrite", "--key", key_for(0, "TARGETPROMPT make the checkout faster for every customer please"),
+                FAKE_JSON=self.ADV, FAKE_BAD_ONCE=os.path.join(self.cfg, "bad-once"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(os.path.join(self.cfg, "sent.log"), encoding="utf-8") as f: self.assertEqual(f.read().count("====="), 2)
+        self.assertIn("Goal: make checkout faster", flat(once(self.cfg, 120, 40)))
 
 
 class CoachCommand(Base):
