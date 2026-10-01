@@ -61,7 +61,7 @@ To open the panel automatically in a split pane on every session, run `/coach au
 
 ## Usage
 
-Keep the panel open next to Claude Code and send prompts as usual. The panel follows the conversation you are in, including one you just resumed.
+Keep the panel open next to Claude Code and send prompts as usual. The panel follows the conversation you are in: a new session starts empty, and a resumed one shows its prompts at once.
 
 ### Keys
 

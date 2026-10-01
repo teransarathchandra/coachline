@@ -119,6 +119,31 @@ class SetupSwitches(unittest.TestCase):
             self.assertNotEqual(self.run_setup(cfg, "--auto-open", "maybe").returncode, 0)
             self.assertFalse(os.path.exists(os.path.join(cfg, "settings.json")))      # switches never touch Claude Code's settings.json
 
+    def test_the_refresh_hook_records_the_session_that_just_started(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8"}
+            sf = os.path.join(cfg, "coach", "current-session.json")
+
+            def hook(payload):                                                         # what Claude Code pipes to a SessionStart hook
+                r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "setup.py"), "--refresh"], input=payload, capture_output=True, text=True, env=env)
+                self.assertEqual(r.returncode, 0, r.stderr)                           # never fails a session start
+            hook("not json"); hook(json.dumps({"session_id": "../../evil", "source": "startup"}))
+            self.assertFalse(os.path.exists(sf))
+            hook(json.dumps({"session_id": "abcd1234-aaaa-bbbb-cccc", "source": "startup", "cwd": "C:\\work"}))
+            self.assertEqual(self.read(sf)["id"], "abcd1234-aaaa-bbbb-cccc")
+            hook(json.dumps({"session_id": "zzzz9999-aaaa-bbbb-cccc", "source": "resume"}))
+            self.assertEqual(self.read(sf)["id"], "abcd1234-aaaa-bbbb-cccc")           # a resume does not replace it
+
+    def test_a_silent_open_stdin_never_blocks_a_session_start(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8"}
+            p = subprocess.Popen([sys.executable, os.path.join(ROOT, "scripts", "setup.py"), "--refresh"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+            try:
+                self.assertEqual(p.wait(timeout=15), 0)                                # nobody writes or closes stdin: it gives up after about a second
+            finally:
+                if p.poll() is None: p.kill()
+                for s in (p.stdin, p.stdout, p.stderr): s.close()
+
     def test_the_consent_text_says_what_is_sent(self):
         with tempfile.TemporaryDirectory() as cfg:
             out = self.run_setup(cfg, "--panel-ai", "on").stdout
