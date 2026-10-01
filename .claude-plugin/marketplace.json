@@ -1,12 +1,12 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "coachline",
-  "description": "Prompt coaching in your Claude Code statusline.",
+  "description": "A split-pane panel that coaches your prompts, analysed by Claude with your past chats.",
   "owner": { "name": "Teran Sarathchandra" },
   "plugins": [
     {
       "name": "coachline",
-      "description": "Scores your last prompt, learns your recurring prompt mistakes and repeated requests from your own history via your Claude subscription (no API key), drafts skills. Stdlib Python.",
+      "description": "This thread's prompts (white) and what can be improved (blue), analysed by Claude on your subscription (no API key) with your past chats; drafts skills for what you repeat. Stdlib Python.",
       "source": "./",
       "category": "productivity"
     }

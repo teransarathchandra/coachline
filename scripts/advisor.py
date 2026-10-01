@@ -92,9 +92,11 @@ def catalog_block(inst, avail):
             f"AVAILABLE (plugins not installed; install with /plugin install <name>):\n{lines(avail, 50)}")
 
 
-def build_prompt(text, fails, inst, avail):
+def build_prompt(text, fails, inst, avail, context=()):
+    ctx = ("EARLIER PROMPTS IN THIS CONVERSATION (context only, oldest first; they tell you what 'this' and 'it' refer to):\n"
+           + "\n".join(f"- {c[:300]}" for c in context) + "\n\n") if context else ""
     return (f"{INSTRUCTIONS}\n\n{catalog_block(inst, avail)}\n\n---\nFailed prompt checks (local rules): {', '.join(fails) or 'none'}\n\n"
-            f"USER PROMPT:\n{text[:2000]}")
+            f"{ctx}USER PROMPT:\n{text[:2000]}")
 
 
 def _pick(raw, allowed, limit):
@@ -120,10 +122,16 @@ def validate(d, inst, avail):
             "after": coach.clean(d.get("after", ""), keep_newlines=True).strip()[:800], "dropped": max(dropped, 0)}
 
 
-def advise(text, fails, timeout=120, model="haiku"):
-    """One claude -p call. Raises RuntimeError (claude failed) or ValueError (unusable answer)."""
+def advise(text, fails, timeout=120, model="haiku", context=()):
+    """One claude -p call (one retry if the answer is not JSON: a long prompt sometimes gets answered instead of analysed).
+    Raises RuntimeError (claude failed) or ValueError (unusable answer)."""
     inst, avail = catalog()
-    return validate(parse_json(coach.ask_claude(build_prompt(text, fails, inst, avail), model=model, timeout=timeout)), inst, avail)
+    prompt = build_prompt(text, fails, inst, avail, context)
+    try:
+        return validate(parse_json(coach.ask_claude(prompt, model=model, timeout=timeout)), inst, avail)
+    except ValueError:
+        again = prompt + "\n\nYour previous answer was not a JSON object. Do not answer the user prompt. Reply with ONLY the JSON object described above."
+        return validate(parse_json(coach.ask_claude(again, model=model, timeout=timeout)), inst, avail)
 
 
 # ---- display: one formatter shared by the statusline, the watch panel and /coach --------------------

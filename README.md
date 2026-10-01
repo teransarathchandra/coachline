@@ -1,43 +1,54 @@
 # coachline
 
-A Claude Code statusline that scores your last prompt, and a review that reads your own history to find the prompt mistakes you keep making and the requests you keep repeating. It runs on your existing Claude subscription (`claude -p`): **no API key**. Standard-library Python, no npm.
+A panel in a split pane next to Claude Code. It shows **this thread's prompts** (white) and **what can be improved** (blue), analysed by Claude on your existing subscription (`claude -p`): **no API key**. It also reads your past chats, so it can tell you when something you keep asking for deserves a skill. Standard-library Python, no npm.
 
 ```
-coach 3/5 | done-when, no-vague  (/coach for before/after)
-repeat: 'commit/PR/ticket text' asked 9x in 14d (from 2026-09-03)
+ coachline  this thread  15:33:41
+ Claude analysed 65 prompts from your past chats on 2026-10-01
+ FROM YOUR PAST CHATS
+   - You have asked for "merge-prs-and-update" 4x in past chats and 1x in this thread -> make it a skill,
+     /merge-prs-and-update (a draft is ready: press s to install it)
+   - Recurring gap (2x before, 1x here), vague-quality-feedback: describe what is wrong and show a reference
+ ----------------------------------------------------------------------
+ 15:28
+ <your prompt, in white>
+ can be improved:                                   (blue from here)
+   task: frontend - ...
+   tip: ...
+ enhanced prompt (press c to copy):
+   ...
 ```
 
-> **Status: v0.1, unvalidated heuristics.** The five rules are keyword checks. Their precision has not been measured (see [Measuring the rules](#measuring-the-rules)). Treat the score as a nudge, not a grade. Developed and run on Windows; macOS and Linux are covered by CI only.
+> **Status: early.** Claude's analysis is the engine; its output is checked locally (see [How it is checked](#how-it-is-checked)) but the quality of advice varies. The five local rules are keyword heuristics, shown only as a fallback when Claude analysis is off; their precision has not been measured. Developed and run on Windows; macOS and Linux are covered by CI only.
 
 ## What it does
 
-- **Statusline** (after each reply): the score of your last prompt, the concrete fix for each failed rule (local, free), and a repeat note when you have asked for the same kind of thing 3+ times in the last 14 days. Scoring is local; no network.
-- **Advisor (opt in)**: `setup.py --advisor on`. For each prompt that looks like a task, one background `claude -p` (Haiku) call classifies it and suggests, right in the statusline and the panel: **which of your installed skills to use** (`use: /impeccable`), **which not-yet-installed plugins from your marketplaces to get** (`get: /plugin install frontend-design@...`), **prompt tips** for that kind of task (for UI work: name the style such as modern, luxury or polished; give reference sites; ask for states and responsive behaviour), a short **workflow**, and a better **AFTER** prompt. Nothing about skills is hardcoded: the lists are read from your machine (personal and plugin skills, minus the ones you switched off in `skillOverrides`, and every plugin in your marketplaces you have not installed). Names the model invents are dropped. Tips and workflow steps are the model's own knowledge, so treat them as suggestions. Off by default: it sends every task-like prompt.
-- **Web discovery (opt in, inside the advisor)**: `setup.py --discover on`. Beyond what you have installed or listed in your marketplaces, once per kind of task (cached 24h) Claude searches the web (its only tools are WebSearch and WebFetch) for things that do the job better: skills, plugins, MCP servers, CLI tools, libraries or workflows. **Nothing it says is trusted; each suggestion is verified on your machine**: an https URL on a public host (redirects checked), reachable with HTTP 200, the page must mention the name, a GitHub repo must exist (real stars and last-push date come from GitHub; archived or ~18-month-stale repos are dropped), and anything you already have is dropped. Whatever fails is dropped and never shown. Results appear as `better: <name> (<kind>) <stars> - why  <url>` and are labelled web-found. Nothing is ever installed for you. `/coach discover` (or `discover.py --last`) runs it right now for your last prompt.
-- **Auto-open**: `setup.py --auto-open on` makes the plugin's SessionStart hook open the thread panel next to Claude when a session starts: a tmux split, a Windows Terminal split, a new console window on Windows, a Terminal.app window on macOS, or a terminal emulator on Linux. It never opens a second panel while one is open (the panel keeps a heartbeat file). Off by default because it opens windows.
-- **Thread panel** (`python scripts/watch.py`, `/coach watch` for the exact command, or automatically with auto-open): a second terminal pane, no animation. One column per thread (a thread is one Claude Code session); *this thread* is pinned on the left. Every flagged prompt is shown in full with its fixes. **Getting an enhanced prompt you can paste:** `n`/`p` select a prompt (marked `*`), `e` asks Claude to write an enhanced version of *that* prompt (your explicit action, so no always-on setting is needed), **Enter** opens it full width as plain text with no column borders, and `c` copies the enhanced prompt to the clipboard exactly as written. Other keys: `h`/`l` (or arrows, Tab) move between threads and pan sideways, `j`/`k`/PgUp/PgDn scroll, `g`/`G` top or newest, Esc closes the detail view, `q` quits. Local history only; prompt text is redacted on screen. `--once` prints one plain frame. Interactive input is tested on Linux (pty); on macOS it uses the same code path; on Windows it uses `msvcrt`, which the automated tests do not cover.
+- **The panel** (`python ~/.claude/coach/panel.py`, or `python scripts/watch.py`): one column, this thread only (the session of your newest prompt). Your prompts are white, everything that can be improved is blue. No animation; it redraws on a key or when new data arrives. Keys: `n`/`p` select a prompt (marked `*`), **Enter** opens it full width as plain text, `c` copies its enhanced prompt, `e` has Claude analyse it now, `s` installs a drafted skill, `j`/`k`/PgUp/PgDn scroll, `g`/`G` top or newest, `q` quits.
+- **From your past chats**: with Claude analysis on, Claude reads your last 90 days of prompts (redacted, a couple of calls) every ~2 days and finds the **requests you repeat** and the **mistakes you keep making**. The panel shows the ones that also appear in this thread, with counts computed on your machine: for example *you have asked for "merge-prs-and-update" 4x in past chats and 1x here -> make it a skill (a draft is ready: press `s`)*. Drafts are written to `~/.claude/coach/drafts/`; `s` copies one into your skills folder and never overwrites.
+- **Per-prompt analysis**: for each new prompt of this thread (the newest first, one at a time, up to the last five), Claude gets the prompt, its three earlier prompts as context, and the names of your installed skills and uninstalled marketplace plugins, and returns the kind of task, which of your skills to use, which plugins to get, prompt tips, a workflow and an **enhanced prompt**. Invented skill or plugin names are dropped. If the answer is not valid JSON it is asked once more.
+- **Claude analysis is opt-in**: `python scripts/setup.py --panel-ai on` (or `/coach panel-ai on`) lets the panel start these background jobs itself. Without it the panel still lists your prompts with local rule hints, and `e` analyses one prompt on demand (your key press is the consent). Turn it off with `--panel-ai off`.
+- **Web discovery (opt in, inside Claude analysis)**: `setup.py --discover on`. Once per kind of task (cached 24h) Claude searches the web (its only tools are WebSearch and WebFetch) for things that do the job better: skills, plugins, MCP servers, CLI tools, libraries or workflows. **Nothing it says is trusted; each suggestion is verified on your machine**: an https URL on a public host (redirects checked), reachable with HTTP 200, the page must mention the name, a GitHub repo must exist (real stars and last-push date from GitHub; archived or ~18-month-stale repos are dropped), and anything you already have is dropped. Whatever fails is dropped. Nothing is ever installed for you. `/coach discover` runs it now for your last prompt.
+- **Auto-open**: `setup.py --auto-open on` makes the plugin's SessionStart hook **split a pane** with the panel next to Claude: a tmux split or a Windows Terminal split. Never a separate window, and never a second panel while one is open. In any other terminal nothing opens by itself; run the short, permanent command `python ~/.claude/coach/panel.py` (the path never changes; a launcher is rewritten after plugin updates) in a second tab or pane.
 - **Enhanced prompts and pasted content**: your history keeps only a marker like `[Pasted text #1 +28 lines]`, not what you pasted, and pasted content is never sent. The enhanced prompt keeps the marker where it belongs and does not ask for the paste again; paste your content back at the marker. Placeholders such as `[ASK: ...]` or `<email>` (redacted secrets) are for you to fill in.
 - **Clipboard**: Windows uses the Win32 clipboard API (exact text, no byte-order mark); macOS `pbcopy`; Linux `wl-copy`, `xclip` or `xsel`; WSL `clip.exe`; anything else falls back to the OSC 52 terminal sequence (Windows Terminal, iTerm2, kitty, tmux with `set-clipboard on`). `/coach --copy` copies too.
-- **`/coach`**: BEFORE with the failed rules and a fix for each, then AFTER: a rewrite from Haiku via `claude -p`. Runs only when you ask.
-- **`/coach review`**: sends your redacted history to Claude (your subscription) and asks what *you* do repeatedly: tasks worth a skill, and recurring prompt mistakes. Nothing is hardcoded: the model proposes patterns, then every claim is re-checked locally (see [How review is checked](#how-review-is-checked)). Output: a Markdown report, draft skills in `~/.claude/coach/drafts/`, and `learned.json`, which the statusline reads with no LLM call, so it can say `habit: vague-correction-without-criteria - state what is wrong and how to verify`.
-- **Install a drafted skill**: `review.py --install <slug>` copies one draft into your skills folder. It never overwrites, and the `/coach` skill only does it for a name you give.
-- **`/coach doctor`**: checks history parsing, interpreter, `claude` CLI and the statusline path.
+- **`/coach`**: BEFORE with the failed local rules, then Claude's advice and one clean ENHANCED PROMPT block (`--copy` puts it on the clipboard).
+- **`/coach review`**: runs the history analysis by hand: a plan first (it sends nothing), then your go-ahead, then the report. `review.py --install <slug>` copies one draft skill into your skills folder, never overwriting.
+- **`/coach doctor`**: checks history parsing, the interpreter and the `claude` CLI, and shows the panel settings and the command to open it.
 
-The five rules: **done-when** (long prompt with no completion criterion), **dont-touch** (risky verb with no boundary), **evidence** (paste over 150 lines), **no-vague** (carefully / properly / best / clean), **rejection-loop** (a correction with no stated reason, sent right after the last reply). A prompt under 26 words shows `short` instead of a score, because most rules do not apply to it.
+The five local rules (shown as hints when Claude analysis is off): **done-when** (long prompt with no completion criterion), **dont-touch** (risky verb with no boundary), **evidence** (paste over 150 lines), **no-vague** (carefully / properly / best / clean), **rejection-loop** (a correction with no stated reason, sent right after the last reply).
 
 ## Install
 
 ```
 /plugin marketplace add teransarathchandra/coachline
 /plugin install coachline@coachline
-/coach setup
 ```
 
-`/coach setup` writes a `statusLine` entry into `~/.claude/settings.json` (backup: `settings.json.coach-bak`). It will not replace a statusline you already have unless you pass `--force`. After a plugin update a SessionStart hook re-points the entry at the new version (only if the entry is ours; it never touches another statusline or creates one). Undo with `python scripts/setup.py --uninstall`.
+Then, once, in a terminal: `python <plugin>/scripts/setup.py` shows your settings and the command that opens the panel, and `setup.py --panel-ai on` / `--auto-open on` turn on the two things that are off by default (`/coach` can do this for you; it asks first). Old versions put a coachline `statusLine` entry in `~/.claude/settings.json`; the SessionStart hook removes that entry automatically (a statusline of anyone else's is never touched). The statusline is gone: the panel is the interface.
 
-Requires Python 3.9+. On macOS `python3` is the command; on Windows use `python` or `py -3`. `setup.py` records the exact interpreter that ran it, so the statusline does not depend on your PATH.
+Requires Python 3.9+. On macOS `python3` is the command; on Windows use `python` or `py -3`.
 
-## How review is checked
+## How it is checked
 
 A model can invent patterns, so nothing it says is taken on trust:
 - It is shown a numbered list of your prompts and must cite ids. Keywords must occur, as whole words, in the prompts it cites.
@@ -50,8 +61,8 @@ This verifies that a pattern exists in your prompts. It does **not** verify that
 ## Privacy
 
 - Web discovery searches with only a generic description of the kind of task (for example `ui-design: improve visual design of a store website`), never your prompt text. Search queries still leave your machine through Claude's web search, which is why it is a separate switch. Model and web text is stripped of terminal escape sequences before display.
-- The advisor is the only feature that sends prompts without you asking each time, which is why it is opt-in. It sends the redacted prompt, the names and short descriptions of your installed skills, and the names of plugins in your marketplaces.
-- Scoring and repeat detection read `~/.claude/history.jsonl` and never leave your machine.
+- Claude analysis (`--panel-ai on`) is the only feature that sends prompts without you asking each time, which is why it is opt-in. It sends redacted prompts (this thread's prompts, plus up to 90 days of history every ~2 days, project names replaced by P1, P2...), the names and short descriptions of your installed skills, and the names of plugins in your marketplaces.
+- The panel, the local rules and the counts read `~/.claude/history.jsonl` and never leave your machine.
 - `/coach review` first prints a plan (how many prompts, how many calls) and sends nothing until you re-run with `--yes`. Then it sends up to 300 redacted prompts (project names replaced by P1, P2...) in a few `claude -p` calls. The `/coach` rewrite sends **one prompt**. Both go to Anthropic through your own `claude` CLI, after redaction (emails, GUIDs, JWTs, API keys, bearer tokens, `password=`/`AccountKey=`-style values). Redaction is pattern-based and will miss things; do not rely on it for secrets.
 - List project path fragments in `~/.claude/coach/llm-off.txt` (one per line) to block both the rewrite and the review for those projects.
 - Each advisor call is about 9k input tokens on a machine like mine (71 installed skills, 312 marketplace plugins); the catalog comes first and the prompt last so the repeated part can be cached, but I have not verified that `claude -p` caches it. Review uses roughly one call per 60 prompts. `claude -p` inherits `CLAUDE_CONFIG_DIR`, so a custom config directory needs its own login.
@@ -62,11 +73,10 @@ This verifies that a pattern exists in your prompts. It does **not** verify that
 - **`history.jsonl` is not a documented API.** It may change; `/coach doctor` will tell you if parsing breaks. Malformed lines are skipped, never fatal.
 - **Review reads `history.jsonl` only**: your Claude Code prompts. It cannot see claude.ai web chats, and it does not read Claude's replies from session transcripts.
 - **Verification proves a suggestion exists and matches its page or repo, not that it is good or safe.** On the first real test the model gave a GitHub URL with an invented owner (a 404, so it was dropped by the check); the real project has a different owner. Stars measure popularity, not quality; read a tool before you install it.
-- **Suggestions are only as good as the model**: on a synthetic "beautify my shoe store website" prompt it picked `/impeccable`, `/design-html` and `/superpowers:brainstorming` from a real machine and dropped two invented names. That is one example, not a measurement.
-- **Auto-open was tested on Windows (new console and Windows Terminal split) and in tmux 3.4.** The macOS Terminal.app and Linux terminal-emulator paths are covered by unit tests of the command they build, not by a real launch.
+- **Suggestions are only as good as the model.** In real tests the history analysis found the repeated requests (for example "merge PRs and update the install") and sensible mistake patterns, and the per-prompt analysis misread a prompt until I added the earlier prompts as context; it can still be generic or wrong. Each prompt is analysed with only the thread's last three prompts as context, not the whole conversation or Claude's replies.
+- **Auto-open was tested on Windows (Windows Terminal split) and in tmux 3.4.** Other terminals (macOS Terminal.app, iTerm2, Linux emulators, a plain Windows console) cannot be split from outside, so nothing opens there; use the `panel.py` command.
 - **Pasted text is not in history**, only a `[Pasted text #N +M lines]` marker, so the rewrite cannot see what you pasted.
 - **English only.** Rules are regexes.
-- **Score appears after Claude replies**, not while you type. Claude Code offers no hook for the draft text.
 - Custom repeat categories: `~/.claude/coach/config.json`, `{"categories": {"name": "regex"}}`.
 
 ## Measuring the rules
@@ -75,7 +85,7 @@ This verifies that a pattern exists in your prompts. It does **not** verify that
 
 ## Alternatives
 
-This overlaps with existing tools, and some are more mature. [Prompt Sensei](https://github.com/chengzhongwei/Prompt-sensei) is a fuller prompt coach (scores, rewrites, observe-mode hooks, habit reports; needs Node). [claude-code-prompt-coach-skill](https://github.com/hancengiz/claude-code-prompt-coach-skill) analyses session logs. What coachline adds, as far as I know: a statusline view, repeated-request detection with skill drafts, and zero install steps beyond Python. If you want a coach, read theirs first.
+This overlaps with existing tools, and some are more mature. [Prompt Sensei](https://github.com/chengzhongwei/Prompt-sensei) is a fuller prompt coach (scores, rewrites, observe-mode hooks, habit reports; needs Node). [claude-code-prompt-coach-skill](https://github.com/hancengiz/claude-code-prompt-coach-skill) analyses session logs. What coachline adds, as far as I know: a split-pane view of the current thread, repeated-request detection with skill drafts, and zero install steps beyond Python. If you want a coach, read theirs first.
 
 ## Development
 

@@ -53,6 +53,12 @@ class Redaction(unittest.TestCase):
 
 
 class Loading(unittest.TestCase):
+    def setUp(self):  # never read the real ~/.claude/coach/config.json
+        self._cfg = coach.USER_CFG; coach.USER_CFG = os.path.join(tempfile.gettempdir(), "coachline-no-such-config.json")
+
+    def tearDown(self):
+        coach.USER_CFG = self._cfg
+
     def test_missing_and_malformed_history_do_not_crash(self):
         self.assertEqual(coach.load(os.path.join(tempfile.gettempdir(), "nope.jsonl")), [])
         with tempfile.TemporaryDirectory() as d:
@@ -89,74 +95,54 @@ class Loading(unittest.TestCase):
 
 
 class Scripts(unittest.TestCase):
-    def test_setup_installs_refuses_foreign_and_uninstalls(self):
+    def settings(self, cfg, data):
+        with open(os.path.join(cfg, "settings.json"), "w") as f: json.dump(data, f)
+
+    def test_uninstall_removes_only_the_old_coachline_statusline(self):
+        old = {"type": "command", "command": "python C:/gone/plugins/cache/coachline/coachline/0.8.0/scripts/statusline.py"}
         with tempfile.TemporaryDirectory() as cfg:
-            sp = os.path.join(cfg, "settings.json")
-            with open(sp, "w") as f: json.dump({"theme": "dark"}, f)
-            self.assertEqual(run("setup.py", cfg).returncode, 0)
-            s = read(sp)
-            self.assertIn("statusline.py", s["statusLine"]["command"])
-            self.assertEqual(s["theme"], "dark")
-            self.assertTrue(os.path.exists(sp + ".coach-bak"))
+            self.settings(cfg, {"theme": "dark", "statusLine": old})
             self.assertEqual(run("setup.py", cfg, "--uninstall").returncode, 0)
-            self.assertNotIn("statusLine", read(sp))
-            with open(sp, "w") as f: json.dump({"statusLine": {"type": "command", "command": "other"}}, f)
-            self.assertNotEqual(run("setup.py", cfg).returncode, 0)
-            self.assertEqual(read(sp)["statusLine"]["command"], "other")
-
-    def test_doctor_and_reinstall_work_from_a_folder_with_a_space_and_any_name(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            cfg = os.path.join(tmp, "cfg"); os.makedirs(cfg)
-            for name in ("with space", "renamed"):
-                dst = os.path.join(tmp, name, "scripts")
-                shutil.copytree(os.path.join(ROOT, "scripts"), dst, ignore=shutil.ignore_patterns("__pycache__"))
-                env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg}
-                def cmd(script, *a):
-                    return subprocess.run([sys.executable, os.path.join(dst, script), *a],
-                                          capture_output=True, text=True, env=env)
-                self.assertEqual(cmd("setup.py").returncode, 0, name + " setup")
-                out = cmd("coach.py", "--doctor")
-                self.assertIn("statusline script exists", out.stdout, name)
-                self.assertNotIn("FAIL statusline", out.stdout, name)
-
-    def test_refresh_repoints_only_our_own_stale_entry(self):
-        with tempfile.TemporaryDirectory() as cfg:
-            sp = os.path.join(cfg, "settings.json")
-            stale = {"type": "command", "command": "python /gone/plugins/cache/coachline/coachline/0.1.0/scripts/statusline.py"}
-            with open(sp, "w") as f: json.dump({"statusLine": stale}, f)
-            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)
-            self.assertIn(os.path.join(ROOT, "scripts").replace("\\", "/"), read(sp)["statusLine"]["command"])
+            s = read(os.path.join(cfg, "settings.json"))
+            self.assertNotIn("statusLine", s); self.assertEqual(s["theme"], "dark")
+            self.assertTrue(os.path.exists(os.path.join(cfg, "settings.json.coach-bak")))
             foreign = {"type": "command", "command": "other-tool"}
-            with open(sp, "w") as f: json.dump({"statusLine": foreign}, f)
-            run("setup.py", cfg, "--refresh"); self.assertEqual(read(sp)["statusLine"], foreign)
-            os.remove(sp); run("setup.py", cfg, "--refresh"); self.assertFalse(os.path.exists(sp))
-            with open(sp, "w") as f: f.write("{broken")
-            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)  # never fail a session start
+            self.settings(cfg, {"statusLine": foreign})
+            run("setup.py", cfg, "--uninstall")
+            self.assertEqual(read(os.path.join(cfg, "settings.json"))["statusLine"], foreign)      # someone else's statusline is untouched
 
-    def test_statusline_stays_fast_on_a_huge_history(self):
-        import time
+    def test_refresh_migrates_the_old_statusline_away_and_never_fails_a_session_start(self):
+        old = {"type": "command", "command": "python C:/gone/plugins/cache/coachline/coachline/0.8.0/scripts/statusline.py", "refreshInterval": 10}
         with tempfile.TemporaryDirectory() as cfg:
-            with open(os.path.join(cfg, "history.jsonl"), "w") as f:
-                for i in range(30000):
-                    f.write(json.dumps({"display": "write a commit message for this change please",
-                                        "timestamp": 1750000000000 + i * 60000, "project": "p"}) + "\n")
-            t = time.time(); r = run("statusline.py", cfg)
-            self.assertEqual(r.returncode, 0)
-            self.assertLess(time.time() - t, 5, "was 13s before the O(n) fix")
+            self.settings(cfg, {"statusLine": old, "theme": "dark"})
+            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)
+            s = read(os.path.join(cfg, "settings.json"))
+            self.assertNotIn("statusLine", s); self.assertEqual(s["theme"], "dark")
+            self.assertTrue(os.path.isfile(os.path.join(cfg, "coach", "panel.py")))                # the stable launcher is refreshed too
+            with open(os.path.join(cfg, "settings.json"), "w") as f: f.write("{broken")
+            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)
+            os.remove(os.path.join(cfg, "settings.json"))
+            self.assertEqual(run("setup.py", cfg, "--refresh").returncode, 0)
+            self.assertFalse(os.path.exists(os.path.join(cfg, "settings.json")))                   # nothing to migrate: nothing created
 
-    def test_statusline_never_fails_on_empty_config(self):
+    def test_setup_without_options_shows_the_settings_and_the_panel_command(self):
         with tempfile.TemporaryDirectory() as cfg:
-            r = run("statusline.py", cfg)
-            self.assertEqual((r.returncode, r.stdout.strip()), (0, ""))
+            r = run("setup.py", cfg)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            for want in ("Claude analysis (--panel-ai):  off", "auto-open a split pane (--auto-open):  off", "panel.py"):
+                self.assertIn(want, r.stdout)
+            self.assertFalse(os.path.exists(os.path.join(cfg, "settings.json")))                   # looking never writes settings
 
-    def test_statusline_and_coach_on_real_shape_history(self):
+    def test_coach_and_doctor_on_real_shape_history(self):
         with tempfile.TemporaryDirectory() as cfg:
             with open(os.path.join(cfg, "history.jsonl"), "w") as f:
                 f.write(json.dumps({"display": "please deal with this carefully " + "word " * 5, "timestamp": 5000, "project": "p"}) + "\n")
-            self.assertIn("no-vague", run("statusline.py", cfg).stdout)
             out = run("coach.py", cfg, "--coach", "--no-llm").stdout
             self.assertIn("BEFORE (4/5)", out)
-            self.assertNotEqual(run("coach.py", cfg, "--doctor").returncode, 2)
+            d = run("coach.py", cfg, "--doctor")
+            self.assertEqual(d.returncode, 0, d.stdout)
+            self.assertIn("Claude analysis in the panel", d.stdout)
+            self.assertIn("open the panel by hand:", d.stdout)
 
 
 if __name__ == "__main__":

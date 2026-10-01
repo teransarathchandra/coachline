@@ -65,7 +65,7 @@ CATS = {
 
 def categories():
     try:
-        extra = json.load(open(USER_CFG, encoding="utf-8")).get("categories", {})
+        with open(USER_CFG, encoding="utf-8") as f: extra = json.load(f).get("categories", {})
     except (OSError, ValueError, AttributeError):
         extra = {}
     return {**CATS, **{k: v for k, v in extra.items() if isinstance(v, str)}}
@@ -82,6 +82,22 @@ def load(path):
             try:
                 r = json.loads(l)
                 rows.append((float(r["timestamp"]) / 1000, r.get("project") or "", str(r["display"]).strip()))
+            except (ValueError, KeyError, TypeError):
+                continue
+    return sorted(rows)
+
+def load_full(path):
+    """(unix_seconds, project, text, session_id) rows, oldest first. Malformed lines are skipped."""
+    rows = []
+    try:
+        f = open(path, encoding="utf-8")
+    except OSError:
+        return rows
+    with f:
+        for l in f:
+            try:
+                r = json.loads(l)
+                rows.append((float(r["timestamp"]) / 1000, r.get("project") or "", str(r["display"]).strip(), str(r.get("sessionId") or "")))
             except (ValueError, KeyError, TypeError):
                 continue
     return sorted(rows)
@@ -257,15 +273,14 @@ def advisable(text, fails):
     """Worth an LLM call: a rule fired, or it is long enough to be a real task (not 'continue' or 'yes')."""
     return bool(fails) or len(body(text).split()) >= 6
 
-# --- auto-rewrite: opt-in, runs in a detached background process so the statusline never blocks ------
-CACHE = os.path.join(STATE, "last-rewrite.json")
+# --- Claude-driven analysis, started by the panel in detached background processes ------------------
 ALIVE = os.path.join(STATE, "watch.alive")  # watch.py touches this every second while it is open
+REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished analyses, keyed by prompt_key; later lines win
+REVIEW_LOCK = os.path.join(STATE, "review.running")  # review.py holds this while it runs
 
 def panel_alive(max_age=6):
     try: return time.time() - os.path.getmtime(ALIVE) < max_age
     except OSError: return False
-
-REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished AFTER rewrites, keyed by prompt_key
 
 def setting(name, default=None):
     try:
@@ -283,33 +298,41 @@ def set_setting(name, value):
     os.makedirs(STATE, exist_ok=True)
     with open(USER_CFG, "w", encoding="utf-8") as f: json.dump(d, f, indent=2)
 
-def read_cache():
-    try:
-        with open(CACHE, encoding="utf-8") as f: d = json.load(f)
-        return d if isinstance(d, dict) else {}
-    except (OSError, ValueError):
-        return {}
+def ai_on():
+    """Claude analysis (advice per prompt, review of your history) is opt-in. 'auto_rewrite' is the old name of the same switch."""
+    v = setting("panel_ai")
+    return bool(setting("auto_rewrite", False) if v is None else v)
 
-def write_cache(d):
-    os.makedirs(STATE, exist_ok=True)
-    tmp = CACHE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f)
-    os.replace(tmp, CACHE)
+def py_cmd(script, *args):
+    """A command line the user can paste: this Python (python / python3 / full path), a script next to this file, arguments."""
+    exe = sys.executable; name = None
+    for n in ("python", "python3"):
+        w = shutil.which(n)
+        try:
+            if w and os.path.samefile(w, exe): name = n; break
+        except OSError: pass
+    py = name or (f'"{exe}"' if " " in exe else exe)
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), script).replace("\\", "/")
+    return " ".join([py, f'"{path}"' if " " in path else path, *args])
 
 def prompt_key(row):
     import hashlib
     return f"{row[0]}:{hashlib.sha1(row[2].encode('utf-8')).hexdigest()[:12]}"
 
-def spawn_bg(key):
-    """Mark the prompt pending (so the next tick does not spawn again), then start a detached rewrite."""
-    write_cache({"key": key, "status": "pending", "ts": time.time()})
+def _spawn(argv):
     kw = {"creationflags": 0x00000008 | 0x00000200 | 0x08000000} if os.name == "nt" else {"start_new_session": True}
-    subprocess.Popen([sys.executable, os.path.abspath(__file__), "--bg-rewrite"], stdin=subprocess.DEVNULL,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
+    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
+
+def spawn_key(key):
+    """Analyse one specific prompt in a detached process."""
+    _spawn([sys.executable, os.path.abspath(__file__), "--bg-rewrite", "--key", key])
+
+def spawn_review():
+    """Have Claude analyse your whole history (review.py) in a detached process."""
+    _spawn([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "review.py"), "--yes", "--days", "90", "--max", "360"])
 
 def _save(key, res):
-    if read_cache().get("key") == key: write_cache({**res, "ts": time.time()})
-    os.makedirs(STATE, exist_ok=True)  # keep every result so watch.py can show this and earlier threads' advice; later lines win
+    os.makedirs(STATE, exist_ok=True)
     if res["status"] == "done":
         rec = {"key": key, "text": res["text"], "advice": res["advice"]}
         if res.get("discovery"): rec["discovery"] = res["discovery"]
@@ -317,26 +340,17 @@ def _save(key, res):
         rec = {"key": key, "error": res.get("error", "failed")}
     with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
 
-def spawn_key(key):
-    """Enhance one specific prompt in a detached process (no statusline cache involved)."""
-    kw = {"creationflags": 0x00000008 | 0x00000200 | 0x08000000} if os.name == "nt" else {"start_new_session": True}
-    subprocess.Popen([sys.executable, os.path.abspath(__file__), "--bg-rewrite", "--key", key], stdin=subprocess.DEVNULL,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
-
-def bg_rewrite(path, only_key=None):
-    rows = load(path)
-    if only_key:  # asked for by name (the panel's `e`): any prompt, not just the last one
-        i = next((n for n, r in enumerate(rows) if prompt_key(r) == only_key), None)
-        if i is None: return
-        fails = [n for n, fn in RULES if not fn(rows[i][2], rows[i][0] - rows[i - 1][0] if i else None)]
-    else:
-        i, fails = last_eval(rows)
-        if i is None or not advisable(rows[i][2], fails): return
-    if llm_off(rows[i][1]): return
-    key = prompt_key(rows[i])
+def bg_rewrite(path, key):
+    """Claude's analysis of the prompt with this key (advice, enhanced prompt, optional web discovery), appended to rewrites.jsonl."""
+    rows = load_full(path)
+    i = next((n for n, r in enumerate(rows) if prompt_key(r) == key), None)
+    if i is None or llm_off(rows[i][1]): return
+    fails = [n for n, fn in RULES if not fn(rows[i][2], rows[i][0] - rows[i - 1][0] if i else None)]
+    # the three earlier prompts of the same conversation: what "this" and "it" refer to (redacted; opted-out projects never included)
+    context = [redact(r[2]) for r in rows[max(0, i - 40):i] if r[3] == rows[i][3] and scorable(r[2]) and not r[2].startswith("/coach") and not llm_off(r[1])][-3:]
     import advisor
     try:
-        adv = advisor.advise(redact(rows[i][2]), fails, timeout=90)
+        adv = advisor.advise(redact(rows[i][2]), fails, timeout=90, context=context)
         res = {"key": key, "status": "done", "advice": adv, "text": "AFTER: " + adv.get("after", "")}
     except (RuntimeError, ValueError) as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
     _save(key, res)
@@ -354,25 +368,6 @@ def _after_lines(text, width=96):
     if len(wrapped) > 8: out[-1] = out[-1][:width - 1] + "…"
     why = " ".join(why.split())
     return out + (["WHY:   " + why[:width - 7] + ("…" if len(why) > width - 7 else "")] if why else [])
-
-def auto_after(rows, i, fails):
-    """Statusline lines for the advice block, or []. Starts the background advisor once per prompt."""
-    if not advisable(rows[i][2], fails) or not setting("auto_rewrite", False) or llm_off(rows[i][1]): return []
-    key = prompt_key(rows[i]); c = read_cache(); age = time.time() - c.get("ts", 0)
-    if c.get("key") != key:
-        spawn_bg(key); return ["advice: (working on it...)"]
-    if c.get("status") == "done":
-        import advisor
-        adv = c.get("advice")
-        if not adv: return _after_lines(c.get("text", ""))
-        lines = advisor.compact(adv)
-        if c.get("discovery"):
-            import discover
-            lines += discover.compact(c["discovery"])
-        if adv.get("after"): lines += [t for _k, t in advisor.lines({"after": adv["after"]}, 96)][:6]
-        return lines
-    if c.get("status") == "pending" and age < 150: return ["advice: (working on it...)"]
-    return ["advice: (unavailable: " + c.get("error", "timed out") + "; /coach retries)"]
 
 LEARNED = os.path.join(STATE, "learned.json")  # written by review.py from YOUR history; read locally, no LLM
 
@@ -438,15 +433,9 @@ def doctor(path):
     line(bool(rows), f"parsed {len(rows)} prompts (needs JSONL with 'display' and 'timestamp' fields)")
     line(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} at {sys.executable}")
     print(("ok   " if shutil.which("claude") else "warn ") + "claude CLI on PATH (needed only for the /coach rewrite)")
-    print(("ok   " if setting("auto_rewrite", False) else "off  ") + "auto-rewrite in the statusline (opt in: setup.py --auto-rewrite on)")
-    try:
-        sl = json.load(open(os.path.join(CONFIG, "settings.json"), encoding="utf-8")).get("statusLine", {})
-    except (OSError, ValueError):
-        sl = {}
-    cmd = sl.get("command", "")
-    print(("ok   " if "statusline.py" in cmd else "warn ") + f"statusLine: {cmd or 'not set (run scripts/setup.py)'}")
-    script = script_of(cmd)
-    if script: line(os.path.isfile(script), f"statusline script exists: {script} (run setup.py again if not)")
+    print(("ok   " if ai_on() else "off  ") + "Claude analysis in the panel (turn on: " + py_cmd("setup.py", "--panel-ai", "on") + ")")
+    print(("ok   " if setting("auto_open_watch", False) else "off  ") + "panel opens itself at session start (turn on: " + py_cmd("setup.py", "--auto-open", "on") + ")")
+    print("     open the panel by hand: " + py_cmd("watch.py"))
     sys.exit(0 if ok else 1)
 
 if __name__ == "__main__":
@@ -457,7 +446,8 @@ if __name__ == "__main__":
     ap.add_argument("--bg-rewrite", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--key", help=argparse.SUPPRESS); ap.add_argument("--copy", action="store_true", help="with --coach: copy the enhanced prompt to the clipboard")
     a = ap.parse_args()
-    if a.bg_rewrite: bg_rewrite(a.history, a.key)
+    if a.bg_rewrite:
+        if a.key: bg_rewrite(a.history, a.key)
     elif a.doctor: doctor(a.history)
     elif a.coach: coach(a.history, llm=not a.no_llm, copy=a.copy)
     else:
