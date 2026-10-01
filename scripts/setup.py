@@ -6,10 +6,10 @@
   python setup.py --auto-open on|off    split a pane with the panel at session start (tmux or Windows Terminal only)
   python setup.py --discover on|off     web search for better tools per kind of task (inside the analysis; verified locally)
   python setup.py --uninstall           remove the old coachline statusline entry from settings.json
-  python setup.py --refresh             silent: used by the SessionStart hook (refreshes the launcher, migrates the old statusline)
+  python setup.py --refresh             silent: used by the SessionStart hook (refreshes the launcher, records which session started, migrates the old statusline)
 Old names still work: --advisor and --auto-rewrite mean --panel-ai.
 """
-import json, os, shutil, sys
+import json, os, shutil, sys, threading
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import coach
@@ -38,8 +38,25 @@ def onoff(argv, flag):
     return v == "on"
 
 
+STUCK = []
+
+
+def hook_json(wait=1.0):
+    """What Claude Code pipes to a hook, or '' when there is nothing within `wait` seconds. A session start must never block on this."""
+    if sys.stdin is None or sys.stdin.isatty(): return ""
+    box = []
+
+    def read():
+        try: box.append(sys.stdin.read())
+        except (OSError, ValueError): pass
+    t = threading.Thread(target=read, daemon=True); t.start(); t.join(wait)
+    if t.is_alive(): STUCK.append(t)                          # an open pipe nobody writes to: do not wait for it at exit either
+    return box[0] if box else ""
+
+
 def main(argv):
     if "-h" in argv or "--help" in argv: print(__doc__); return
+    if "--refresh" in argv: coach.record_session(hook_json())      # the hook's JSON: which session just started
     bad = [a for a in argv if a.startswith("-") and a not in KNOWN]
     if bad: sys.exit(f"unknown option {bad[0]}; nothing was changed (see --help)")
     try:
@@ -89,3 +106,5 @@ def main(argv):
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+    if STUCK:
+        sys.stdout.flush(); sys.stderr.flush(); os._exit(0)
