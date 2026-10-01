@@ -485,6 +485,57 @@ class PaneSize(unittest.TestCase):
             self.assertTrue(lines and all(watch.dw(l) <= 50 for l in lines), [watch.dw(l) for l in lines])      # nothing is wider than the pane
 
 
+class Resume(Base):
+    """Resuming logs '/resume' under a throwaway session id and nothing for the resumed session until you send a prompt; the panel
+    showed '0 prompts in this thread'. The conversation you are in is the one whose transcript Claude Code wrote last."""
+
+    def transcript(self, sid, age):
+        d = os.path.join(self.cfg, "projects", "C--proj"); os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, sid + ".jsonl")
+        with open(p, "w") as f: f.write("{}\n")
+        t = time.time() - age; os.utime(p, (t, t))
+
+    def setUp(self):
+        super().setUp()
+        history(self.cfg, [("shoes", "p", "SHOES one create a luxury shoe website with astro"), ("shoes", "p", "SHOES two add a product catalog page please"),
+                           ("audit", "p", "AUDIT one audit how i use claude code in detail"), ("audit", "p", "AUDIT two fix what is fixable from the report"),
+                           ("throwaway", "p", "/resume")])
+
+    def entries(self):
+        return [e["text"] for e in watch.build(self.path)["entries"]]
+
+    def test_the_resumed_session_is_shown_not_the_empty_throwaway_one(self):
+        self.transcript("audit", 600); self.transcript("shoes", 5)                # you just resumed the shoe session: its transcript was touched
+        self.assertEqual(self.entries(), ["SHOES one create a luxury shoe website with astro", "SHOES two add a product catalog page please"])
+        self.transcript("audit", 1); self.transcript("shoes", 300)                # then you resume the audit session
+        self.assertEqual([t[:9] for t in self.entries()], ["AUDIT one", "AUDIT two"])
+
+    def test_a_session_with_no_transcript_is_never_chosen_over_one_with_a_transcript(self):
+        self.transcript("audit", 100)                                             # 'throwaway' has no file, as in real life
+        self.assertEqual(watch.build(self.path)["session"], "audit")
+
+    def test_without_any_transcripts_it_is_the_newest_prompt_that_is_not_a_command(self):
+        self.assertEqual(watch.build(self.path)["session"], "audit")              # '/resume' is skipped
+        history(self.cfg, [("shoes", "p", "/clear")])
+        self.assertEqual(watch.build(self.path)["session"], "shoes")              # only commands: the last session seen
+
+    def test_the_panel_switches_to_the_other_conversation_and_starts_at_its_newest_prompt(self):
+        self.transcript("audit", 10); self.transcript("shoes", 500)
+        t, it, frames = [0], iter(["up", None, None]), []
+        state = {"n": 0}
+
+        def clock(): t[0] += 3; return t[0]
+
+        def load():
+            state["n"] += 1
+            if state["n"] > 1: self.transcript("shoes", 0)                         # resume: the shoe transcript becomes the newest
+            return watch.build(self.path)
+        watch.loop(lambda _t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (100, 30), load, clock=clock)
+        self.assertIn("AUDIT one", card_of(frames[1]))                             # you had moved up to the earlier audit prompt
+        self.assertIn("SHOES two", card_of(frames[-1]))                            # then the thread changed: the newest prompt of the new one
+        self.assertNotIn("earlier prompt", card_of(frames[-1]))
+
+
 class Navigation(Base):
     def setUp(self):
         super().setUp()

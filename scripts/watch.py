@@ -24,7 +24,7 @@ With Claude analysis on (setup.py --panel-ai on) the panel itself starts the bac
 the newest unanalysed prompts of this thread, and a review of your history every ~2 days. Redacted; llm-off.txt projects never sent.
 The screen redraws only on a key, a click or when new data arrives.
 """
-import argparse, datetime as dt, json, os, re, sys, time, unicodedata
+import argparse, datetime as dt, glob, json, os, re, sys, time, unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import advisor
@@ -158,12 +158,32 @@ def insights(entries, rows, L):
     return out
 
 
+def current_session(rows):
+    """The conversation you are in: the recent session whose transcript was written last.
+    The newest history line is not enough. Resuming (or /clear, /exit) logs a command under a throwaway session id, and a resumed
+    session logs nothing until you send a prompt, yet Claude Code writes to its transcript the moment it resumes.
+    With no transcripts to look at (a fresh install), the newest prompt that is not a /command."""
+    seen, ids = set(), []
+    for r in reversed(rows):
+        if r[3] and r[3] not in seen: seen.add(r[3]); ids.append(r[3])
+    best = None
+    for sid in ids[:40]:
+        for p in glob.glob(os.path.join(coach.CONFIG, "projects", "*", sid + ".jsonl")):
+            try: m = os.path.getmtime(p)
+            except OSError: continue
+            if best is None or m > best[0]: best = (m, sid)
+    if best: return best[1]
+    for r in reversed(rows):
+        if not r[2].lstrip().startswith("/"): return r[3]
+    return rows[-1][3]
+
+
 def build(path):
-    """State for render(): THIS thread's prompts (the session of the newest history entry) plus what Claude knows from the rest."""
+    """State for render(): THIS thread's prompts (the session you are in, see current_session) plus what Claude knows from the rest."""
     rows = load_full(path); aft = rewrites(); L = coach.learned()
-    st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0}
+    st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None}
     if not rows: return st
-    cur = rows[-1][3]; prev = None
+    cur = st["session"] = current_session(rows); prev = None
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
         if sid != cur or not coach.scorable(text) or text.startswith("/coach"): continue
@@ -179,7 +199,7 @@ def build(path):
 
 
 def signature(st):
-    return (len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
+    return (st.get("session"), len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
             st["learned"].get("generated"), st["review_running"], st["ai"])
 
 
@@ -686,7 +706,9 @@ def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0, s
         if k is None:
             if clock() - last_load >= reload_every:
                 new = load_state(); last_load = clock()
-                if signature(new) != signature(st): st = new; dirty = True
+                if signature(new) != signature(st):
+                    if new.get("session") != st.get("session"): ui.update(sel=None, lo=0, cs=0, detail=False, dscroll=0)      # another conversation: start at its newest prompt
+                    st = new; dirty = True
                 if work: work(st, ui)
             continue
         if handle(ui, st, k, io): return
