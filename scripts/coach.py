@@ -195,6 +195,8 @@ def llm_off(proj):
     except OSError:
         return False
 
+NO_WINDOW = {"creationflags": 0x08000000} if os.name == "nt" else {}   # CREATE_NO_WINDOW: a child console program must never pop up a terminal
+
 def ask_claude(prompt, model="haiku", timeout=180, web=False):
     """One-shot question to the user's own Claude subscription via `claude -p`. No API key, no settings, no session
     saved, and no tools, except that web=True allows exactly two read-only ones: WebSearch and WebFetch. The prompt goes over stdin (no argv length limit, not visible in `ps`).
@@ -208,7 +210,7 @@ def ask_claude(prompt, model="haiku", timeout=180, web=False):
                                   "--tools", "WebSearch,WebFetch" if web else "", "--setting-sources", ""]
                                  + (["--allowedTools", "WebSearch,WebFetch"] if web else []),
                            input=prompt, capture_output=True, text=True, encoding="utf-8", timeout=timeout,
-                           cwd=tempfile.gettempdir())
+                           cwd=tempfile.gettempdir(), **NO_WINDOW)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"claude timed out after {timeout}s")
     if r.returncode != 0 or not r.stdout.strip():
@@ -254,7 +256,7 @@ def copy_text(text):
     COACHLINE_CLIPBOARD (a command reading stdin) overrides everything; the tests use it so they never touch a real clipboard."""
     import base64, shlex
     def run(argv, data):
-        try: return subprocess.run(argv, input=data, capture_output=True, timeout=10).returncode == 0
+        try: return subprocess.run(argv, input=data, capture_output=True, timeout=10, **NO_WINDOW).returncode == 0
         except (OSError, subprocess.TimeoutExpired): return False
     if os.environ.get("COACHLINE_CLIPBOARD"):
         return "override" if run(shlex.split(os.environ["COACHLINE_CLIPBOARD"]), text.encode("utf-8")) else None
@@ -320,7 +322,9 @@ def prompt_key(row):
     return f"{row[0]}:{hashlib.sha1(row[2].encode('utf-8')).hexdigest()[:12]}"
 
 def _spawn(argv):
-    kw = {"creationflags": 0x00000008 | 0x00000200 | 0x08000000} if os.name == "nt" else {"start_new_session": True}
+    # Not DETACHED_PROCESS: Windows then ignores CREATE_NO_WINDOW and gives the `claude` child its own visible console.
+    # With a hidden console the job owns, claude inherits it and nothing appears.
+    kw = {"creationflags": 0x00000200 | 0x08000000} if os.name == "nt" else {"start_new_session": True}
     subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
 
 def spawn_key(key):

@@ -133,5 +133,24 @@ class EndToEnd(Base):
         self.assertIn("Claude off", flat(once(self.cfg)))
 
 
+class NoWindow(unittest.TestCase):
+    """On Windows a console program started by a job without a console opens its own visible window. The panel's background
+    jobs must own a hidden console instead (CREATE_NO_WINDOW without DETACHED_PROCESS, which makes Windows ignore it)."""
+
+    def test_background_jobs_and_claude_calls_never_open_a_window(self):
+        from unittest import mock
+        seen = []
+        with mock.patch.object(coach.subprocess, "Popen", lambda argv, **kw: seen.append(kw)):
+            coach.spawn_key("k"); coach.spawn_review()
+        self.assertEqual(len(seen), 2)
+        if os.name == "nt":
+            for kw in seen:
+                self.assertTrue(kw["creationflags"] & 0x08000000)          # CREATE_NO_WINDOW
+                self.assertFalse(kw["creationflags"] & 0x00000008)         # not DETACHED_PROCESS
+            self.assertEqual(coach.NO_WINDOW, {"creationflags": 0x08000000})   # also passed to `claude -p` and the clipboard helpers
+        else:
+            self.assertTrue(all(kw.get("start_new_session") for kw in seen))
+
+
 if __name__ == "__main__":
     unittest.main()
