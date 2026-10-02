@@ -133,6 +133,35 @@ class Tick(unittest.TestCase):
         self.assertEqual(json.loads(r.stdout)["entries"][0]["text"], VAGUE)
 
 
+    def write_rec(self, rec):
+        with open(coach.REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
+
+    def test_web_suggestions_come_with_hide_and_use_actions(self):
+        history(self.cfg, [("s1", "p", SOLID)])
+        from test_watch import key_for, ADVICE
+        self.write_rec({"key": key_for(0, SOLID), "text": "AFTER: x", "advice": ADVICE,
+                        "discovery": [{"name": "GreatKit", "kind": "tool", "why": "w", "url": "https://x.example.com/g", "install": "", "stars": None, "pushed": None}]})
+        st = self.tick()
+        self.assertIn(["web", "itemacts", "", "", "item:x.example.com/g"], st["entries"][0]["lines"])
+        self.assertIn("References (checked links from web research):", st["entries"][0]["after"])
+
+    def test_mark_and_research_from_the_pane(self):
+        import memory
+        self.assertEqual(pane.main(["--mark", "dismissed", "x.example.com/g"]), 0)
+        self.assertEqual(memory.statuses(), {"x.example.com/g": "dismissed"})
+        self.assertEqual(pane.main(["--mark", "maybe", "x.example.com/g"]), 2)
+        history(self.cfg, [("s1", "p", SOLID)])
+        from test_watch import key_for, ADVICE
+        key = key_for(0, SOLID)
+        with mock.patch.object(coach, "spawn_research") as sr:
+            self.assertEqual(pane.main(["--research", key, "--session", "s1"]), 1)          # not analysed yet: says why, sends nothing
+            self.write_rec({"key": key, "text": "AFTER: x", "advice": ADVICE})
+            self.assertEqual(pane.main(["--research", key, "--session", "s1"]), 0)
+            coach.set_setting("research", False)
+            self.assertEqual(pane.main(["--research", key]), 1)
+        sr.assert_called_once_with(key)
+        self.assertFalse(self.tick()["research"])
+
 class Actions(unittest.TestCase):
     def test_enhance_starts_one_background_analysis(self):
         with mock.patch.object(coach, "spawn_key") as spawn, mock.patch("sys.stdout"):

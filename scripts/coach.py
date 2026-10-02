@@ -398,6 +398,10 @@ def spawn_review():
     """Have Claude analyse your whole history (review.py) in a detached process."""
     _spawn([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "review.py"), "--yes", "--days", "90", "--max", "360"])
 
+def spawn_research(key):
+    """Search the web again for one analysed prompt (the panel's r key), in a detached process. Ignores the cache and a usage-limit pause."""
+    _spawn([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "discover.py"), "--key", key])
+
 def _save(key, res):
     os.makedirs(STATE, exist_ok=True)
     if res["status"] == "done":

@@ -30,15 +30,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import advisor
 import coach
 import discover
+import memory
 import review
 
 POSIX_KEYS = {"[A": "up", "[B": "down", "[5~": "pgup", "[6~": "pgdn", "[H": "home", "[F": "end", "[1~": "home", "[4~": "end",
               "OA": "up", "OB": "down", "OH": "home", "OF": "end"}
 WIN_KEYS = {"H": "up", "P": "down", "I": "pgup", "Q": "pgdn", "G": "home", "O": "end"}     # msvcrt fallback when VT input is unavailable
 ALIASES = {"k": "up", "j": "down", "p": "up", "n": "down", "b": "pgup", " ": "pgdn", "g": "home", "G": "end", "\x03": "q", "Q": "q",
-           "c": "copy", "e": "enhance", "s": "skill", "i": "patterns", "m": "mouse", "\r": "enter", "\n": "enter", "\x1b": "esc"}
+           "c": "copy", "e": "enhance", "s": "skill", "i": "patterns", "m": "mouse", "\r": "enter", "\n": "enter", "\x1b": "esc",
+           "x": "dismiss", "a": "adopt", "r": "research"}
 IO = type("IO", (), {"copy": staticmethod(coach.copy_text), "enhance": staticmethod(coach.spawn_key),
-                     "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill)})  # swapped for fakes in tests
+                     "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill),
+                     "mark": staticmethod(memory.mark), "research": staticmethod(coach.spawn_research)})  # swapped for fakes in tests
 # your words white; what can be improved blue (bright blue reads on dark and light terminals); structure in grey
 CODE = {"title": "1", "meta": "90", "prompt": "1;97", "label": "1;94", "blue": "94", "bluedim": "2;94", "enh": "94", "rule": "90", "blank": "0",
         "ok": "92", "warn": "93", "bad": "91", "key": "1;97", "task": "2;94", "better": "1;94", "src": "2;94", "dim": "2;94", "use": "94",
@@ -187,15 +190,19 @@ def build(path, session=None, notice=True):
           "research_paused": None}
     if not rows: st["session"] = session; return st
     cur = st["session"] = session or current_session(rows); prev = None
+    mem = memory.statuses()
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
         if sid != cur or not coach.scorable(text) or text.startswith("/coach"): continue
         fails = [n for n, fn in coach.RULES if not fn(text, gap)]
         key = coach.prompt_key((ts, proj, text)); rec = aft.get(key) or {}; adv = rec.get("advice") or {}
         after = adv.get("after") or (re.sub(r"^AFTER:\s*", "", rec.get("text", "")).strip() if rec.get("text") else "")
+        items = [dict(x, status=mem.get(memory.item_id(x))) for x in rec.get("discovery") or []
+                 if isinstance(x, dict) and x.get("url") and mem.get(memory.item_id(x)) != "dismissed"]
+        refs = discover.references(items) if after else ""
         st["entries"].append({"ts": ts, "key": key, "text": tidy(coach.redact(text))[:2000], "fails": fails,
-                              "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "advice": adv, "after": after,
-                              "disc": discover.lines(rec["discovery"], 200) if rec.get("discovery") else [],
+                              "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "advice": adv, "after": after + ("\n\n" + refs if refs else ""),
+                              "refs": bool(refs), "items": items, "disc": discover.lines(items, 200, numbered=True),
                               "error": None if adv else rec.get("error"), "off": coach.llm_off(proj), "advisable": coach.advisable(text, fails)})
     st["research_paused"] = discover.paused_until() if st["ai"] else None
     st["insights"] = insights(st["entries"], rows, L)
@@ -205,7 +212,8 @@ def build(path, session=None, notice=True):
 
 def signature(st):
     return (st.get("session"), len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
-            st["learned"].get("generated"), st["review_running"], st["ai"])
+            st["learned"].get("generated"), st["review_running"], st["ai"],
+            tuple((memory.item_id(x), x.get("status")) for e in st["entries"] for x in e.get("items", [])), st.get("research_paused"))
 
 
 # ---------------------------------------------------------------- presentation helpers
@@ -250,7 +258,7 @@ def cur_entry(ui, st):
     return i, es[i]
 
 
-def card_lines(st, ui, i, e, iw):
+def card_lines(st, ui, i, e, iw, acts=False):
     """[(section, kind, text, right, action)]: the prompt you are looking at, what to improve, the enhanced prompt.
     section picks the gutter colour; kind 'head' is a section title with an optional right-hand label (a button when it has an action).
     Nothing in Improve is ever dropped or cut. When the card is taller than the pane the enhanced prompt, which is last, scrolls (PgDn, wheel)."""
@@ -275,10 +283,14 @@ def card_lines(st, ui, i, e, iw):
             copied = time.time() - ui["copied"].get(e["key"], 0) < 8
             out += [("", "blank", "", "", None), ("enh", "head", "Enhanced prompt", "✓ Copied" if copied else "c Copy", "copy")]
             for ln in e["after"].splitlines(): out += [("enh", "enh", w, "", None) for w in wrap(ln, iw)]
-        found = [(k, x) for k, x in e["disc"] if k != "dim"]
-        if found:
+            if e.get("refs"):
+                note = "Includes references from web research." if acts else "Includes references from web research: x hides one, a marks one you use, r looks again."
+                out += [("enh", "bluedim", w, "", None) for w in wrap(note, iw)]
+        if e.get("items"):
             out += [("", "blank", "", "", None), ("web", "head", "Worth a look", "found on the web, not installed", None)]
-            for k, x in found: out += [("web", k, w, "", None) for w in wrap(x, iw, "  ")]
+            for n, it in enumerate(e["items"], 1):
+                for k, x in discover.item_lines(it, n, 200): out += [("web", k, w, "", None) for w in wrap(x, iw, "  ")]
+                if acts: out.append(("web", "itemacts", "", "", "item:" + memory.item_id(it)))
         elif st.get("research_paused"):
             out.append(("", "blank", "", "", None))
             out += [("info", "bluedim", w, "", None) for w in wrap(f"web research paused until {st['research_paused']} (usage limit); the enhanced prompt still works", iw)]
@@ -522,13 +534,46 @@ def _click(ui, st, key, io):
     return False
 
 
+def _mark(ui, it, action, io):
+    status = "dismissed" if action == "dismiss" else "adopted"
+    if io.mark(memory.item_id(it), status):
+        ui["reload"] = True                                                   # the card and the copy drop it now, not on the next reload
+        ui["msg"] = (f"hidden: {it['name']} will not be suggested again" if status == "dismissed"
+                     else f"noted: you use {it['name']}; it will not be suggested again")
+    else:
+        ui["msg"] = "could not save that choice (see /coach doctor)"
+    return False
+
+
 def handle(ui, st, key, io=None):
     """Apply one key or mouse event to ui. True = quit. `io` (copy, enhance, review, install) is swapped for fakes in tests."""
     io = io or IO
-    if isinstance(key, tuple): ui["msg"] = ""; return _click(ui, st, key, io)
+    pick, ui["pick"] = ui.get("pick"), None                                   # x or a asked "which one?": only a number, on that same prompt, answers
+    if isinstance(key, tuple): ui["msg"] = ""; return _click(ui, st, key, io)   # a click or the wheel cancels it
     key = ALIASES.get(key, key); ui["msg"] = ""
     n = len(st["entries"]); i, e = cur_entry(ui, st)
+    if pick:
+        its = e["items"] if e and e["key"] == pick[1] else []
+        if isinstance(key, str) and key.isdigit() and 1 <= int(key) <= len(its): return _mark(ui, its[int(key) - 1], pick[0], io)
+        ui["msg"] = "cancelled"
+        return False
     if key == "q": return True
+    if key in ("dismiss", "adopt"):
+        its = e["items"] if e else []
+        if not its: ui["msg"] = "no web suggestions on this prompt"
+        elif len(its) == 1: return _mark(ui, its[0], key, io)
+        else:
+            ui["pick"] = (key, e["key"])
+            ui["msg"] = f"which one? press 1-{len(its)} to {'hide it' if key == 'dismiss' else 'mark it as one you use'} (any other key cancels)"
+        return False
+    if key == "research":
+        if e is None or not e["advice"]: ui["msg"] = "analyse this prompt first (e), then r looks on the web again"
+        elif e["off"]: ui["msg"] = "this project is in llm-off.txt: not sending it anywhere"
+        elif not coach.research_on(): ui["msg"] = "web research is off (turn on: /coach research on)"
+        else:
+            io.research(e["key"])
+            ui["msg"] = "searching the web for this task in the background (up to ~4 minutes); the card updates by itself"
+        return False
     if key == "enter":
         if e is not None: ui["detail"] = not ui["detail"]; ui["dscroll"] = 0
         return False
@@ -734,6 +779,7 @@ def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0, s
                 if work: work(st, ui)
             continue
         if handle(ui, st, k, io): return
+        if ui.pop("reload", False): st = load_state(); last_load = clock()
         seq = ui.pop("emit", None)
         if seq: emit(seq)
         dirty = True

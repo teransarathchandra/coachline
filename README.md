@@ -32,6 +32,7 @@ It sits in a split pane next to Claude, shows the prompts of your current conver
 - **Per-prompt coaching**: your prompt in white, what to improve in blue, and a complete enhanced prompt with a copy button.
 - **Skill suggestions**: Claude reads your past chats and spots requests you keep repeating, so you can turn them into a skill.
 - **Research for each new task**: Claude searches the web for tools, modern approaches, official docs and reference sites that would make the result better (not only what you already have), matched to your project's framework versions. Every link is checked on your machine before you see it.
+- **Remembers what it showed you**: a suggestion appears with two prompts at most, never again once you hide it or say you use it, and its checked links are added to the enhanced prompt as References, so Claude Code gets them with your task.
 - **Keyboard and mouse**: arrows or wheel to move, click to select, click `c Copy` to copy.
 - **Opens by itself**: on macOS and Linux the panel appears inside Claude Code as soon as you start; nothing to set up.
 
@@ -73,6 +74,9 @@ Keep the panel open next to Claude Code and send prompts as usual. The panel fol
 | `e` | Ask Claude to analyse the selected prompt now |
 | `i` | Show or hide patterns from your past chats |
 | `s` | Install the skill Claude drafted for a repeated request |
+| `x` | Hide a web suggestion for good (asks which one when there are several) |
+| `a` | Mark a web suggestion as one you already use, so it is not suggested again |
+| `r` | Look on the web again for the selected prompt (ignores the cache and a usage-limit pause) |
 | `m` | Mouse on or off (off lets you select text with the mouse) |
 | `q` | Quit |
 
@@ -111,6 +115,7 @@ With the mouse, the wheel scrolls and a click selects a prompt or presses a butt
 - Pasted content is never sent, only the `[Pasted text #1 +28 lines]` marker.
 - List folder names in `~/.claude/coach/llm-off.txt` (one per line) and those projects are never sent.
 - Web research sends a short generic task topic, your project's framework names and major versions (read from package.json, pyproject.toml, requirements.txt, go.mod or Cargo.toml; only well-known public frameworks and libraries, never your own packages) and the names of your installed skills. Never your prompt, code, paths or project name. It runs once per new task; a usage limit pauses it until the reset time.
+- What you hid or use is kept in `~/.claude/coach/suggestions.json`, on your machine only.
 - State is kept in `~/.claude/coach/`. There is no telemetry.
 
 ## How it stays accurate

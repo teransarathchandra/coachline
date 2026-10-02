@@ -97,6 +97,40 @@ subscription through `claude -p`: no API key.
 - Per prompt and in total: fast and research latency, `use`/`get` counts, raw and verified research counts, kind mix, and the share
   of recommendations not already installed (`(get + verified) / (use + get + verified)`). Written to `<state>/eval/<time>.json`.
 
+## P2 scope (second plan)
+
+Branch `feat/research-memory`, stacked on `feat/research-engine` (PR #23).
+
+### Memory (new `memory.py`, `<state>/suggestions.json`, local only)
+
+- An item's id is its URL without scheme, `www.`, case or trailing slash (the name when there is no URL).
+- An item is shown with at most **2** prompts. The research pass picks up to 4 from what it found (it now keeps up to 8 verified),
+  skipping hidden, adopted and twice-shown items, and records the prompt each one was shown with.
+- `x` hides an item for good (`dismissed`); `a` marks it as one you already use (`adopted`). Neither is suggested again. Choices
+  are never forgotten; at most 500 unmarked items are kept.
+- A hidden item also disappears at once from cards that already show it.
+
+### References in the enhanced prompt
+
+- When research lands, the card's enhanced prompt (and what `c` / the pane's Copy button copies) ends with a block:
+  `References (checked links from web research):` then one line per shown item: `- Use|Consider|Follow|Take visual cues from <name>: <url>`
+  for tool|tech|docs|inspo. It is built at display time from the items not hidden, so hiding one updates the copy too.
+- The card says so under the enhanced prompt (the "updated" mark): `Includes references from web research: x hides one, a marks one
+  you use, r looks again.` The pane shows Hide / I use this buttons per item and a Look again button instead.
+
+### Keys and buttons
+
+- Panel: web items are numbered. `x` / `a` act at once when there is one item, else ask `press 1-N` (Esc or any other key cancels).
+  `r` researches the selected prompt again now (fresh: ignores the cache and a usage-limit pause; still never for `llm-off.txt`).
+- Pane: `pane.py --mark dismissed|adopted ID` and `pane.py --research KEY [--session S]`, behind per-item Hide / I use this buttons and a
+  Look again button.
+- The footer keys do not change (they are tested at fixed widths); the card line names the new keys.
+
+### Fixes carried into P2
+
+- The standalone panel did not redraw when research landed (its change signature ignored research): it now counts research items and
+  the pause.
+
 ## Privacy changes (README must say so)
 
 Research sends a generic topic, a summary, the stack (framework names + major versions) and installed skill names to a web-search
