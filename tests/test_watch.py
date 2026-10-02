@@ -770,5 +770,45 @@ class Research(Base):
         self.assertFalse([l for l in watch.card_lines(st, watch.new_ui(), 0, e, 80) if l[1] == "itemacts"])   # never in the terminal panel
 
 
+class WebIO:
+    def __init__(self): self.marks, self.researched, self.copied = [], [], []
+    def mark(self, iid, status): self.marks.append((iid, status)); return memory.mark(iid, status)
+    def research(self, key): self.researched.append(key)
+    def copy(self, text): self.copied.append(text); return "fake"
+
+
+class WebKeys(Base):
+    def setUp(self):
+        super().setUp(); history(self.cfg, [("now", "p", SOLID)]); self.io = WebIO()
+
+    def test_x_then_a_number_hides_that_suggestion_and_the_copy_follows(self):
+        self.analyse(0, SOLID, discovery=[WCAG, KIT])
+        frames = self.drive(["x", "2", "c"], W=100, H=60, io=self.io)
+        self.assertEqual(self.io.marks, [("x.example.com/g", "dismissed")])
+        self.assertIn("press 1-2", frames[1])
+        self.assertIn("hidden: GreatKit will not be suggested again", flat(frames[2])); self.assertNotIn("better: GreatKit", frames[2])
+        self.assertNotIn("GreatKit", self.io.copied[0]); self.assertIn("WCAG 2.2", self.io.copied[0])
+
+    def test_with_one_suggestion_a_marks_it_at_once(self):
+        self.analyse(0, SOLID, discovery=[KIT])
+        frames = self.drive(["a"], io=self.io)
+        self.assertEqual(self.io.marks, [("x.example.com/g", "adopted")]); self.assertIn("noted: you use GreatKit", flat(frames[-1]))
+
+    def test_any_other_key_cancels_the_choice(self):
+        self.analyse(0, SOLID, discovery=[WCAG, KIT])
+        self.drive(["x", "esc", "2", "a", "j", "1"], io=self.io)
+        self.assertEqual(self.io.marks, [])
+
+    def test_x_without_suggestions_says_so(self):
+        self.analyse(0, SOLID)
+        self.assertIn("no web suggestions on this prompt", flat(self.drive(["x"], io=self.io)[-1]))
+
+    def test_r_researches_the_selected_prompt_again_once_it_is_analysed(self):
+        self.assertIn("analyse this prompt first", flat(self.drive(["r"], io=self.io)[-1]))
+        self.analyse(0, SOLID)
+        frames = self.drive(["r"], io=self.io)
+        self.assertEqual(self.io.researched, [key_for(0, SOLID)]); self.assertIn("searching the web", flat(frames[-1]))
+
+
 if __name__ == "__main__":
     unittest.main()
