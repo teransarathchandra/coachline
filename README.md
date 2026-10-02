@@ -106,7 +106,7 @@ With the mouse, the wheel scrolls and a click selects a prompt or presses a butt
 ## Privacy
 
 - Analysis is **on by default on macOS and Linux** and off on Windows. Turn it off with `/coach panel-ai off`; then only built-in local hints run, on your machine. The panel says so in your first three sessions.
-- With it on, the panel sends Claude your prompts with emails, keys, tokens and secrets removed, plus up to five earlier prompts of the same conversation. Every ~2 days it also sends up to 90 days of history for the pattern analysis, with project names replaced by `P1`, `P2`.
+- With it on, the panel sends Claude your prompts with emails, keys, tokens and secrets removed, plus up to five earlier prompts of the same conversation. Once on the first run, then every ~2 days, it also sends up to 90 days of history for the pattern analysis, with project names replaced by `P1`, `P2`.
 - Pasted content is never sent, only the `[Pasted text #1 +28 lines]` marker.
 - List folder names in `~/.claude/coach/llm-off.txt` (one per line) and those projects are never sent.
 - Web discovery sends only a generic description of the task, never your prompt.
@@ -129,7 +129,7 @@ This shows that a pattern exists. It does not prove the suggested fix is good, s
 - Only Claude Code prompts are analysed, not claude.ai chats or Claude's replies.
 - Suggestions are only as good as the model.
 - The local hints are five keyword rules, English only.
-- The built-in pane needs Claude Code 2.1.287+. The Windows split was tested on Windows Terminal; `/coach watch` works in any terminal.
+- The built-in pane needs Claude Code 2.1.287+. On macOS and Linux the panel no longer splits tmux by itself (the pane replaces it); with an older Claude Code, use `/coach watch`. The Windows split was tested on Windows Terminal; `/coach watch` works in any terminal.
 
 ## Development
 
