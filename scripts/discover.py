@@ -230,6 +230,61 @@ def for_advice(advice, stack=(), fresh=False, get=http_get):
         return []
 
 
+LOCK_STALE = 600
+
+
+def wanted(session, advice):
+    """Research this prompt? When it starts a new task, or when this session has had no research yet."""
+    return advice.get("new_task") is not False or session not in (_load("research-state.json").get("done") or {})
+
+
+def _lock():
+    p = os.path.join(coach.STATE, "research.running")
+    try:
+        if time.time() - os.path.getmtime(p) > LOCK_STALE: os.remove(p)      # a crashed job never blocks research for good
+    except OSError:
+        pass
+    try:
+        os.makedirs(coach.STATE, exist_ok=True)
+        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY); os.write(fd, str(time.time()).encode()); os.close(fd)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock():
+    try: os.remove(os.path.join(coach.STATE, "research.running"))
+    except OSError: pass
+
+
+def _research(w, save):
+    items = for_advice(w["advice"], w.get("stack") or ())
+    if items: save(w["key"], w["advice"], items)
+    if paused_until(): return                     # a usage limit: the session is not researched; its next prompt tries again
+    st, now = _load("research-state.json"), time.time()
+    done = {s: t for s, t in (st.get("done") or {}).items() if isinstance(t, (int, float)) and now - t < TTL}
+    done[w.get("session", "")] = now; st["done"] = done; _dump("research-state.json", st)
+
+
+def request(key, session, advice, stack, save):
+    """Research for this prompt, newest request first. If another job is researching, leave the request for it and return: it
+    takes the newest waiting request when it finishes, so an older one that never started is dropped. One web call at a time.
+    save(key, advice, items) records a result (coach._save_discovery appends it to rewrites.jsonl)."""
+    _dump("research-want.json", {"key": key, "session": session, "advice": advice, "stack": list(stack), "ts": time.time()})
+    done = None
+    while True:
+        if not _lock(): return
+        try:
+            while True:
+                w = _load("research-want.json")
+                if not w.get("key") or w["key"] == done: break
+                done = w["key"]; _research(w, save)
+        finally:
+            _unlock()
+        w = _load("research-want.json")                # a request written just before the unlock must not be lost
+        if not w.get("key") or w["key"] == done: return
+
+
 # ---------------------------------------------------------------- display
 def _stars(n):
     return "" if not isinstance(n, int) else f"{n / 1000:.1f}k".replace(".0k", "k") if n >= 1000 else str(n)
@@ -274,8 +329,9 @@ def main(argv):
         pass
     try: adv = adv or advisor.advise(coach.redact(rows[i][2]), fails)
     except (RuntimeError, ValueError) as e: sys.exit(f"advice failed: {e}")
-    print(f"kind of task: {adv['task']} - {adv['summary']}\nsearching the web (up to ~2 min)...")
-    items = for_advice(adv, fresh=True)
+    import stackinfo
+    print(f"kind of task: {adv['task']} - {adv.get('topic') or adv['summary']}\nsearching the web (up to ~4 min)...")
+    items = for_advice(adv, stackinfo.detect(rows[i][1]), fresh=True)
     if not items: print("nothing verifiable found (suggestions that fail the checks are dropped)."); return 0
     for _k, t in lines(items, 100): print(t)
     return 0
