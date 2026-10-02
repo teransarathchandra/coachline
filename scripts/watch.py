@@ -37,9 +37,11 @@ POSIX_KEYS = {"[A": "up", "[B": "down", "[5~": "pgup", "[6~": "pgdn", "[H": "hom
               "OA": "up", "OB": "down", "OH": "home", "OF": "end"}
 WIN_KEYS = {"H": "up", "P": "down", "I": "pgup", "Q": "pgdn", "G": "home", "O": "end"}     # msvcrt fallback when VT input is unavailable
 ALIASES = {"k": "up", "j": "down", "p": "up", "n": "down", "b": "pgup", " ": "pgdn", "g": "home", "G": "end", "\x03": "q", "Q": "q",
-           "c": "copy", "e": "enhance", "s": "skill", "i": "patterns", "m": "mouse", "\r": "enter", "\n": "enter", "\x1b": "esc"}
+           "c": "copy", "e": "enhance", "s": "skill", "i": "patterns", "m": "mouse", "\r": "enter", "\n": "enter", "\x1b": "esc",
+           "x": "dismiss", "a": "adopt", "r": "research"}
 IO = type("IO", (), {"copy": staticmethod(coach.copy_text), "enhance": staticmethod(coach.spawn_key),
-                     "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill)})  # swapped for fakes in tests
+                     "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill),
+                     "mark": staticmethod(memory.mark), "research": staticmethod(coach.spawn_research)})  # swapped for fakes in tests
 # your words white; what can be improved blue (bright blue reads on dark and light terminals); structure in grey
 CODE = {"title": "1", "meta": "90", "prompt": "1;97", "label": "1;94", "blue": "94", "bluedim": "2;94", "enh": "94", "rule": "90", "blank": "0",
         "ok": "92", "warn": "93", "bad": "91", "key": "1;97", "task": "2;94", "better": "1;94", "src": "2;94", "dim": "2;94", "use": "94",
@@ -531,13 +533,45 @@ def _click(ui, st, key, io):
     return False
 
 
+def _mark(ui, it, action, io):
+    status = "dismissed" if action == "dismiss" else "adopted"
+    if io.mark(memory.item_id(it), status):
+        ui["reload"] = True                                                   # the card and the copy drop it now, not on the next reload
+        ui["msg"] = (f"hidden: {it['name']} will not be suggested again" if status == "dismissed"
+                     else f"noted: you use {it['name']}; it will not be suggested again")
+    else:
+        ui["msg"] = "could not save that choice (see /coach doctor)"
+    return False
+
+
 def handle(ui, st, key, io=None):
     """Apply one key or mouse event to ui. True = quit. `io` (copy, enhance, review, install) is swapped for fakes in tests."""
     io = io or IO
     if isinstance(key, tuple): ui["msg"] = ""; return _click(ui, st, key, io)
     key = ALIASES.get(key, key); ui["msg"] = ""
     n = len(st["entries"]); i, e = cur_entry(ui, st)
+    pick, ui["pick"] = ui.get("pick"), None
+    if pick:                                                                  # x or a asked "which one?": a number answers, anything else cancels
+        its = e["items"] if e else []
+        if isinstance(key, str) and key.isdigit() and 1 <= int(key) <= len(its): return _mark(ui, its[int(key) - 1], pick, io)
+        ui["msg"] = "cancelled"
+        return False
     if key == "q": return True
+    if key in ("dismiss", "adopt"):
+        its = e["items"] if e else []
+        if not its: ui["msg"] = "no web suggestions on this prompt"
+        elif len(its) == 1: return _mark(ui, its[0], key, io)
+        else:
+            ui["pick"] = key
+            ui["msg"] = f"which one? press 1-{len(its)} to {'hide it' if key == 'dismiss' else 'mark it as one you use'} (any other key cancels)"
+        return False
+    if key == "research":
+        if e is None or not e["advice"]: ui["msg"] = "analyse this prompt first (e), then r looks on the web again"
+        elif e["off"]: ui["msg"] = "this project is in llm-off.txt: not sending it anywhere"
+        else:
+            io.research(e["key"])
+            ui["msg"] = "searching the web for this task in the background (up to ~4 minutes); the card updates by itself"
+        return False
     if key == "enter":
         if e is not None: ui["detail"] = not ui["detail"]; ui["dscroll"] = 0
         return False
@@ -743,6 +777,7 @@ def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0, s
                 if work: work(st, ui)
             continue
         if handle(ui, st, k, io): return
+        if ui.pop("reload", False): st = load_state(); last_load = clock()
         seq = ui.pop("emit", None)
         if seq: emit(seq)
         dirty = True
