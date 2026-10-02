@@ -1,4 +1,5 @@
 import json, os, sys, tempfile, unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -135,6 +136,31 @@ class Instructions(unittest.TestCase):
         self.assertIn("Never write bracketed alternatives", text)    # no [modern/clean/other] fill-in templates
         self.assertIn("at most 2", text)                             # [ASK: ...] only for facts nobody could guess
         self.assertIn("under 110 characters", text)                  # tips short enough for a narrow pane
+
+
+class FastPass(AdvisorBase):
+    def sent(self):
+        with open(os.environ["FAKE_LOG"], encoding="utf-8") as f: return f.read()
+
+    def test_installed_lists_are_context_not_the_limit(self):
+        os.environ["FAKE_JSON"] = json.dumps({"task": "ui-design", "summary": "s", "topic": "Checkout  Page UI", "new_task": False,
+                                              "use": [{"name": "design-polish", "why": "fits"}, {"name": "made-up"}]})
+        a = advisor.advise("build the checkout page please now", [])
+        self.assertNotIn("Use ONLY", self.sent()); self.assertIn("NOT the limit of good advice", self.sent())
+        self.assertEqual((a["topic"], a["new_task"]), ("checkout page ui", False))
+        self.assertEqual([u["name"] for u in a["use"]], ["design-polish"])          # a name still has to exist
+
+    def test_topic_and_new_task_fall_back_safely(self):
+        os.environ["FAKE_JSON"] = json.dumps({"task": "ui-design", "summary": "Polish the store", "new_task": "no"})
+        a = advisor.advise("make the store look better for customers", [])
+        self.assertEqual((a["topic"], a["new_task"]), ("polish the store", True))   # only a real false means "same task"
+
+    def test_the_fast_model_comes_from_the_setting(self):
+        cfg = os.path.join(self.cfg, "config.json")
+        with open(cfg, "w") as f: json.dump({"model_fast": "sonnet"}, f)
+        os.environ["FAKE_JSON"] = "{}"
+        with mock.patch.object(coach, "USER_CFG", cfg): advisor.advise("make the store look better for customers", [])
+        self.assertIn("--model sonnet", [l for l in self.sent().splitlines() if l.startswith("ARGS:")][-1])
 
 
 if __name__ == "__main__":
