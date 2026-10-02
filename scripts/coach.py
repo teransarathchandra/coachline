@@ -340,6 +340,21 @@ def auto_open_on():
     v = setting("auto_open_watch")
     return bool(defaults_on() if v is None else v)
 
+NOTICE = "Claude analysis is on: your prompts and history are sent redacted through your subscription · /coach panel-ai off"
+NOTICE_SESSIONS = 3
+
+def notice(session):
+    """The first-run line, while analysis is on only because of the macOS / Linux default (the user never chose), in their first three
+    sessions. Shown by the Claude Code pane and by watch.py alike."""
+    if not ai_on() or setting("panel_ai") is not None or setting("auto_rewrite") is not None: return None
+    seen = setting("notice_sessions", [])
+    if not isinstance(seen, list): seen = []
+    if session in seen: return NOTICE
+    if len(seen) >= NOTICE_SESSIONS: return None
+    try: set_setting("notice_sessions", seen + [session])
+    except OSError: pass
+    return NOTICE
+
 def py_cmd(script, *args):
     """A command line the user can paste: this Python (python / python3 / full path), a script next to this file, arguments."""
     exe = sys.executable; name = None

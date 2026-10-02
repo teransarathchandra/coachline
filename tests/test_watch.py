@@ -707,5 +707,16 @@ class ForcedSession(unittest.TestCase):
 
 
 
+class Notice(unittest.TestCase):
+    def test_the_standalone_panel_shows_the_notice_too(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("s1", "p", VAGUE)])
+            env = {**os.environ, "COACHLINE_PLATFORM": "Darwin", "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8"}
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--once", "--width", "100", "--height", "40"],
+                               capture_output=True, text=True, encoding="utf-8", env=env, input="")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("your prompts and history are sent redacted", flat(r.stdout))
+
+
 if __name__ == "__main__":
     unittest.main()
