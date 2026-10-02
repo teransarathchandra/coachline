@@ -31,7 +31,7 @@ It sits in a split pane next to Claude, shows the prompts of your current conver
 
 - **Per-prompt coaching**: your prompt in white, what to improve in blue, and a complete enhanced prompt with a copy button.
 - **Skill suggestions**: Claude reads your past chats and spots requests you keep repeating, so you can turn them into a skill.
-- **Better tools**: points to skills and plugins you already have, or could install, that fit the task.
+- **Research for each new task**: Claude searches the web for tools, modern approaches, official docs and reference sites that would make the result better (not only what you already have), matched to your project's framework versions. Every link is checked on your machine before you see it.
 - **Keyboard and mouse**: arrows or wheel to move, click to select, click `c Copy` to copy.
 - **Opens by itself**: on macOS and Linux the panel appears inside Claude Code as soon as you start; nothing to set up.
 
@@ -53,9 +53,9 @@ In Claude Code:
 
 Restart Claude Code.
 
-On macOS and Linux that is all: the panel opens inside Claude Code (from 144 columns at start, otherwise with your first prompt), and Claude analysis is on. Turn either off with `/coach auto-open off` or `/coach panel-ai off`.
+On macOS and Linux that is all: the panel opens inside Claude Code (from 144 columns at start, otherwise with your first prompt), and Claude analysis and web research are on. Turn either off with `/coach auto-open off` or `/coach panel-ai off`.
 
-On Windows, run `/coach panel-ai on` to let Claude analyse your prompts, and `/coach auto-open on` to open the panel in a Windows Terminal split on every session (or use the command from `/coach watch`).
+On Windows, Claude analysis is on as well; run `/coach auto-open on` to open the panel in a Windows Terminal split on every session (or use the command from `/coach watch`).
 
 ## Usage
 
@@ -95,21 +95,22 @@ With the mouse, the wheel scrolls and a click selects a prompt or presses a butt
 | --- | --- |
 | `/coach` | Enhance your last prompt and copy it to the clipboard |
 | `/coach watch` | Print the command that opens the panel |
-| `/coach panel-ai on\|off` | Turn Claude analysis on or off (on by default on macOS and Linux) |
+| `/coach panel-ai on\|off` | Turn Claude analysis on or off (on by default) |
 | `/coach review` | Analyse your whole history for repeated requests and mistakes (shows a plan first, sends nothing until you agree) |
-| `/coach discover` | Search the web now for better tools for your last prompt |
-| `/coach discover on\|off` | Search the web automatically, once per kind of task (needs analysis on) |
+| `/coach discover` | Research the web now for your last prompt (ignores the cache and any pause) |
+| `/coach research on\|off` | Web research once per new task (on by default; `/coach discover on\|off` is the old name) |
+| `/coach model fast\|research haiku\|sonnet\|opus` | The model of each pass (defaults: fast haiku, research sonnet) |
 | `/coach auto-open on\|off` | Open the panel by itself at session start (on by default on macOS and Linux) |
 | `/coach setup` | Show the current settings |
 | `/coach doctor` | Check that history, Python and the `claude` CLI work |
 
 ## Privacy
 
-- Analysis is **on by default on macOS and Linux** and off on Windows. Turn it off with `/coach panel-ai off`; then only built-in local hints run, on your machine. The panel says so in your first three sessions.
+- Analysis and web research are **on by default**. Turn them off with `/coach panel-ai off` (or only research with `/coach research off`); then only built-in local hints run, on your machine. The panel says so in your first three sessions.
 - With it on, the panel sends Claude your prompts with emails, keys, tokens and secrets removed, plus up to five earlier prompts of the same conversation. Once on the first run, then every ~2 days, it also sends up to 90 days of history for the pattern analysis, with project names replaced by `P1`, `P2`.
 - Pasted content is never sent, only the `[Pasted text #1 +28 lines]` marker.
 - List folder names in `~/.claude/coach/llm-off.txt` (one per line) and those projects are never sent.
-- Web discovery sends only a generic description of the task, never your prompt.
+- Web research sends a short generic task topic, your project's framework names and major versions (read from package.json, pyproject.toml, requirements.txt, go.mod or Cargo.toml; only well-known public frameworks and libraries, never your own packages) and the names of your installed skills. Never your prompt, code, paths or project name. It runs once per new task; a usage limit pauses it until the reset time.
 - State is kept in `~/.claude/coach/`. There is no telemetry.
 
 ## How it stays accurate
@@ -118,7 +119,7 @@ Claude can invent patterns, so its answers are checked on your machine before yo
 
 - Keywords must appear in the prompts Claude cites.
 - Counts are recomputed locally; Claude's own counts are ignored.
-- Skill and plugin names must exist. Web suggestions need a live page, and GitHub repos must exist and be maintained.
+- Skill and plugin names must exist. Every web suggestion needs a live page that names it, GitHub repos must exist and be maintained, and anything made for an older major version than your project uses is dropped.
 - A repeated request needs 3 or more matching prompts, a repeated mistake 2 or more.
 
 This shows that a pattern exists. It does not prove the suggested fix is good, so read it critically.
@@ -135,6 +136,7 @@ This shows that a pattern exists. It does not prove the suggested fix is good, s
 
 ```
 python -W error::ResourceWarning -m unittest discover -s tests
+python scripts/eval_suggest.py --yes   # live: measures suggestions on 10 fixed prompts (not in CI)
 ```
 
 CI runs the tests on Ubuntu, macOS and Windows with Python 3.9 and 3.13.

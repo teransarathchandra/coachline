@@ -107,7 +107,7 @@ class Panel(Base):
         self.assertIn("Claude is analysing this prompt, usually about 20 seconds", flat(f[2]))
 
     def test_e_refuses_projects_in_the_opt_out_list_and_already_enhanced_prompts(self):
-        os.makedirs(os.path.join(self.cfg, "coach"))
+        os.makedirs(os.path.join(self.cfg, "coach"), exist_ok=True)
         with open(os.path.join(self.cfg, "coach", "llm-off.txt"), "w") as f: f.write("secret-proj\n")
         history(self.cfg, [("now", "D:/w/secret-proj", VAGUE + " S01")])
         f = self.frames(["e"])

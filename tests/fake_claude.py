@@ -11,5 +11,5 @@ bad_once = os.environ.get("FAKE_BAD_ONCE")      # path of a marker file: the fir
 if bad_once and not os.path.exists(bad_once):
     open(bad_once, "w").close(); print("Sure! Here is my creative answer to your request, in prose."); sys.exit(0)
 mode = os.environ.get("FAKE_MODE", "ok")
-if mode == "fail": sys.stderr.write("boom"); sys.exit(1)
+if mode == "fail": print(os.environ.get("FAKE_STDOUT", "")); sys.stderr.write(os.environ.get("FAKE_ERR", "boom")); sys.exit(1)
 print("this is not json" if mode == "bad" else os.environ.get("FAKE_JSON_WEB" if web else "FAKE_JSON", "{}"))
