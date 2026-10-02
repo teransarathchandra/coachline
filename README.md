@@ -110,7 +110,7 @@ With the mouse, the wheel scrolls and a click selects a prompt or presses a butt
 - With it on, the panel sends Claude your prompts with emails, keys, tokens and secrets removed, plus up to five earlier prompts of the same conversation. Once on the first run, then every ~2 days, it also sends up to 90 days of history for the pattern analysis, with project names replaced by `P1`, `P2`.
 - Pasted content is never sent, only the `[Pasted text #1 +28 lines]` marker.
 - List folder names in `~/.claude/coach/llm-off.txt` (one per line) and those projects are never sent.
-- Web research sends a short generic task topic, your project's framework names and major versions (read from package.json, pyproject.toml, requirements.txt, go.mod or Cargo.toml; private and local packages are left out) and the names of your installed skills. Never your prompt, code, paths or project name. It runs once per new task; a usage limit pauses it until the reset time.
+- Web research sends a short generic task topic, your project's framework names and major versions (read from package.json, pyproject.toml, requirements.txt, go.mod or Cargo.toml; only well-known public frameworks and libraries, never your own packages) and the names of your installed skills. Never your prompt, code, paths or project name. It runs once per new task; a usage limit pauses it until the reset time.
 - State is kept in `~/.claude/coach/`. There is no telemetry.
 
 ## How it stays accurate
