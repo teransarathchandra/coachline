@@ -74,6 +74,7 @@ def main(argv, system=None, env=None, opener=spawn, which=shutil.which):
     auto, dry = "--auto" in argv, "--dry-run" in argv
     extra = tuple(argv[argv.index("--watch-args") + 1:]) if "--watch-args" in argv else ()
     ensure_shim()
+    if auto and (system or platform.system()) != "Windows": return 0     # macOS / Linux: hooks/coachline.tsx opens a Claude Code pane instead
     if auto and not coach.setting("auto_open_watch", False): return 0
     if coach.panel_alive():
         if not auto: print("the panel is already open")

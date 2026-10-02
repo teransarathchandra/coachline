@@ -45,6 +45,18 @@ class Main(unittest.TestCase):
     def run_main(self, *argv, env=None):
         return launch.main(list(argv), system="Windows", env=env if env is not None else {"WT_SESSION": "x"}, opener=self.opened.append, which=HAVE)
 
+    def test_auto_never_splits_outside_windows_the_claude_code_pane_does_it(self):
+        coach.set_setting("auto_open_watch", True)
+        for system in ("Darwin", "Linux"):
+            rc = launch.main(["--auto"], system=system, env={"TMUX": "x"}, opener=self.opened.append, which=HAVE)
+            self.assertEqual(rc, 0)
+        self.assertEqual(self.opened, [])
+
+    def test_auto_on_windows_still_splits_when_turned_on(self):
+        coach.set_setting("auto_open_watch", True)
+        launch.main(["--auto"], system="Windows", env={"WT_SESSION": "abc"}, opener=self.opened.append, which=lambda x: "wt.exe")
+        self.assertEqual(self.opened[0][:4], ["wt.exe", "-w", "0", "split-pane"])
+
     def test_auto_does_nothing_until_you_opt_in(self):
         self.assertEqual(self.run_main("--auto"), 0)
         self.assertEqual(self.opened, [])

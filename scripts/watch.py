@@ -179,12 +179,13 @@ def current_session(rows):
     return rows[-1][3]
 
 
-def build(path):
-    """State for render(): THIS thread's prompts (the session you are in, see current_session) plus what Claude knows from the rest."""
+def build(path, session=None):
+    """State for render(): THIS thread's prompts (the session you are in, see current_session, or `session` when the caller knows it,
+    as the Claude Code pane does) plus what Claude knows from the rest."""
     rows = load_full(path); aft = rewrites(); L = coach.learned()
     st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None}
-    if not rows: return st
-    cur = st["session"] = current_session(rows); prev = None
+    if not rows: st["session"] = session; return st
+    cur = st["session"] = session or current_session(rows); prev = None
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
         if sid != cur or not coach.scorable(text) or text.startswith("/coach"): continue

@@ -691,5 +691,21 @@ class Navigation(Base):
             except OSError: pass
 
 
+class ForcedSession(unittest.TestCase):
+    def test_build_shows_only_the_session_it_is_given(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("s1", "p", VAGUE), ("s2", "p", SOLID)])
+            st = watch.build(os.path.join(cfg, "history.jsonl"), session="s1")
+            self.assertEqual(st["session"], "s1")
+            self.assertEqual([e["text"] for e in st["entries"]], [VAGUE])
+
+    def test_a_session_with_no_prompts_yet_has_no_entries(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("s1", "p", VAGUE)])
+            st = watch.build(os.path.join(cfg, "history.jsonl"), session="brand-new")
+            self.assertEqual(st["entries"], [])
+
+
+
 if __name__ == "__main__":
     unittest.main()
