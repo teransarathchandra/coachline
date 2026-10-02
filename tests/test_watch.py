@@ -3,6 +3,7 @@ import json, os, re, subprocess, sys, tempfile, time, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import coach, watch  # noqa: E402
+os.environ["COACHLINE_PLATFORM"] = "Windows"   # these tests pin the opt-in defaults; tests/test_defaults.py covers macOS and Linux
 
 T0 = 1750000000000
 VAGUE = "handle this carefully and make it good for all the customers we have"
