@@ -119,13 +119,13 @@ def verify_item(item, have, get=http_get, now=None, stack=()):
     return out, None
 
 
-def verify_all(raw, have, get=http_get, stack=()):
+def verify_all(raw, have, get=http_get, stack=(), limit=MAX_ITEMS):
     ok, dropped = [], []
     for it in (raw if isinstance(raw, list) else [])[:MAX_RAW]:
         v, why = verify_item(it, have, get, stack=stack)
         if v and v["url"] not in [o["url"] for o in ok]: ok.append(v)
         elif why: dropped.append(why)
-    return ok[:MAX_ITEMS], dropped
+    return ok[:limit], dropped
 
 
 # ---------------------------------------------------------------- asking Claude
@@ -218,7 +218,7 @@ def paused_until(now=None):
 
 
 def for_advice(advice, stack=(), fresh=False, get=http_get):
-    """Verified items for this task on this stack. Cached per topic and stack for 7 days. Never raises: research is a bonus.
+    """Up to MAX_RAW verified items for this task on this stack (memory.pick chooses what to show). Cached per topic and stack for 7 days. Never raises: research is a bonus.
     A usage limit pauses research; fresh (a run the user asked for) ignores the cache and the pause."""
     try:
         if not fresh and paused_until(): return []
@@ -230,7 +230,7 @@ def for_advice(advice, stack=(), fresh=False, get=http_get):
             if LIMIT.search(str(e)):
                 st = _load("research-state.json"); st["paused_until"] = pause_until(str(e)); _dump("research-state.json", st)
             return []
-        items, _dropped = verify_all(raw, have_names() | {u["name"].lower() for u in advice.get("use", [])}, get, stack)
+        items, _dropped = verify_all(raw, have_names() | {u["name"].lower() for u in advice.get("use", [])}, get, stack, limit=MAX_RAW)
         cache = {k: v for k, v in cache.items() if isinstance(v, dict) and time.time() - v.get("ts", 0) < TTL}
         cache[key] = {"ts": time.time(), "items": items}
         try: _dump("discover-cache.json", cache)
@@ -287,23 +287,25 @@ def _unlock(tok):
 
 
 def _research(w, save):
-    items = for_advice(w["advice"], w.get("stack") or ())
+    import memory
+    items = memory.pick(for_advice(w["advice"], w.get("stack") or (), fresh=bool(w.get("fresh"))), key=w["key"])
     if items: save(w["key"], w["advice"], items)
     # a usage limit: the session is not researched, and its next prompt tries again
     _mark(w.get("session", ""), done=not paused_until())
 
 
-def request(key, session, advice, stack, save):
+def request(key, session, advice, stack, save, fresh=False):
     """Research for this prompt, newest request first. If another job is researching, leave the request for it and return: it
     takes the newest waiting request when it finishes, so an older one that never started is dropped. One web call at a time.
-    save(key, advice, items) records a result (coach._save_discovery appends it to rewrites.jsonl). Never raises."""
-    try: _request(key, session, advice, stack, save)
+    save(key, advice, items) records a result (coach._save_discovery appends it to rewrites.jsonl). fresh (asked for by hand)
+    ignores the cache and a usage-limit pause. Never raises."""
+    try: _request(key, session, advice, stack, save, fresh)
     except (OSError, ValueError, KeyError, TypeError, AttributeError): pass
 
 
-def _request(key, session, advice, stack, save):
+def _request(key, session, advice, stack, save, fresh=False):
     _mark(session, pending=True)                   # its follow-ups wait for this research instead of asking again
-    _dump("research-want.json", {"key": key, "session": session, "advice": advice, "stack": list(stack), "ts": time.time()})
+    _dump("research-want.json", {"key": key, "session": session, "advice": advice, "stack": list(stack), "fresh": bool(fresh), "ts": time.time()})
     done, p = None, os.path.join(coach.STATE, "research.running")
     while True:
         tok = _lock()
@@ -344,17 +346,9 @@ def compact(items):
             for it in items[:2]]
 
 
-def main(argv):
-    ap = argparse.ArgumentParser(prog="discover.py", description="Search the web for better tools for your last prompt's kind of task. "
-                                 "Sends a generic task description to a web search through your Claude subscription.")
-    ap.add_argument("--last", action="store_true", help="do it now (nothing runs without this flag)")
-    if not ap.parse_args(argv).last:
-        ap.print_help(); return 2
-    import advisor
-    rows = coach.load(coach.HIST); i, fails = coach.last_eval(rows)
-    if i is None: sys.exit("no prompt to look at; run `coach.py --doctor`")
-    if coach.llm_off(rows[i][1]): sys.exit("this project is in llm-off.txt: not sending it anywhere")
-    key = coach.prompt_key(rows[i]); adv = None
+def _advice_for(key):
+    """The newest advice recorded for this prompt, or None."""
+    adv = None
     try:
         with open(coach.REWRITES, encoding="utf-8") as f:
             for l in f:
@@ -363,11 +357,35 @@ def main(argv):
                 if d.get("key") == key and d.get("advice"): adv = d["advice"]
     except OSError:
         pass
+    return adv
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="discover.py", description="Search the web for better tools, approaches, docs and reference sites "
+                                 "for a prompt's task. Sends a generic topic and your stack to a web search through your Claude subscription.")
+    ap.add_argument("--last", action="store_true", help="do it now for your last prompt and print the result")
+    ap.add_argument("--key", help="do it now, in the background, for one analysed prompt (the panel's r key)")
+    a = ap.parse_args(argv)
+    if not (a.last or a.key):
+        ap.print_help(); return 2
+    import advisor, memory, stackinfo
+    if a.key:
+        rows = coach.load_full(coach.HIST)
+        row = next((r for r in rows if coach.prompt_key(r) == a.key), None)
+        if row is None: sys.exit("no prompt with that key")
+        if coach.llm_off(row[1]): sys.exit("this project is in llm-off.txt: not sending it anywhere")
+        adv = _advice_for(a.key)
+        if not adv: sys.exit("not analysed yet: analyse the prompt first")
+        request(a.key, row[3], adv, stackinfo.detect(row[1]), coach._save_discovery, fresh=True)
+        return 0
+    rows = coach.load(coach.HIST); i, fails = coach.last_eval(rows)
+    if i is None: sys.exit("no prompt to look at; run `coach.py --doctor`")
+    if coach.llm_off(rows[i][1]): sys.exit("this project is in llm-off.txt: not sending it anywhere")
+    adv = _advice_for(coach.prompt_key(rows[i]))
     try: adv = adv or advisor.advise(coach.redact(rows[i][2]), fails)
     except (RuntimeError, ValueError) as e: sys.exit(f"advice failed: {e}")
-    import stackinfo
     print(f"kind of task: {adv['task']} - {adv.get('topic') or adv['summary']}\nsearching the web (up to ~4 min)...")
-    items = for_advice(adv, stackinfo.detect(rows[i][1]), fresh=True)
+    items = memory.pick(for_advice(adv, stackinfo.detect(rows[i][1]), fresh=True))
     if not items: print("nothing verifiable found (suggestions that fail the checks are dropped)."); return 0
     for _k, t in lines(items, 100): print(t)
     return 0
