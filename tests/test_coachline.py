@@ -130,7 +130,7 @@ class Scripts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as cfg:
             r = run("setup.py", cfg)
             self.assertEqual(r.returncode, 0, r.stderr)
-            for want in ("Claude analysis (--panel-ai):  off", "auto-open a split pane (--auto-open):  off", "panel.py"):
+            for want in ("Claude analysis (--panel-ai):  ON", "panel.py"):
                 self.assertIn(want, r.stdout)
             self.assertFalse(os.path.exists(os.path.join(cfg, "settings.json")))                   # looking never writes settings
 

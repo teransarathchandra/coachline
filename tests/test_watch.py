@@ -65,6 +65,7 @@ class Base(unittest.TestCase):
         coach.CONFIG, coach.HIST, coach.STATE = self.cfg, self.path, st
         coach.REWRITES, coach.OFF, coach.ALIVE = (os.path.join(st, n) for n in ("rewrites.jsonl", "llm-off.txt", "watch.alive"))
         coach.USER_CFG, coach.REVIEW_LOCK, coach.LEARNED = (os.path.join(st, n) for n in ("config.json", "review.running", "learned.json"))
+        self.write_json("config.json", {"panel_ai": False})        # analysis is on by default everywhere; these tests start with it off
 
     def tearDown(self):
         for n, v in self._paths.items(): setattr(coach, n, v)
@@ -715,7 +716,7 @@ class Notice(unittest.TestCase):
             r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--once", "--width", "100", "--height", "40"],
                                capture_output=True, text=True, encoding="utf-8", env=env, input="")
             self.assertEqual(r.returncode, 0, r.stderr)
-            self.assertIn("your prompts and history are sent redacted", flat(r.stdout))
+            self.assertIn("prompts go redacted to your subscription", flat(r.stdout))
 
 
 if __name__ == "__main__":
