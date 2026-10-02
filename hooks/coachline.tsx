@@ -203,6 +203,15 @@ export const register: Register = on => {
       await update($, msg, () => (r.ok ? r.out.trim() : r.err))
       await refresh($)
     }
+    const mark = async (status: 'dismissed' | 'adopted', id: string) => {
+      const r = await run($, ['--mark', status, id])
+      await update($, msg, () => (r.ok ? r.out.trim() : r.err))
+      await refresh($)
+    }
+    const research = async () => {
+      const r = await run($, s.session ? ['--research', cur.key, '--session', s.session] : ['--research', cur.key])
+      await update($, msg, () => (r.ok ? r.out.trim() : r.err))
+    }
     const install = async () => {
       if (!s.skill) return
       const r = await run($, ['--install', s.skill])
@@ -223,6 +232,17 @@ export const register: Register = on => {
           </Box>
         )
       }
+      if (kind === 'itemacts' && action?.startsWith('item:')) {
+        const id = action.slice('item:'.length)
+        return (
+          <Box key={`l${n}`}>
+            <Text>{'  '}</Text>
+            <Button key={`hide:${id}`} label="Hide" onPress={() => mark('dismissed', id)} />
+            <Text>{'  '}</Text>
+            <Button key={`use:${id}`} label="I use this" onPress={() => mark('adopted', id)} />
+          </Box>
+        )
+      }
       if (action === 'enter') return <Button key="whole" label="Show the whole prompt" onPress={() => update($, full, () => true)} />
       return <Text key={`l${n}`} color={COLOR[kind]} dimColor={kind === 'bluedim' || kind === 'meta'} bold={kind === 'prompt'}>{text}</Text>
     }
@@ -239,6 +259,7 @@ export const register: Register = on => {
         {header}
         <Box flexDirection="column" marginY={1}>{card}</Box>
         {canAnalyse && <Button key="analyse" label={cur.state === 'pending' ? 'Analyse again' : 'Analyse'} onPress={analyse} />}
+        {!!cur.after && cur.state !== 'off' && <Button key="research" label="Look again on the web" onPress={research} />}
         {s.patterns.length > 0 && (
           <Box flexDirection="column">
             <Button key="patterns" label={pats ? 'Hide patterns' : `${s.patterns.length} pattern${s.patterns.length === 1 ? '' : 's'} from your past chats`}
