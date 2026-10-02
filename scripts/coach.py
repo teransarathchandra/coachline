@@ -5,7 +5,7 @@ Stdlib only. Reads <config>/history.jsonl (read-only). Writes only under <config
   python coach.py --coach      before/after for your last prompt (Haiku rewrite via `claude -p`)
   python coach.py --doctor     check that everything this tool depends on works
 """
-import argparse, collections, datetime as dt, json, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, collections, datetime as dt, json, os, platform, re, shutil, subprocess, sys, tempfile, time
 
 CONFIG = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
 HIST = os.path.join(CONFIG, "history.jsonl")
@@ -324,10 +324,36 @@ def set_setting(name, value):
     os.makedirs(STATE, exist_ok=True)
     with open(USER_CFG, "w", encoding="utf-8") as f: json.dump(d, f, indent=2)
 
+def defaults_on():
+    """macOS and Linux: Claude analysis and the pane are on until the user turns them off. Windows keeps them opt-in.
+    COACHLINE_PLATFORM overrides the system name (tests)."""
+    return (os.environ.get("COACHLINE_PLATFORM") or platform.system()) != "Windows"
+
 def ai_on():
-    """Claude analysis (advice per prompt, review of your history) is opt-in. 'auto_rewrite' is the old name of the same switch."""
+    """Claude analysis (advice per prompt, review of your history). 'auto_rewrite' is the old name of the same switch."""
     v = setting("panel_ai")
-    return bool(setting("auto_rewrite", False) if v is None else v)
+    if v is None: v = setting("auto_rewrite")
+    return bool(defaults_on() if v is None else v)
+
+def auto_open_on():
+    """The panel opens by itself at session start: the Claude Code pane on macOS / Linux, a Windows Terminal split on Windows."""
+    v = setting("auto_open_watch")
+    return bool(defaults_on() if v is None else v)
+
+NOTICE = "Claude analysis is on: your prompts and history are sent redacted through your subscription · /coach panel-ai off"
+NOTICE_SESSIONS = 3
+
+def notice(session):
+    """The first-run line, while analysis is on only because of the macOS / Linux default (the user never chose), in their first three
+    sessions. Shown by the Claude Code pane and by watch.py alike."""
+    if not ai_on() or setting("panel_ai") is not None or setting("auto_rewrite") is not None: return None
+    seen = setting("notice_sessions", [])
+    if not isinstance(seen, list): seen = []
+    if session in seen: return NOTICE
+    if len(seen) >= NOTICE_SESSIONS: return None
+    try: set_setting("notice_sessions", seen + [session])
+    except OSError: pass
+    return NOTICE
 
 def py_cmd(script, *args):
     """A command line the user can paste: this Python (python / python3 / full path), a script next to this file, arguments."""
@@ -462,7 +488,7 @@ def doctor(path):
     line(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} at {sys.executable}")
     print(("ok   " if shutil.which("claude") else "warn ") + "claude CLI on PATH (needed only for the /coach rewrite)")
     print(("ok   " if ai_on() else "off  ") + "Claude analysis in the panel (turn on: " + py_cmd("setup.py", "--panel-ai", "on") + ")")
-    print(("ok   " if setting("auto_open_watch", False) else "off  ") + "panel opens itself at session start (turn on: " + py_cmd("setup.py", "--auto-open", "on") + ")")
+    print(("ok   " if auto_open_on() else "off  ") + "panel opens itself at session start (turn on: " + py_cmd("setup.py", "--auto-open", "on") + ")")
     print("     open the panel by hand: " + py_cmd("watch.py"))
     sys.exit(0 if ok else 1)
 

@@ -3,6 +3,7 @@ import json, os, shutil, subprocess, sys, tempfile, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import coach, gold  # noqa: E402
+os.environ["COACHLINE_PLATFORM"] = "Windows"   # these tests pin the opt-in defaults; tests/test_defaults.py covers macOS and Linux
 
 
 def read(p):

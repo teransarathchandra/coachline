@@ -99,7 +99,7 @@ def main(argv):
     launch.ensure_shim()
     print(f"coachline settings ({coach.USER_CFG})")
     print(f"  Claude analysis (--panel-ai):  {'ON' if coach.ai_on() else 'off'}")
-    print(f"  auto-open a split pane (--auto-open):  {'ON' if coach.setting('auto_open_watch', False) else 'off'}")
+    print(f"  auto-open a split pane (--auto-open):  {'ON' if coach.auto_open_on() else 'off'}")
     print(f"  web discovery (--discover):  {'ON' if coach.setting('discover', False) else 'off'}")
     print(f"open the panel by hand, in a second tab or pane:\n  {launch.panel_command()}")
 

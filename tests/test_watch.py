@@ -3,6 +3,7 @@ import json, os, re, subprocess, sys, tempfile, time, unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import coach, watch  # noqa: E402
+os.environ["COACHLINE_PLATFORM"] = "Windows"   # these tests pin the opt-in defaults; tests/test_defaults.py covers macOS and Linux
 
 T0 = 1750000000000
 VAGUE = "handle this carefully and make it good for all the customers we have"
@@ -688,6 +689,33 @@ class Navigation(Base):
         finally:
             try: os.kill(pid, 9)
             except OSError: pass
+
+
+class ForcedSession(unittest.TestCase):
+    def test_build_shows_only_the_session_it_is_given(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("s1", "p", VAGUE), ("s2", "p", SOLID)])
+            st = watch.build(os.path.join(cfg, "history.jsonl"), session="s1")
+            self.assertEqual(st["session"], "s1")
+            self.assertEqual([e["text"] for e in st["entries"]], [VAGUE])
+
+    def test_a_session_with_no_prompts_yet_has_no_entries(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("s1", "p", VAGUE)])
+            st = watch.build(os.path.join(cfg, "history.jsonl"), session="brand-new")
+            self.assertEqual(st["entries"], [])
+
+
+
+class Notice(unittest.TestCase):
+    def test_the_standalone_panel_shows_the_notice_too(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            history(cfg, [("s1", "p", VAGUE)])
+            env = {**os.environ, "COACHLINE_PLATFORM": "Darwin", "CLAUDE_CONFIG_DIR": cfg, "PYTHONIOENCODING": "utf-8"}
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "watch.py"), "--once", "--width", "100", "--height", "40"],
+                               capture_output=True, text=True, encoding="utf-8", env=env, input="")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn("your prompts and history are sent redacted", flat(r.stdout))
 
 
 if __name__ == "__main__":
