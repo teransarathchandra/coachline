@@ -41,6 +41,13 @@ class Memory(unittest.TestCase):
         self.assertEqual(memory.statuses(), {"example.com/t1": "dismissed", "example.com/t2": "adopted"})
         self.assertFalse(memory.mark("example.com/t1", "maybe")); self.assertFalse(memory.mark("", "dismissed"))
 
+    def test_bad_fields_inside_an_item_never_break_picking(self):
+        os.makedirs(coach.STATE, exist_ok=True)
+        with open(self.file, "w") as f:
+            json.dump({"items": {"example.com/t1": {"shown": None}, "example.com/t2": {"shown": "abc"}, "example.com/t3": {"shown": 5, "ts": "x"}}}, f)
+        self.assertEqual(len(memory.pick([it(1), it(2), it(3)], key="k1")), 3)
+        self.assertEqual(len(memory.pick([it(1), it(2), it(3)])), 3)
+
     def test_the_limit_caps_what_is_picked(self):
         self.assertEqual(len(memory.pick([it(n) for n in range(8)], key="k1")), 4)
 

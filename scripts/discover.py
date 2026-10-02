@@ -20,6 +20,7 @@ from review import parse_json
 
 TTL, MAX_ITEMS, MAX_RAW, STALE_DAYS, PAUSE = 7 * 86400, 4, 8, 550, 3600
 KINDS = {"tool", "tech", "docs", "inspo"}       # anything else (skill, plugin, mcp, library, workflow, from older answers) is a tool
+SAFE_URL = re.compile(r"^https://[^\s\x00-\x1f\x7f]+$")   # one plain url: no spaces or line breaks that could carry text into a prompt
 LIMIT = re.compile(r"usage limit|rate limit|limit reached|hit your limit|too many requests|\b429\b|\blimit\b.{0,60}\breset", re.I)
 STOP = set("the and for with your that this from into make have using want need over under about more less very".split())
 
@@ -89,7 +90,7 @@ def verify_item(item, have, get=http_get, now=None, stack=()):
     """(clean item, None) or (None, reason). Never trusts the model's claims."""
     if not isinstance(item, dict): return None, "not an object"
     name, url = coach.clean(item.get("name", ""))[:60], str(item.get("url", "")).strip()
-    if not name or not public_https(url): return None, f"'{name}': no usable https url"
+    if not name or not SAFE_URL.match(url) or not public_https(url): return None, f"'{name}': no usable https url"
     if name.lower() in have: return None, f"'{name}': you already have it"
     kind = item.get("kind") if item.get("kind") in KINDS else "tool"
     if older_major(item, stack): return None, f"'{name}': made for an older version than this project uses"
@@ -333,8 +334,9 @@ VERB = {"tool": "Use", "tech": "Consider", "docs": "Follow", "inspo": "Take visu
 
 def references(items):
     """The block added to the enhanced prompt, so Claude Code gets the checked links with the task."""
-    if not items: return ""
-    return "References (checked links from web research):\n" + "\n".join(f"- {VERB.get(it.get('kind'), 'Use')} {it['name']}: {it['url']}" for it in items)
+    ok = [it for it in items if SAFE_URL.match(str(it.get("url", "")))]   # records written before the url check are checked again here
+    if not ok: return ""
+    return "References (checked links from web research):\n" + "\n".join(f"- {VERB.get(it.get('kind'), 'Use')} {coach.clean(it['name'])}: {it['url']}" for it in ok)
 
 
 def item_lines(it, n=None, width=96):
@@ -375,6 +377,16 @@ def _advice_for(key):
     return adv
 
 
+def research_refusal(key):
+    """Why research of this prompt asked for by hand must not run, or None. Shared by discover.py --key, the panel's r and the pane."""
+    if not coach.research_on(): return "web research is off (turn on: /coach research on)"
+    row = next((r for r in coach.load_full(coach.HIST) if coach.prompt_key(r) == key), None)
+    if row is None: return "no prompt with that key"
+    if coach.llm_off(row[1]): return "this project is in llm-off.txt: not sending it anywhere"
+    if not _advice_for(key): return "not analysed yet: analyse the prompt first"
+    return None
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog="discover.py", description="Search the web for better tools, approaches, docs and reference sites "
                                  "for a prompt's task. Sends a generic topic and your stack to a web search through your Claude subscription.")
@@ -385,13 +397,10 @@ def main(argv):
         ap.print_help(); return 2
     import advisor, memory, stackinfo
     if a.key:
-        rows = coach.load_full(coach.HIST)
-        row = next((r for r in rows if coach.prompt_key(r) == a.key), None)
-        if row is None: sys.exit("no prompt with that key")
-        if coach.llm_off(row[1]): sys.exit("this project is in llm-off.txt: not sending it anywhere")
-        adv = _advice_for(a.key)
-        if not adv: sys.exit("not analysed yet: analyse the prompt first")
-        request(a.key, row[3], adv, stackinfo.detect(row[1]), coach._save_discovery, fresh=True)
+        why = research_refusal(a.key)
+        if why: sys.exit(why)
+        row = next(r for r in coach.load_full(coach.HIST) if coach.prompt_key(r) == a.key)
+        request(a.key, row[3], _advice_for(a.key), stackinfo.detect(row[1]), coach._save_discovery, fresh=True)
         return 0
     rows = coach.load(coach.HIST); i, fails = coach.last_eval(rows)
     if i is None: sys.exit("no prompt to look at; run `coach.py --doctor`")

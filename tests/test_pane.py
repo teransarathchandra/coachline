@@ -150,9 +150,17 @@ class Tick(unittest.TestCase):
         self.assertEqual(pane.main(["--mark", "dismissed", "x.example.com/g"]), 0)
         self.assertEqual(memory.statuses(), {"x.example.com/g": "dismissed"})
         self.assertEqual(pane.main(["--mark", "maybe", "x.example.com/g"]), 2)
+        history(self.cfg, [("s1", "p", SOLID)])
+        from test_watch import key_for, ADVICE
+        key = key_for(0, SOLID)
         with mock.patch.object(coach, "spawn_research") as sr:
-            self.assertEqual(pane.main(["--research", "123.0:abc", "--session", "s1"]), 0)
-        sr.assert_called_once_with("123.0:abc")
+            self.assertEqual(pane.main(["--research", key, "--session", "s1"]), 1)          # not analysed yet: says why, sends nothing
+            self.write_rec({"key": key, "text": "AFTER: x", "advice": ADVICE})
+            self.assertEqual(pane.main(["--research", key, "--session", "s1"]), 0)
+            coach.set_setting("research", False)
+            self.assertEqual(pane.main(["--research", key]), 1)
+        sr.assert_called_once_with(key)
+        self.assertFalse(self.tick()["research"])
 
 class Actions(unittest.TestCase):
     def test_enhance_starts_one_background_analysis(self):
