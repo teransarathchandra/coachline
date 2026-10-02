@@ -33,13 +33,14 @@ It sits in a split pane next to Claude, shows the prompts of your current conver
 - **Skill suggestions**: Claude reads your past chats and spots requests you keep repeating, so you can turn them into a skill.
 - **Better tools**: points to skills and plugins you already have, or could install, that fit the task.
 - **Keyboard and mouse**: arrows or wheel to move, click to select, click `c Copy` to copy.
-- **Private by default**: nothing is sent to Claude until you turn analysis on.
+- **Opens by itself**: on macOS and Linux the panel appears inside Claude Code as soon as you start; nothing to set up.
 
 ## Requirements
 
 - Claude Code, signed in with your Claude subscription (the `claude` command works in your terminal)
 - Python 3.9 or newer (`python3` on macOS and Linux, `python` or `py -3` on Windows)
 - Windows, macOS or Linux
+- Claude Code 2.1.287 or newer for the built-in pane (older versions: use `/coach watch`)
 
 ## Install
 
@@ -50,14 +51,11 @@ In Claude Code:
 /plugin install coachline@coachline
 ```
 
-Restart Claude Code. Then:
+Restart Claude Code.
 
-```
-/coach watch          # prints the command that opens the panel; run it in a second pane or tab
-/coach panel-ai on    # let Claude analyse your prompts (it asks first)
-```
+On macOS and Linux that is all: the panel opens inside Claude Code (from 144 columns at start, otherwise with your first prompt), and Claude analysis is on. Turn either off with `/coach auto-open off` or `/coach panel-ai off`.
 
-To open the panel automatically in a split pane on every session, run `/coach auto-open on`. This works in Windows Terminal and tmux. Everywhere else, use the command from `/coach watch`.
+On Windows, run `/coach panel-ai on` to let Claude analyse your prompts, and `/coach auto-open on` to open the panel in a Windows Terminal split on every session (or use the command from `/coach watch`).
 
 ## Usage
 
@@ -97,17 +95,17 @@ With the mouse, the wheel scrolls and a click selects a prompt or presses a butt
 | --- | --- |
 | `/coach` | Enhance your last prompt and copy it to the clipboard |
 | `/coach watch` | Print the command that opens the panel |
-| `/coach panel-ai on\|off` | Turn Claude analysis on or off |
+| `/coach panel-ai on\|off` | Turn Claude analysis on or off (on by default on macOS and Linux) |
 | `/coach review` | Analyse your whole history for repeated requests and mistakes (shows a plan first, sends nothing until you agree) |
 | `/coach discover` | Search the web now for better tools for your last prompt |
 | `/coach discover on\|off` | Search the web automatically, once per kind of task (needs analysis on) |
-| `/coach auto-open on\|off` | Open the panel in a split pane at session start |
+| `/coach auto-open on\|off` | Open the panel by itself at session start (on by default on macOS and Linux) |
 | `/coach setup` | Show the current settings |
 | `/coach doctor` | Check that history, Python and the `claude` CLI work |
 
 ## Privacy
 
-- Analysis is **off** until you run `/coach panel-ai on`. With it off, only built-in local hints run, on your machine.
+- Analysis is **on by default on macOS and Linux** and off on Windows. Turn it off with `/coach panel-ai off`; then only built-in local hints run, on your machine. The panel says so in your first three sessions.
 - With it on, the panel sends Claude your prompts with emails, keys, tokens and secrets removed, plus up to five earlier prompts of the same conversation. Every ~2 days it also sends up to 90 days of history for the pattern analysis, with project names replaced by `P1`, `P2`.
 - Pasted content is never sent, only the `[Pasted text #1 +28 lines]` marker.
 - List folder names in `~/.claude/coach/llm-off.txt` (one per line) and those projects are never sent.
@@ -131,7 +129,7 @@ This shows that a pattern exists. It does not prove the suggested fix is good, s
 - Only Claude Code prompts are analysed, not claude.ai chats or Claude's replies.
 - Suggestions are only as good as the model.
 - The local hints are five keyword rules, English only.
-- Auto-open was tested on Windows Terminal and tmux. Other terminals cannot be split from outside.
+- The built-in pane needs Claude Code 2.1.287+. The Windows split was tested on Windows Terminal; `/coach watch` works in any terminal.
 
 ## Development
 
