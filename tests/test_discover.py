@@ -48,7 +48,7 @@ class Verify(unittest.TestCase):
     def test_a_real_github_repo_passes_with_real_metadata(self):
         v, why = self.check({"name": "good-tool", "kind": "mcp", "why": "better", "url": "https://github.com/acme/good-tool"}, {API + "acme/good-tool": (200, gh_json())})
         self.assertIsNone(why)
-        self.assertEqual((v["stars"], v["kind"]), (1234, "mcp")); self.assertEqual(v["pushed"], (TODAY - dt.timedelta(days=30)).isoformat())
+        self.assertEqual((v["stars"], v["kind"]), (1234, "tool")); self.assertEqual(v["pushed"], (TODAY - dt.timedelta(days=30)).isoformat())
 
     def test_a_made_up_github_repo_is_dropped(self):
         v, why = self.check({"name": "screenshot-to-code", "url": "https://github.com/iankleinschmidt/screenshot-to-code"}, {})
@@ -85,8 +85,41 @@ class Verify(unittest.TestCase):
         table = {f"https://example.com/{i}": (200, f"tool{i}") for i in range(6)}
         raw = [{"name": f"tool{i}", "url": f"https://example.com/{i}"} for i in range(6)] + [{"name": "tool0", "url": "https://example.com/0"}]
         ok, _ = discover.verify_all(raw, HAVE, getter(table))
-        self.assertEqual(len(ok), 3)
+        self.assertEqual(len(ok), 4)
         self.assertEqual(discover.verify_all("nonsense", HAVE, getter({})), ([], []))
+
+    def test_old_kinds_are_tools_and_install_is_kept_for_tools_only(self):
+        u = "https://example.com/d"
+        v, _ = self.check({"name": "Thing", "kind": "mcp", "url": u, "install": "npx thing"}, {u: (200, "thing")})
+        self.assertEqual((v["kind"], v["install"]), ("tool", "npx thing"))
+        v, _ = self.check({"name": "WCAG", "kind": "docs", "url": u, "install": "npm i x"}, {u: (200, "wcag 2.2")})
+        self.assertEqual((v["kind"], v["install"]), ("docs", ""))
+        v, _ = self.check({"name": "Linear", "kind": "inspo", "url": u}, {u: (200, "linear")})
+        self.assertEqual(v["kind"], "inspo")
+
+    def test_items_for_an_older_major_than_the_stack_are_dropped(self):
+        stack = ["node", "next@15", "react@19", "go@1.22"]
+        self.assertTrue(discover.older_major({"name": "Next.js 13 app router guide", "why": ""}, stack))
+        self.assertTrue(discover.older_major({"name": "Upgrade kit", "why": "made for nextjs 14"}, stack))
+        self.assertFalse(discover.older_major({"name": "Next.js 15 caching", "why": "for the app router"}, stack))
+        self.assertFalse(discover.older_major({"name": "Next 15 codemods for apps on Next 14", "why": ""}, stack))   # names the current major too
+        self.assertFalse(discover.older_major({"name": "Playwright", "why": "e2e tests in context 3"}, stack))
+        u = "https://example.com/n"
+        v, why = discover.verify_item({"name": "Next 13 guide", "kind": "docs", "url": u}, HAVE, getter({u: (200, "next 13 guide")}), stack=stack)
+        self.assertIsNone(v); self.assertIn("older version", why)
+
+    def test_topic_key_includes_the_stack(self):
+        a = {"task": "frontend", "topic": "checkout page ui", "summary": "whatever"}
+        self.assertNotEqual(discover.topic_key(a, ["next@15"]), discover.topic_key(a, ["vue@3"]))
+        self.assertEqual(discover.topic_key(a, ["react@19", "next@15"]), discover.topic_key(a, ["next@15", "react@19"]))
+
+    def test_pause_until_reads_the_reset_time_or_waits_an_hour(self):
+        now = dt.datetime(2026, 10, 2, 10, 0).timestamp()
+        self.assertEqual(discover.pause_until("Claude AI usage limit reached|1795000000", now), 1795000000)
+        at = lambda s: dt.datetime.fromtimestamp(discover.pause_until(s, now)).strftime("%d %H:%M")
+        self.assertEqual(at("5-hour limit reached \u2219 resets 2pm"), "02 14:00")
+        self.assertEqual(at("usage limit reached, resets at 9:30"), "03 09:30")          # already past today: tomorrow
+        self.assertEqual(discover.pause_until("usage limit reached", now), now + 3600)    # a format we have never seen
 
     def test_topic_key_is_stable_for_the_same_kind_of_task(self):
         a = {"task": "ui-design", "summary": "Improve visual design of the shoe store website"}
@@ -97,18 +130,19 @@ class Verify(unittest.TestCase):
 class Asking(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); s = self.tmp.name
-        self.saved = (coach.STATE, coach.CONFIG); coach.STATE = os.path.join(s, "coach"); coach.CONFIG = s
+        self.saved = (coach.STATE, coach.CONFIG, coach.USER_CFG); coach.STATE = os.path.join(s, "coach"); coach.CONFIG = s
+        coach.USER_CFG = os.path.join(s, "coach", "config.json")
         make_config(s)
-        self.env = {k: os.environ.get(k) for k in ("COACHLINE_CLAUDE", "FAKE_LOG", "FAKE_JSON_WEB", "FAKE_MODE", "COACHLINE_FETCH_STUB")}
+        self.env = {k: os.environ.get(k) for k in ("COACHLINE_CLAUDE", "FAKE_LOG", "FAKE_JSON_WEB", "FAKE_MODE", "FAKE_ERR", "COACHLINE_FETCH_STUB")}
         os.environ["COACHLINE_CLAUDE"] = f'"{PY}" "{FAKE}"'; os.environ["FAKE_LOG"] = os.path.join(s, "sent.log"); os.environ.pop("FAKE_MODE", None)
         self.stub = os.path.join(s, "stub.json"); os.environ["COACHLINE_FETCH_STUB"] = self.stub
         with open(self.stub, "w") as f: json.dump({"https://tools.example.com/g": {"status": 200, "text": "GreatKit is here"}}, f)
         os.environ["FAKE_JSON_WEB"] = json.dumps({"items": [{"name": "GreatKit", "kind": "tool", "why": "does it better", "url": "https://tools.example.com/g", "install": "npm i greatkit"},
                                                             {"name": "Ghost", "kind": "tool", "why": "invented", "url": "https://tools.example.com/none"}]})
-        self.adv = {"task": "ui-design", "summary": "improve visual design of a shoe store website", "use": []}
+        self.adv = {"task": "ui-design", "summary": "improve visual design of a shoe store website", "topic": "shoe store ui", "use": []}
 
     def tearDown(self):
-        coach.STATE, coach.CONFIG = self.saved; self.tmp.cleanup()
+        coach.STATE, coach.CONFIG, coach.USER_CFG = self.saved; self.tmp.cleanup()
         for k, v in self.env.items():
             if v is None: os.environ.pop(k, None)
             else: os.environ[k] = v
@@ -121,7 +155,7 @@ class Asking(unittest.TestCase):
         self.assertEqual([i["name"] for i in items], ["GreatKit"])       # 'Ghost' 404s in verification
         log = read(os.environ["FAKE_LOG"])
         self.assertIn("--tools WebSearch,WebFetch --setting-sources  --allowedTools WebSearch,WebFetch", log.replace("  ", "  "))
-        self.assertIn("ui-design: improve visual design of a shoe store website", log)   # the generic kind-of-task, nothing else
+        self.assertIn('"ui-design: shoe store ui"', log)                                 # the generic topic, nothing else of the prompt
         self.assertNotIn("USER PROMPT", log)                                            # the user's own prompt is never part of a web search call
         import advisor
         os.environ["FAKE_JSON"] = "{}"; advisor.advise("landing page please", [])
@@ -134,10 +168,31 @@ class Asking(unittest.TestCase):
         discover.for_advice(self.adv, fresh=True)
         self.assertEqual(self.calls(), 2)
         with open(os.path.join(coach.STATE, "discover-cache.json")) as f: c = json.load(f)
-        for v in c.values(): v["ts"] = time.time() - 2 * 86400
+        for v in c.values(): v["ts"] = time.time() - 8 * 86400
         with open(os.path.join(coach.STATE, "discover-cache.json"), "w") as f: json.dump(c, f)
         discover.for_advice(self.adv)
-        self.assertEqual(self.calls(), 3)                                # expired after 24h
+        self.assertEqual(self.calls(), 3)                                # expired after 7 days
+
+    def test_research_gets_topic_stack_and_installed_names_on_the_research_model(self):
+        discover.for_advice(self.adv, ["node", "next@15"])
+        log = read(os.environ["FAKE_LOG"])
+        for want in ("next@15", "design-polish", "--model sonnet"): self.assertIn(want, log)
+        self.assertNotIn("USER PROMPT", log)
+
+    def test_a_usage_limit_pauses_research_and_fresh_ignores_the_pause(self):
+        os.environ["FAKE_MODE"] = "fail"; os.environ["FAKE_ERR"] = "Claude AI usage limit reached, resets 11pm"
+        self.assertEqual(discover.for_advice(self.adv), [])
+        self.assertIsNotNone(discover.paused_until())
+        self.assertEqual(discover.for_advice({**self.adv, "topic": "something else"}), [])
+        self.assertEqual(self.calls(), 1)                                                   # paused: no second call
+        os.environ.pop("FAKE_MODE")
+        self.assertEqual([i["name"] for i in discover.for_advice(self.adv, fresh=True)], ["GreatKit"])   # asked for by hand
+        self.assertEqual(self.calls(), 2)
+
+    def test_an_ordinary_failure_does_not_pause(self):
+        os.environ["FAKE_MODE"] = "fail"
+        discover.for_advice(self.adv)
+        self.assertIsNone(discover.paused_until())
 
     def test_discovery_never_raises(self):
         os.environ["FAKE_MODE"] = "fail"
