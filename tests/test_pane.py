@@ -99,7 +99,7 @@ class Tick(unittest.TestCase):
 
 class Actions(unittest.TestCase):
     def test_enhance_starts_one_background_analysis(self):
-        with mock.patch.object(coach, "spawn_key") as spawn:
+        with mock.patch.object(coach, "spawn_key") as spawn, mock.patch("sys.stdout"):
             self.assertEqual(pane.main(["--enhance", "123.0:abc"]), 0)
         spawn.assert_called_once_with("123.0:abc")
 
