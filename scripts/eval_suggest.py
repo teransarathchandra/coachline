@@ -46,11 +46,11 @@ def run_case(task, text, stack, have):
     r["fast_s"] = round(time.time() - t0, 1)
     r["use"], r["get"] = [u["name"] for u in adv["use"]], [g["name"] for g in adv["get"]]
     t1 = time.time()
-    try: raw = discover.find(adv)
+    try: raw = discover.find(adv, stack)
     except (RuntimeError, ValueError) as e:
         r["error"] = f"research: {e}"[:200]; raw = []
     r["research_s"] = round(time.time() - t1, 1)
-    ok, dropped = discover.verify_all(raw, have)
+    ok, dropped = discover.verify_all(raw, have, stack=stack)
     r.update(raw=len(raw) if isinstance(raw, list) else 0, dropped=dropped, verified=[{"name": i["name"], "kind": i["kind"], "url": i["url"]} for i in ok])
     return r
 
