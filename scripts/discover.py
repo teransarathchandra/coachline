@@ -328,16 +328,31 @@ def _stars(n):
     return "" if not isinstance(n, int) else f"{n / 1000:.1f}k".replace(".0k", "k") if n >= 1000 else str(n)
 
 
-def lines(items, width=96):
-    """[(kind, text)] for the panel. Says plainly that these are web-found and unverified beyond the checks."""
+VERB = {"tool": "Use", "tech": "Consider", "docs": "Follow", "inspo": "Take visual cues from"}
+
+
+def references(items):
+    """The block added to the enhanced prompt, so Claude Code gets the checked links with the task."""
+    if not items: return ""
+    return "References (checked links from web research):\n" + "\n".join(f"- {VERB.get(it.get('kind'), 'Use')} {it['name']}: {it['url']}" for it in items)
+
+
+def item_lines(it, n=None, width=96):
+    """One item: the 'better:' line (numbered on the panel), then where it comes from and how to install it."""
     import textwrap
+    head = (f"{n}. " if n else "") + f"better: {it['name']} ({it['kind']})" + (" · you use this" if it.get("status") == "adopted" else "") + f" - {it['why']}"
+    out = [("better", w) for w in textwrap.wrap(head, width, subsequent_indent="        ")]
+    meta = " · ".join(x for x in (f"{_stars(it['stars'])} stars" if it.get("stars") is not None else "", f"pushed {it['pushed']}" if it.get("pushed") else "") if x)
+    out.append(("src", "  " + (meta + " · " if meta else "") + it["url"]))
+    if it.get("install"): out.append(("src", "  install: " + it["install"]))
+    return out
+
+
+def lines(items, width=96, numbered=False):
+    """[(kind, text)] for the panel. Says plainly that these are web-found and unverified beyond the checks."""
     if not items: return []
     out = [("dim", "web-found, not installed; only the checks above were verified. read before installing:")]
-    for it in items:
-        out += [("better", w) for w in textwrap.wrap(f"better: {it['name']} ({it['kind']}) - {it['why']}", width, subsequent_indent="        ")]
-        meta = " · ".join(x for x in (f"{_stars(it['stars'])} stars" if it.get("stars") is not None else "", f"pushed {it['pushed']}" if it.get("pushed") else "") if x)
-        out.append(("src", "  " + (meta + " · " if meta else "") + it["url"]))
-        if it.get("install"): out.append(("src", "  install: " + it["install"]))
+    for n, it in enumerate(items, 1): out += item_lines(it, n if numbered else None, width)
     return out
 
 
