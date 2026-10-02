@@ -407,8 +407,12 @@ def _save(key, res):
         rec = {"key": key, "error": res.get("error", "failed")}
     with open(REWRITES, "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
 
+def _save_discovery(key, advice, items):
+    """Research results for the prompt with this key (maybe another job's: the research queue runs the newest request)."""
+    _save(key, {"key": key, "status": "done", "advice": advice, "text": "AFTER: " + advice.get("after", ""), "discovery": items})
+
 def bg_rewrite(path, key):
-    """Claude's analysis of the prompt with this key (advice, enhanced prompt, optional web discovery), appended to rewrites.jsonl."""
+    """Claude's analysis of the prompt with this key (advice and enhanced prompt, then web research when it starts a new task), appended to rewrites.jsonl."""
     rows = load_full(path)
     i = next((n for n, r in enumerate(rows) if prompt_key(r) == key), None)
     if i is None or llm_off(rows[i][1]): return
@@ -422,9 +426,9 @@ def bg_rewrite(path, key):
     except (RuntimeError, ValueError) as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
     _save(key, res)
     if res["status"] == "done" and research_on():
-        import discover
-        items = discover.for_advice(res["advice"])  # cached per topic for 24h; verified locally; never raises
-        if items: _save(key, {**res, "discovery": items})
+        import discover, stackinfo
+        if discover.wanted(rows[i][3], res["advice"]):          # once per new task; follow-ups of the same task send nothing
+            discover.request(key, rows[i][3], res["advice"], stackinfo.detect(rows[i][1]), _save_discovery)
 
 def _after_lines(text, width=96):
     import textwrap

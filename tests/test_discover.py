@@ -127,7 +127,7 @@ class Verify(unittest.TestCase):
         self.assertTrue(discover.topic_key(a).startswith("ui-design:"))
 
 
-class Asking(unittest.TestCase):
+class AskingBase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); s = self.tmp.name
         self.saved = (coach.STATE, coach.CONFIG, coach.USER_CFG); coach.STATE = os.path.join(s, "coach"); coach.CONFIG = s
@@ -150,6 +150,8 @@ class Asking(unittest.TestCase):
     def calls(self):
         return read(os.environ["FAKE_LOG"]).count("=====") if os.path.exists(os.environ["FAKE_LOG"]) else 0
 
+
+class Asking(AskingBase):
     def test_only_discovery_gets_the_web_tools_and_only_verified_items_come_back(self):
         items = discover.for_advice(self.adv)
         self.assertEqual([i["name"] for i in items], ["GreatKit"])       # 'Ghost' 404s in verification
@@ -209,9 +211,52 @@ class Asking(unittest.TestCase):
         self.assertEqual(discover.lines([]), [])
 
 
+class Queue(AskingBase):
+    def setUp(self):
+        super().setUp(); self.got = []
+
+    def save(self, key, advice, items):
+        self.got.append((key, [i["name"] for i in items]))
+
+    def lock(self, age=0):
+        os.makedirs(coach.STATE, exist_ok=True); p = os.path.join(coach.STATE, "research.running")
+        open(p, "w").close()
+        if age: os.utime(p, (time.time() - age, time.time() - age))
+        return p
+
+    def test_new_tasks_and_the_first_of_a_session_are_researched_follow_ups_are_not(self):
+        self.assertTrue(discover.wanted("s1", {"new_task": False}))              # nothing researched in s1 yet
+        discover.request("k1", "s1", self.adv, [], self.save)
+        self.assertEqual(self.got, [("k1", ["GreatKit"])])
+        self.assertFalse(discover.wanted("s1", {"new_task": False}))
+        self.assertTrue(discover.wanted("s1", {"new_task": True}))
+        self.assertTrue(discover.wanted("s1", {}))                                # advice from before this version: a new task
+
+    def test_while_one_job_researches_newer_requests_wait_and_older_waiting_ones_are_dropped(self):
+        p = self.lock()                                                           # another job is researching
+        discover.request("k1", "s1", self.adv, [], self.save); discover.request("k2", "s1", self.adv, [], self.save)
+        self.assertEqual((self.got, self.calls()), ([], 0))                       # both left for the running job
+        os.remove(p)
+        discover.request("k3", "s1", {**self.adv, "topic": "size guide"}, [], self.save)
+        self.assertEqual([k for k, _ in self.got], ["k3"])                        # k1 and k2 were never started: dropped
+        self.assertFalse(os.path.exists(p))
+
+    def test_a_lock_left_by_a_crashed_job_expires(self):
+        p = self.lock(age=700)
+        discover.request("k1", "s1", self.adv, [], self.save)
+        self.assertEqual([k for k, _ in self.got], ["k1"]); self.assertFalse(os.path.exists(p))
+
+    def test_a_usage_limit_leaves_the_session_unresearched(self):
+        os.environ["FAKE_MODE"] = "fail"; os.environ["FAKE_ERR"] = "usage limit reached"
+        discover.request("k1", "s1", self.adv, [], self.save)
+        self.assertEqual(self.got, []); self.assertIsNotNone(discover.paused_until())
+        self.assertTrue(discover.wanted("s1", {"new_task": False}))
+
+
 class EndToEnd(unittest.TestCase):
-    ADVICE = json.dumps({"task": "ui-design", "summary": "polishing a shoe store website", "use": [], "get": [], "tips": ["Name the style."],
-                         "workflow": ["Sketch", "Build"], "after": "Polish the website."})
+    ADVICE = json.dumps({"task": "ui-design", "summary": "polishing a shoe store website", "topic": "shoe store ui", "new_task": True,
+                         "use": [], "get": [], "tips": ["Name the style."], "workflow": ["Sketch", "Build"], "after": "Polish the website."})
+    FOLLOW = json.loads(ADVICE); FOLLOW.update(new_task=False, topic="product size guide"); FOLLOW = json.dumps(FOLLOW)   # a new topic: only new_task stops research
     WEB = json.dumps({"items": [{"name": "GreatKit", "kind": "tool", "why": "does it \x1b[31mbetter", "url": "https://tools.example.com/g", "install": "npm i greatkit"},
                                 {"name": "Ghost", "kind": "tool", "why": "invented", "url": "https://tools.example.com/none"}]})
 
@@ -229,18 +274,17 @@ class EndToEnd(unittest.TestCase):
         key = coach.prompt_key((1750000000.0, "proj", self.TEXT))
         return run(cfg, "coach.py", "--bg-rewrite", "--key", key, **env)
 
-    def test_the_analysis_job_adds_verified_discoveries_that_the_panel_shows(self):
+    def test_the_analysis_job_adds_verified_research_that_the_panel_shows(self):
         with tempfile.TemporaryDirectory() as cfg:
             write_history(cfg, [self.TEXT])
             stub = os.path.join(cfg, "stub.json")
             with open(stub, "w") as f: json.dump({"https://tools.example.com/g": {"status": 200, "text": "GreatKit"}}, f)
-            self.assertEqual(run(cfg, "setup.py", "--discover", "on").returncode, 0)
-            self.assertTrue(json.loads(read(os.path.join(cfg, "coach", "config.json")))["research"])
-            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)
+            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)   # on by default: no setting
             self.assertEqual(r.returncode, 0, r.stderr)
             recs = [json.loads(l) for l in read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()]
             self.assertEqual(len(recs), 2)                                     # advice first, then advice + discovery, same key
             self.assertEqual(recs[0]["key"], recs[1]["key"]); self.assertNotIn("discovery", recs[0])
+            self.assertEqual(recs[1]["advice"]["after"], "Polish the website.")
             self.assertEqual([d["name"] for d in recs[1]["discovery"]], ["GreatKit"])      # 'Ghost' 404s in verification
             panel = run(cfg, "watch.py", "--once", "--width", "150", "--height", "40").stdout
             flat = " ".join(panel.split())
@@ -255,6 +299,27 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB).returncode, 0)
             self.assertEqual(len(read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()), 1)   # advice only
             self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))
+
+
+    def test_a_follow_up_of_the_same_task_makes_no_web_call(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            follow = "now also add a size guide below every product on that same page"
+            write_history(cfg, [self.TEXT, follow])
+            empty = json.dumps({"items": []})                                   # nothing to verify: no network in this test
+            self.assertEqual(self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=empty).returncode, 0)
+            r = run(cfg, "coach.py", "--bg-rewrite", "--key", coach.prompt_key((1750000090.0, "proj", follow)), FAKE_JSON=self.FOLLOW, FAKE_JSON_WEB=empty)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(read(os.path.join(cfg, "sent.log")).count("WebSearch,WebFetch --setting-sources"), 1)
+
+    def test_the_panel_says_when_research_is_paused(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            write_history(cfg, [self.TEXT])
+            os.makedirs(os.path.join(cfg, "coach"))
+            with open(os.path.join(cfg, "coach", "research-state.json"), "w") as f: json.dump({"paused_until": time.time() + 3600}, f)
+            self.assertEqual(self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB).returncode, 0)
+            self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))                          # paused: no web call
+            flat = " ".join(run(cfg, "watch.py", "--once", "--width", "150", "--height", "40").stdout.split())
+            self.assertIn("web research paused until", flat); self.assertIn("the enhanced prompt still works", flat)
 
 
 if __name__ == "__main__":
