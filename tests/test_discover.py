@@ -180,7 +180,7 @@ class EndToEnd(unittest.TestCase):
             stub = os.path.join(cfg, "stub.json")
             with open(stub, "w") as f: json.dump({"https://tools.example.com/g": {"status": 200, "text": "GreatKit"}}, f)
             self.assertEqual(run(cfg, "setup.py", "--discover", "on").returncode, 0)
-            self.assertTrue(json.loads(read(os.path.join(cfg, "coach", "config.json")))["discover"])
+            self.assertTrue(json.loads(read(os.path.join(cfg, "coach", "config.json")))["research"])
             r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)
             self.assertEqual(r.returncode, 0, r.stderr)
             recs = [json.loads(l) for l in read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()]
@@ -193,13 +193,13 @@ class EndToEnd(unittest.TestCase):
             self.assertIn("install: npm i greatkit", flat)
             self.assertNotIn("\x1b[31m", panel)                                 # model/web text is cleaned of escape codes
 
-    def test_discovery_stays_off_unless_enabled(self):
+    def test_research_off_means_no_web_call(self):
         with tempfile.TemporaryDirectory() as cfg:
             write_history(cfg, [self.TEXT])
-            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB)
-            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(run(cfg, "setup.py", "--research", "off").returncode, 0)
+            self.assertEqual(self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB).returncode, 0)
             self.assertEqual(len(read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()), 1)   # advice only
-            self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))                          # no web call was ever made
+            self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))
 
 
 if __name__ == "__main__":

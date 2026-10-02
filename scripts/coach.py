@@ -324,27 +324,40 @@ def set_setting(name, value):
     os.makedirs(STATE, exist_ok=True)
     with open(USER_CFG, "w", encoding="utf-8") as f: json.dump(d, f, indent=2)
 
+MODELS = ("haiku", "sonnet", "opus")
+
 def defaults_on():
-    """macOS and Linux: Claude analysis and the pane are on until the user turns them off. Windows keeps them opt-in.
+    """macOS and Linux: the panel opens by itself until the user turns that off. Windows keeps auto-open opt-in.
     COACHLINE_PLATFORM overrides the system name (tests)."""
     return (os.environ.get("COACHLINE_PLATFORM") or platform.system()) != "Windows"
 
 def ai_on():
-    """Claude analysis (advice per prompt, review of your history). 'auto_rewrite' is the old name of the same switch."""
+    """Claude analysis (advice per prompt, review of your history). On by default everywhere; 'auto_rewrite' is its old name."""
     v = setting("panel_ai")
     if v is None: v = setting("auto_rewrite")
-    return bool(defaults_on() if v is None else v)
+    return True if v is None else bool(v)
+
+def research_on():
+    """Web research once per new task (the slower second pass). On wherever analysis is on; 'discover' is its old name."""
+    v = setting("research")
+    if v is None: v = setting("discover")
+    return ai_on() and (True if v is None else bool(v))
+
+def model_for(kind):
+    """The model of a pass: 'fast' (advice and the enhanced prompt, default haiku) or 'research' (web research, default sonnet)."""
+    v = setting("model_" + kind)
+    return v if v in MODELS else {"fast": "haiku", "research": "sonnet"}[kind]
 
 def auto_open_on():
     """The panel opens by itself at session start: the Claude Code pane on macOS / Linux, a Windows Terminal split on Windows."""
     v = setting("auto_open_watch")
     return bool(defaults_on() if v is None else v)
 
-NOTICE = "Claude analysis is on: your prompts and history are sent redacted through your subscription · /coach panel-ai off"
+NOTICE = "Claude analysis is on: prompts go redacted to your subscription, task topics to web search · /coach panel-ai off"
 NOTICE_SESSIONS = 3
 
 def notice(session):
-    """The first-run line, while analysis is on only because of the macOS / Linux default (the user never chose), in their first three
+    """The first-run line, while analysis is on only because of the default (the user never chose), in their first three
     sessions. Shown by the Claude Code pane and by watch.py alike."""
     if not ai_on() or setting("panel_ai") is not None or setting("auto_rewrite") is not None: return None
     seen = setting("notice_sessions", [])
@@ -408,7 +421,7 @@ def bg_rewrite(path, key):
         res = {"key": key, "status": "done", "advice": adv, "text": "AFTER: " + adv.get("after", "")}
     except (RuntimeError, ValueError) as e: res = {"key": key, "status": "failed", "error": str(e)[:80]}
     _save(key, res)
-    if res["status"] == "done" and setting("discover", False):
+    if res["status"] == "done" and research_on():
         import discover
         items = discover.for_advice(res["advice"])  # cached per topic for 24h; verified locally; never raises
         if items: _save(key, {**res, "discovery": items})
@@ -488,6 +501,7 @@ def doctor(path):
     line(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} at {sys.executable}")
     print(("ok   " if shutil.which("claude") else "warn ") + "claude CLI on PATH (needed only for the /coach rewrite)")
     print(("ok   " if ai_on() else "off  ") + "Claude analysis in the panel (turn on: " + py_cmd("setup.py", "--panel-ai", "on") + ")")
+    print(("ok   " if research_on() else "off  ") + f"web research per new task, {model_for('research')} (turn off: " + py_cmd("setup.py", "--research", "off") + ")")
     print(("ok   " if auto_open_on() else "off  ") + "panel opens itself at session start (turn on: " + py_cmd("setup.py", "--auto-open", "on") + ")")
     print("     open the panel by hand: " + py_cmd("watch.py"))
     sys.exit(0 if ok else 1)

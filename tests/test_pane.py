@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 import coach, pane  # noqa: E402
 from test_watch import history, VAGUE, SOLID  # noqa: E402
 
-NOTICE = "Claude analysis is on: your prompts and history are sent redacted through your subscription · /coach panel-ai off"
+NOTICE = "Claude analysis is on: prompts go redacted to your subscription, task topics to web search · /coach panel-ai off"
 
 
 class FakeIO:

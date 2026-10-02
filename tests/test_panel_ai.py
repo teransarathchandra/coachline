@@ -126,11 +126,13 @@ class Autopilot(Base):
 class EndToEnd(Base):
     def test_panel_status_and_switch_round_trip(self):
         history(self.cfg, [("now", "p", VAGUE)])
+        os.remove(coach.USER_CFG)
+        self.assertTrue(coach.ai_on())                                                    # on by default, Windows included
+        coach.set_setting("auto_rewrite", False)                                          # the old name still works
         self.assertFalse(coach.ai_on())
-        coach.set_setting("auto_rewrite", True)                                           # the old name still works
+        coach.set_setting("panel_ai", True)                                               # the new name wins
         self.assertTrue(coach.ai_on())
-        coach.set_setting("panel_ai", False)                                              # the new name wins
-        self.assertFalse(coach.ai_on())
+        coach.set_setting("panel_ai", False)
         self.assertIn("Claude off", flat(once(self.cfg)))
 
 
