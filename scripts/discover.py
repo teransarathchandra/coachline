@@ -20,7 +20,7 @@ from review import parse_json
 
 TTL, MAX_ITEMS, MAX_RAW, STALE_DAYS, PAUSE = 7 * 86400, 4, 8, 550, 3600
 KINDS = {"tool", "tech", "docs", "inspo"}       # anything else (skill, plugin, mcp, library, workflow, from older answers) is a tool
-LIMIT = re.compile(r"usage limit|rate limit|limit reached|too many requests|\b429\b", re.I)
+LIMIT = re.compile(r"usage limit|rate limit|limit reached|hit your limit|too many requests|\b429\b|\blimit\b.{0,60}\breset", re.I)
 STOP = set("the and for with your that this from into make have using want need over under about more less very".split())
 
 
@@ -72,13 +72,14 @@ def _tokens(s): return [t for t in re.findall(r"[a-z0-9]{3,}", s.lower()) if t n
 
 
 def older_major(item, stack):
-    """True when the item names a framework of the stack only at majors older than the project's ('Next.js 13' on next@15)."""
-    text = coach.clean(f"{item.get('name', '')} {item.get('why', '')}").lower()
+    """True when the item's NAME names a framework of the stack only at majors older than the project's ('Next.js 13' on next@15).
+    Only whole version numbers right after the framework's own name count: not 'eslint-plugin-react 7', 'react 3d' or the 'why'."""
+    text = coach.clean(item.get("name", "")).lower()
     for s in stack:
-        name, _, major = s.partition("@")
-        if not major.isdigit(): continue
-        base = re.escape(name.split("/")[-1].split(".")[0])
-        seen = [int(m) for m in re.findall(r"(?<![a-z0-9])" + base + r"(?:\.?js)?\s*v?@?(\d+)", text)]
+        name, _, major = s.rpartition("@")
+        if not name or not major.isdigit(): continue
+        base = re.escape(name[1:].split("/")[0] if name.startswith("@") else name.split("/")[-1].split(".")[0])   # @angular/core -> angular
+        seen = [int(m) for m in re.findall(r"(?<![a-z0-9/@.-])" + base + r"(?:\.?js)?\s*v?(\d+)(?![a-z0-9.])", text)]
         if seen and max(seen) < int(major): return True
     return False
 
@@ -135,7 +136,7 @@ def topic_key(advice, stack=()):
 
 
 PROMPT = """You research for a developer who is about to give a task to Claude Code (a coding agent).
-Task (generic; this is all you know about it): "{task}: {topic}". What they are doing: {summary}.
+Task (generic; this is all you know about it): "{task}: {topic}".
 Project stack, from its manifest files: {stack}.
 Already installed in their Claude Code (do not recommend these or near-duplicates): {have}.
 Use WebSearch, and WebFetch to confirm, to find up to 4 CURRENT things that would make the result clearly better. Mix kinds when it helps:
@@ -154,7 +155,7 @@ Empty list if nothing is clearly better than a plain Claude Code session."""
 def find(advice, stack=(), have=None, timeout=240):
     have = sorted(have_names() if have is None else have)
     text = coach.ask_claude(PROMPT.format(task=advice.get("task", "other"), topic=advice.get("topic") or advice.get("summary", ""),
-                                          summary=advice.get("summary", ""), stack=", ".join(stack) or "unknown",
+                                          stack=", ".join(stack) or "unknown",
                                           have=", ".join(have[:80]) or "nothing"),
                             model=coach.model_for("research"), timeout=timeout, web=True)
     if LIMIT.search(text) and "{" not in text: raise RuntimeError(text[:300])     # a limit notice printed as the answer
@@ -180,7 +181,15 @@ def _dump(name, d):
     os.makedirs(coach.STATE, exist_ok=True)
     tmp = os.path.join(coach.STATE, f"{name}.{os.getpid()}.tmp")
     with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f)
-    os.replace(tmp, os.path.join(coach.STATE, name))
+    for i in range(5):                            # Windows refuses to replace a file another process is reading: wait a moment
+        try:
+            os.replace(tmp, os.path.join(coach.STATE, name)); return
+        except PermissionError:
+            if i == 4:
+                try: os.remove(tmp)
+                except OSError: pass
+                raise
+            time.sleep(0.05 * (i + 1))
 
 
 def pause_until(err, now=None):
@@ -224,7 +233,8 @@ def for_advice(advice, stack=(), fresh=False, get=http_get):
         items, _dropped = verify_all(raw, have_names() | {u["name"].lower() for u in advice.get("use", [])}, get, stack)
         cache = {k: v for k, v in cache.items() if isinstance(v, dict) and time.time() - v.get("ts", 0) < TTL}
         cache[key] = {"ts": time.time(), "items": items}
-        _dump("discover-cache.json", cache)
+        try: _dump("discover-cache.json", cache)
+        except OSError: pass                      # the results still count; only the cache missed them
         return items
     except (RuntimeError, ValueError, OSError, KeyError, TypeError, AttributeError):
         return []
@@ -234,53 +244,79 @@ LOCK_STALE = 600
 
 
 def wanted(session, advice):
-    """Research this prompt? When it starts a new task, or when this session has had no research yet."""
-    return advice.get("new_task") is not False or session not in (_load("research-state.json").get("done") or {})
+    """Research this prompt? When it starts a new task, or when this session has had no research yet and none is under way."""
+    if advice.get("new_task") is not False: return True
+    st = _load("research-state.json")
+    return session not in (st.get("done") or {}) and time.time() - (st.get("pending") or {}).get(session, 0) > 2 * LOCK_STALE
+
+
+def _mark(session, done=False, pending=False):
+    """Record a session as researched (done) or as waiting for research (pending); neither clears both."""
+    st, now = _load("research-state.json"), time.time()
+    for k in ("done", "pending"):
+        st[k] = {s: t for s, t in (st.get(k) or {}).items() if isinstance(t, (int, float)) and now - t < TTL and s != session}
+    if done: st["done"][session] = now
+    if pending: st["pending"][session] = now
+    _dump("research-state.json", st)
 
 
 def _lock():
+    """A token when this job may research (the lock file holds it), else None."""
     p = os.path.join(coach.STATE, "research.running")
     try:
         if time.time() - os.path.getmtime(p) > LOCK_STALE: os.remove(p)      # a crashed job never blocks research for good
     except OSError:
         pass
+    tok = f"{os.getpid()}-{time.time()}"
     try:
         os.makedirs(coach.STATE, exist_ok=True)
-        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY); os.write(fd, str(time.time()).encode()); os.close(fd)
-        return True
+        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY); os.write(fd, tok.encode()); os.close(fd)
+        return tok
     except OSError:
-        return False
+        return None
 
 
-def _unlock():
-    try: os.remove(os.path.join(coach.STATE, "research.running"))
-    except OSError: pass
+def _unlock(tok):
+    """Remove the lock only if it is still ours (it may have been taken over as stale)."""
+    p = os.path.join(coach.STATE, "research.running")
+    try:
+        with open(p, encoding="utf-8") as f: mine = f.read() == tok
+        if mine: os.remove(p)
+    except OSError:
+        pass
 
 
 def _research(w, save):
     items = for_advice(w["advice"], w.get("stack") or ())
     if items: save(w["key"], w["advice"], items)
-    if paused_until(): return                     # a usage limit: the session is not researched; its next prompt tries again
-    st, now = _load("research-state.json"), time.time()
-    done = {s: t for s, t in (st.get("done") or {}).items() if isinstance(t, (int, float)) and now - t < TTL}
-    done[w.get("session", "")] = now; st["done"] = done; _dump("research-state.json", st)
+    # a usage limit: the session is not researched, and its next prompt tries again
+    _mark(w.get("session", ""), done=not paused_until())
 
 
 def request(key, session, advice, stack, save):
     """Research for this prompt, newest request first. If another job is researching, leave the request for it and return: it
     takes the newest waiting request when it finishes, so an older one that never started is dropped. One web call at a time.
-    save(key, advice, items) records a result (coach._save_discovery appends it to rewrites.jsonl)."""
+    save(key, advice, items) records a result (coach._save_discovery appends it to rewrites.jsonl). Never raises."""
+    try: _request(key, session, advice, stack, save)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError): pass
+
+
+def _request(key, session, advice, stack, save):
+    _mark(session, pending=True)                   # its follow-ups wait for this research instead of asking again
     _dump("research-want.json", {"key": key, "session": session, "advice": advice, "stack": list(stack), "ts": time.time()})
-    done = None
+    done, p = None, os.path.join(coach.STATE, "research.running")
     while True:
-        if not _lock(): return
+        tok = _lock()
+        if not tok: return
         try:
             while True:
                 w = _load("research-want.json")
                 if not w.get("key") or w["key"] == done: break
+                try: os.utime(p)                   # a long drain is not a crashed job
+                except OSError: pass
                 done = w["key"]; _research(w, save)
         finally:
-            _unlock()
+            _unlock(tok)
         w = _load("research-want.json")                # a request written just before the unlock must not be lost
         if not w.get("key") or w["key"] == done: return
 

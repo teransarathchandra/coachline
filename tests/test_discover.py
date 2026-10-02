@@ -1,4 +1,5 @@
 import datetime as dt, json, os, sys, tempfile, time, unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -100,7 +101,11 @@ class Verify(unittest.TestCase):
     def test_items_for_an_older_major_than_the_stack_are_dropped(self):
         stack = ["node", "next@15", "react@19", "go@1.22"]
         self.assertTrue(discover.older_major({"name": "Next.js 13 app router guide", "why": ""}, stack))
-        self.assertTrue(discover.older_major({"name": "Upgrade kit", "why": "made for nextjs 14"}, stack))
+        self.assertTrue(discover.older_major({"name": "Nextjs 14 upgrade kit", "why": ""}, stack))
+        self.assertFalse(discover.older_major({"name": "Upgrade kit", "why": "covers the next 2 releases of nextjs 14"}, stack))   # only the name counts
+        self.assertFalse(discover.older_major({"name": "eslint-plugin-react 7 rules", "why": ""}, stack))   # another package's version
+        self.assertFalse(discover.older_major({"name": "Build react 3d scenes", "why": ""}, stack))         # '3d' is not a version
+        self.assertTrue(discover.older_major({"name": "Angular 15 signals guide", "why": ""}, ["@angular/core@17"]))
         self.assertFalse(discover.older_major({"name": "Next.js 15 caching", "why": "for the app router"}, stack))
         self.assertFalse(discover.older_major({"name": "Next 15 codemods for apps on Next 14", "why": ""}, stack))   # names the current major too
         self.assertFalse(discover.older_major({"name": "Playwright", "why": "e2e tests in context 3"}, stack))
@@ -121,6 +126,13 @@ class Verify(unittest.TestCase):
         self.assertEqual(at("usage limit reached, resets at 9:30"), "03 09:30")          # already past today: tomorrow
         self.assertEqual(discover.pause_until("usage limit reached", now), now + 3600)    # a format we have never seen
 
+    def test_limit_wording_is_recognised(self):
+        for msg in ("Claude AI usage limit reached|1795000000", "You've hit your limit \u00b7 resets 3pm", "5-hour limit reached",
+                    "Error: 429 Too Many Requests", "weekly limit will reset at 9am"):
+            self.assertTrue(discover.LIMIT.search(msg), msg)
+        for msg in ("boom", "claude timed out after 240s", "`claude` CLI not on PATH"):
+            self.assertFalse(discover.LIMIT.search(msg), msg)
+
     def test_topic_key_is_stable_for_the_same_kind_of_task(self):
         a = {"task": "ui-design", "summary": "Improve visual design of the shoe store website"}
         self.assertEqual(discover.topic_key(a), discover.topic_key(dict(a)))
@@ -133,7 +145,7 @@ class AskingBase(unittest.TestCase):
         self.saved = (coach.STATE, coach.CONFIG, coach.USER_CFG); coach.STATE = os.path.join(s, "coach"); coach.CONFIG = s
         coach.USER_CFG = os.path.join(s, "coach", "config.json")
         make_config(s)
-        self.env = {k: os.environ.get(k) for k in ("COACHLINE_CLAUDE", "FAKE_LOG", "FAKE_JSON_WEB", "FAKE_MODE", "FAKE_ERR", "COACHLINE_FETCH_STUB")}
+        self.env = {k: os.environ.get(k) for k in ("COACHLINE_CLAUDE", "FAKE_LOG", "FAKE_JSON_WEB", "FAKE_MODE", "FAKE_ERR", "FAKE_STDOUT", "COACHLINE_FETCH_STUB")}
         os.environ["COACHLINE_CLAUDE"] = f'"{PY}" "{FAKE}"'; os.environ["FAKE_LOG"] = os.path.join(s, "sent.log"); os.environ.pop("FAKE_MODE", None)
         self.stub = os.path.join(s, "stub.json"); os.environ["COACHLINE_FETCH_STUB"] = self.stub
         with open(self.stub, "w") as f: json.dump({"https://tools.example.com/g": {"status": 200, "text": "GreatKit is here"}}, f)
@@ -191,6 +203,15 @@ class Asking(AskingBase):
         self.assertEqual([i["name"] for i in discover.for_advice(self.adv, fresh=True)], ["GreatKit"])   # asked for by hand
         self.assertEqual(self.calls(), 2)
 
+    def test_research_gets_the_topic_not_the_free_text_summary(self):
+        discover.for_advice({**self.adv, "summary": "fixing ACMECORP billing for Jane"})
+        self.assertNotIn("ACMECORP", read(os.environ["FAKE_LOG"]))
+
+    def test_a_limit_notice_on_stdout_pauses_even_with_a_warning_on_stderr(self):
+        os.environ["FAKE_MODE"] = "fail"; os.environ["FAKE_ERR"] = "warning: config"; os.environ["FAKE_STDOUT"] = "You've hit your limit \u00b7 resets 3pm"
+        discover.for_advice(self.adv)
+        self.assertIsNotNone(discover.paused_until())
+
     def test_an_ordinary_failure_does_not_pause(self):
         os.environ["FAKE_MODE"] = "fail"
         discover.for_advice(self.adv)
@@ -245,6 +266,40 @@ class Queue(AskingBase):
         p = self.lock(age=700)
         discover.request("k1", "s1", self.adv, [], self.save)
         self.assertEqual([k for k, _ in self.got], ["k1"]); self.assertFalse(os.path.exists(p))
+
+    def test_a_follow_up_while_research_still_runs_is_not_researched_again(self):
+        self.lock()                                                               # the first prompt's research is still running
+        discover.request("k1", "s1", self.adv, [], self.save)
+        self.assertFalse(discover.wanted("s1", {"new_task": False}))              # its follow-up must not queue a second web call
+        self.assertTrue(discover.wanted("s1", {"new_task": True}))
+
+    def test_a_long_drain_keeps_its_lock_fresh_and_only_removes_its_own_lock(self):
+        p = os.path.join(coach.STATE, "research.running"); ages = []
+        def save(key, advice, items):
+            ages.append(time.time() - os.path.getmtime(p))
+            if key == "k1":                                                       # a newer task arrives; the lock looks old by now
+                os.utime(p, (time.time() - 700, time.time() - 700))
+                discover._dump("research-want.json", {"key": "k2", "session": "s1", "advice": {**self.adv, "topic": "size guide"}, "stack": []})
+        discover.request("k1", "s1", self.adv, [], save)
+        self.assertEqual(len(ages), 2); self.assertLess(ages[1], 60)              # refreshed before the second research
+        tok = discover._lock(); self.assertTrue(tok)
+        with open(p, "w") as f: f.write("someone else")                          # our lock was taken over as stale
+        discover._unlock(tok)
+        self.assertTrue(os.path.exists(p))                                        # never delete another job's lock
+
+    def test_a_state_file_held_open_on_windows_never_kills_the_job(self):
+        real = os.replace; calls = []
+        def flaky(a, b):
+            calls.append(b)
+            if len(calls) <= 2: raise PermissionError("in use")
+            return real(a, b)
+        with mock.patch.object(discover.os, "replace", flaky):
+            discover._dump("x.json", {"a": 1})                                     # retried until it went through
+        self.assertEqual(discover._load("x.json"), {"a": 1})
+        with mock.patch.object(discover.os, "replace", side_effect=PermissionError("in use")):
+            self.assertEqual([i["name"] for i in discover.for_advice(self.adv)], ["GreatKit"])   # results survive a failed cache write
+            discover.request("k1", "s1", {**self.adv, "topic": "other"}, [], self.save)         # never raises
+        self.assertEqual([f for f in os.listdir(coach.STATE) if f.endswith(".tmp")], [])         # no temp files left behind
 
     def test_a_usage_limit_leaves_the_session_unresearched(self):
         os.environ["FAKE_MODE"] = "fail"; os.environ["FAKE_ERR"] = "usage limit reached"

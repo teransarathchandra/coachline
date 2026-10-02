@@ -1,7 +1,9 @@
 """stackinfo.py - what a project is built with, read from its manifest files on this machine.
 
-Only public framework names and major versions leave the machine (the research pass gets them): never code, paths, the project
-name, private packages (npm scopes outside a known public list) or local / workspace / git / url dependencies.
+Only well-known public framework and library names and their major versions leave the machine (the research pass gets them):
+never code, paths, the project name, or any other package. A company's own packages are usually unscoped and named after it,
+so nothing outside the KNOWN list (or a known public npm scope) is sent, and local / workspace / git / url / private-registry
+dependencies never are.
 """
 import json, os, re
 
@@ -10,6 +12,19 @@ MANIFESTS = ("package.json", "pyproject.toml", "requirements.txt", "go.mod", "Ca
 PUBLIC_SCOPES = {"@angular", "@vue", "@sveltejs", "@nestjs", "@remix-run", "@tanstack", "@prisma", "@supabase", "@trpc", "@mui",
                  "@radix-ui", "@reduxjs", "@apollo", "@playwright", "@storybook", "@astrojs", "@nuxt", "@vercel", "@aws-sdk",
                  "@google-cloud", "@anthropic-ai", "@testing-library", "@emotion", "@chakra-ui", "@headlessui", "@vitejs"}
+KNOWN = set("""
+react react-dom next vue nuxt svelte solid-js preact astro gatsby qwik lit ember-source express fastify koa hono typescript vite
+webpack esbuild rollup parcel turbo tailwindcss bootstrap sass less styled-components framer-motion motion three d3 chart.js
+recharts echarts redux zustand mobx jotai recoil pinia vuex react-router react-router-dom react-hook-form formik zod yup axios swr
+graphql prisma drizzle-orm typeorm sequelize mongoose mongodb pg mysql2 redis ioredis socket.io electron react-native expo jest
+vitest mocha cypress playwright puppeteer eslint prettier storybook lodash dayjs date-fns moment i18next next-auth firebase stripe
+openai langchain ai lucide-react antd jquery htmx.org alpinejs remix
+django flask fastapi starlette pydantic sqlalchemy alembic celery requests httpx aiohttp numpy pandas polars scipy scikit-learn
+matplotlib seaborn plotly torch tensorflow keras jax transformers anthropic pytest psycopg psycopg2 psycopg2-binary asyncpg boto3
+streamlit gradio uvicorn gunicorn jinja2 click typer rich scrapy beautifulsoup4 selenium djangorestframework channels flask-sqlalchemy
+tokio serde serde_json axum actix-web rocket warp hyper reqwest clap anyhow thiserror sqlx diesel tracing rayon bevy tauri leptos
+yew wasm-bindgen
+""".split())
 LOCAL = re.compile(r"^\s*[\"']?(file:|link:|workspace:|portal:|git|github:|https?:|\.|/|~/)", re.I)   # '~/' is a path, '~5.2' a range
 NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,60}$")
 REQ = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*(?:[=<>~!^]=?\s*([0-9][^\s,;]*))?")
@@ -23,7 +38,7 @@ def _entry(name, spec=""):
     if name.startswith("@"):
         scope, _, rest = name.partition("/")
         if scope not in PUBLIC_SCOPES or not NAME.match(rest): return None
-    elif not NAME.match(name): return None
+    elif name not in KNOWN: return None
     m = re.search(r"\d+", spec)
     return f"{name}@{m.group(0)}" if m else name
 
@@ -72,7 +87,7 @@ def _go(d):
 def _rust(d):
     m = re.search(SECTION.format("dependencies"), _text(os.path.join(d, "Cargo.toml")))
     out = [_entry(n, rest.replace("version", "")) for n, rest in re.findall(r"(?m)^([A-Za-z0-9][A-Za-z0-9_-]*)\s*=\s*(.+)$", m.group(1) if m else "")
-           if not re.search(r"\b(path|git)\s*=", rest)]
+           if not re.search(r"\b(path|git|registry)\s*=", rest)]
     return ["rust"] + out
 
 

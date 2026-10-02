@@ -214,7 +214,7 @@ def ask_claude(prompt, model="haiku", timeout=180, web=False):
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"claude timed out after {timeout}s")
     if r.returncode != 0 or not r.stdout.strip():
-        raise RuntimeError((r.stderr or r.stdout or "claude returned nothing").strip()[:300])
+        raise RuntimeError((f"{r.stderr or ''} {r.stdout or ''}".strip() or "claude returned nothing")[:300])   # a limit notice may be on either
     return r.stdout.strip()
 
 _ESC = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b.")

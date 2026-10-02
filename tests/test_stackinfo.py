@@ -21,6 +21,12 @@ class Detect(unittest.TestCase):
               "devDependencies": {"@types/node": "22", "tailwindcss": "4.0.0", "my-fork": "github:me/fork"}}))
         self.assertEqual(stackinfo.detect(self.d), ["node", "next@15", "react@19", "@tanstack/react-query@5", "tailwindcss@4"])
 
+    def test_only_well_known_public_packages_leave_the_machine(self):
+        write(os.path.join(self.d, "package.json"), json.dumps({"dependencies": {"acme-billing-core": "^2.1.0", "acme-internal-auth": "*", "react": "19.0.0"}}))
+        self.assertEqual(stackinfo.detect(self.d), ["node", "react@19"])
+        write(os.path.join(self.d, "rs", "Cargo.toml"), '[dependencies]\nserde = "1.0"\nsecret-crate = { version = "1", registry = "corp" }\n')
+        self.assertEqual(stackinfo.detect(os.path.join(self.d, "rs")), ["rust", "serde@1"])
+
     def test_python_pyproject_and_requirements(self):
         write(os.path.join(self.d, "pyproject.toml"), '[project]\nname = "secret"\nrequires-python = ">=3.11"\n'
               'dependencies = [\n  "Django>=5.0",\n  "psycopg[binary]==3.2.1",\n  "mylib @ file:///x",\n]\n')
@@ -52,9 +58,9 @@ class Detect(unittest.TestCase):
         self.assertEqual(stackinfo.detect(self.d), [])
 
     def test_long_dependency_lists_are_capped_and_keep_the_language(self):
-        write(os.path.join(self.d, "package.json"), json.dumps({"dependencies": {f"lib{i}": f"{i}.0.0" for i in range(1, 41)}}))
+        write(os.path.join(self.d, "package.json"), json.dumps({"dependencies": {f"@tanstack/lib{i}": f"{i}.0.0" for i in range(1, 41)}}))
         got = stackinfo.detect(self.d)
-        self.assertEqual((len(got), got[0], got[1]), (12, "node", "lib1@1"))
+        self.assertEqual((len(got), got[0], got[1]), (12, "node", "@tanstack/lib1@1"))
 
 
 if __name__ == "__main__":
