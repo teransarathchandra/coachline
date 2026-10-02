@@ -179,12 +179,13 @@ def current_session(rows):
     return rows[-1][3]
 
 
-def build(path):
-    """State for render(): THIS thread's prompts (the session you are in, see current_session) plus what Claude knows from the rest."""
+def build(path, session=None, notice=True):
+    """State for render(): THIS thread's prompts (the session you are in, see current_session, or `session` when the caller knows it,
+    as the Claude Code pane does) plus what Claude knows from the rest."""
     rows = load_full(path); aft = rewrites(); L = coach.learned()
-    st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None}
-    if not rows: return st
-    cur = st["session"] = current_session(rows); prev = None
+    st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None, "notice": None}
+    if not rows: st["session"] = session; return st
+    cur = st["session"] = session or current_session(rows); prev = None
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
         if sid != cur or not coach.scorable(text) or text.startswith("/coach"): continue
@@ -196,6 +197,7 @@ def build(path):
                               "disc": discover.lines(rec["discovery"], 200) if rec.get("discovery") else [],
                               "error": None if adv else rec.get("error"), "off": coach.llm_off(proj), "advisable": coach.advisable(text, fails)})
     st["insights"] = insights(st["entries"], rows, L)
+    st["notice"] = coach.notice(cur) if notice and cur else None
     return st
 
 
@@ -275,15 +277,15 @@ def card_lines(st, ui, i, e, iw):
         if found:
             out += [("", "blank", "", "", None), ("web", "head", "Worth a look", "found on the web, not installed", None)]
             for k, x in found: out += [("web", k, w, "", None) for w in wrap(x, iw, "  ")]
-        return out
+        return out + notice_lines(st, iw)
     out.append(("", "blank", "", "", None))
     if e["error"]:
         out.append(("info", "head", "Analysis failed", "", None))
         out.append(("info", "bluedim", f"Claude's analysis failed ({str(e['error'])[:80]}). Press e to try again.", "", "enhance"))
-        return out
+        return out + notice_lines(st, iw)
     if e["off"]:
         out.append(("info", "bluedim", "This project is in llm-off.txt, so it is never sent to Claude.", "", None))
-        return out
+        return out + notice_lines(st, iw)
     if kind == "warn":
         out.append(("info", "head", "Analysing", "", None))
         out.append(("info", "bluedim", "Claude is analysing this prompt, usually about 20 seconds. This updates by itself.", "", None))
@@ -297,7 +299,13 @@ def card_lines(st, ui, i, e, iw):
         out.append(("", "blank", "", "", None))
         out.append(("info", "bluedim", "Press e for Claude's analysis and an enhanced prompt.", "", "enhance"))
         out += [("info", "bluedim", w, "", None) for w in wrap("Analyse every prompt automatically: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ")]
-    return out
+    return out + notice_lines(st, iw)
+
+
+def notice_lines(st, iw):
+    """The first-run notice (coach.notice), last on the card."""
+    if not st.get("notice"): return []
+    return [("", "blank", "", "", None)] + [("info", "bluedim", w, "", None) for w in wrap(st["notice"], iw)]
 
 
 # ---------------------------------------------------------------- rendering
@@ -680,6 +688,16 @@ def read_key(timeout):
     return ev[0] if ev else None
 
 
+def mark_shown(session, last=[None]):
+    """Which session this panel shows, so the Claude Code pane (pane.py) of ANOTHER session still does its own background work."""
+    if session == last[0]: return
+    last[0] = session
+    try:
+        os.makedirs(coach.STATE, exist_ok=True)
+        with open(os.path.join(coach.STATE, "watch.session"), "w", encoding="utf-8") as f: f.write(session or "")
+    except OSError: pass
+
+
 def beat(last=[0.0]):
     """Tell launch.py a panel is open (at most one write per second)."""
     if time.time() - last[0] >= 1:
@@ -738,7 +756,7 @@ def main(argv):
         loop(read_key, lambda rows: (out.write("\033[?2026h\033[H" + "\033[K\n".join(rows) + "\033[K\033[J\033[?2026l"), out.flush()),    # one synchronised write: no tearing
              lambda: (a.width or term_size()[0], a.height or term_size()[1]),
              lambda: build(a.history), stop=lambda: bool(a.exit_after) and time.time() - t0 > a.exit_after, heartbeat=beat,
-             work=lambda st, ui: autopilot(st, ui), emit=lambda s: (out.write(s), out.flush()))
+             work=lambda st, ui: (mark_shown(st["session"]), autopilot(st, ui))[1], emit=lambda s: (out.write(s), out.flush()))
     except KeyboardInterrupt:
         pass
     finally:
