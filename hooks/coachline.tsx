@@ -21,15 +21,22 @@ const COLOR: Record<string, string> = {
 }
 const HEAD_COLOR: Record<string, string> = { prompt: 'whiteBright', improve: 'blueBright', enh: 'blueBright', info: 'blueBright', web: 'green' }
 
+// Background work can outlive the module (a reload, the session ending): nothing is left to report to then.
+const ignore = () => undefined
+
 type Run = { ok: true; out: string } | { ok: false; err: string }
 
 let active = false          // an interactive session on macOS / Linux; false under `claude -p`, the SDK and on Windows
 let py: string | null = null
+let pyChecked = false         // asked once: on a Mac without developer tools, each `python3` call can raise the install dialog
+let inflight: Promise<PaneState | null> | null = null
+let again = false
 let width = 80
 let poll: { cancel: () => void } | null = null
 
 async function python($: EngineInterface): Promise<string | null> {
-  if (py) return py
+  if (pyChecked) return py
+  pyChecked = true
   for (const name of ['python3', 'python']) {
     try {
       const r = await $.process.run([name, '--version'], { timeoutMs: 5000 })
@@ -56,7 +63,28 @@ async function run($: EngineInterface, args: string[]): Promise<Run> {
   }
 }
 
+// One pane.py at a time: a refresh asked for while one runs is folded into a single rerun when it ends.
 async function refresh($: EngineInterface): Promise<PaneState | null> {
+  if (inflight) {
+    again = true
+    return inflight
+  }
+  inflight = (async () => {
+    let s: PaneState | null = null
+    do {
+      again = false
+      s = await refreshOnce($)
+    } while (again)
+    return s
+  })()
+  try {
+    return await inflight
+  } finally {
+    inflight = null
+  }
+}
+
+async function refreshOnce($: EngineInterface): Promise<PaneState | null> {
   const r = await run($, ['--json', '--session', await $.session.id(), '--width', String(width)])
   let s: PaneState | null = null
   if (r.ok) {
@@ -73,12 +101,22 @@ async function refresh($: EngineInterface): Promise<PaneState | null> {
   await update($, error, () => '')
   await update($, state, () => s)
   const busy = s.entries.some(e => e.state === 'pending')
-  if (busy && !poll) poll = $.clock.every(3000, () => void refresh($))
+  if (busy && !poll) poll = $.clock.every(3000, () => void refresh($).catch(ignore))
   if (!busy && poll) {
     poll.cancel()
     poll = null
   }
   return s
+}
+
+// Opens when the last answer says auto-open is on, or when there is no answer at all (no Python, pane.py failing): the pane then
+// shows why, and the person can close it.
+async function openIfWanted($: EngineInterface, s: PaneState | null): Promise<void> {
+  if (s ? s.auto_open : (await read($, state)) === null) await open($)
+}
+
+async function startUp($: EngineInterface): Promise<void> {
+  await openIfWanted($, await refresh($))
 }
 
 async function open($: EngineInterface): Promise<void> {
@@ -93,17 +131,18 @@ export const register: Register = on => {
     const r = await next(e)
     active = e.isInteractive && (await $.env.get('OS')) !== 'Windows_NT'
     if (!active) return r
-    const s = await refresh($)
-    if (s?.auto_open) await open($)
+    void startUp($).catch(ignore)              // the first prompt never waits for pane.py
     return r
   })
 
   on('prompt.submit', async ($, e, next) => {
     const r = await next(e)
     if (!active) return r
-    const s = await refresh($)
-    if (s?.auto_open) await open($)            // from a prompt the person entered: placed at any width
     await update($, sel, () => -1)             // follow the newest prompt
+    let s = await read($, state)
+    if (!s && inflight) s = await inflight     // the session start's first answer, if it is still coming
+    await openIfWanted($, s)                   // from a prompt the person entered: placed at any width
+    void refresh($).catch(ignore)
     return r
   })
 
@@ -135,7 +174,7 @@ export const register: Register = on => {
     const footer = [
       err ? <Text key="err" color="red">{err}</Text> : null,
       note ? <Text key="msg" dimColor>{note}</Text> : null,
-      s.notice ? <Text key="notice" dimColor>{s.notice}</Text> : null,
+      s.notice && !s.entries.length ? <Text key="notice" dimColor>{s.notice}</Text> : null,
     ]
     if (!s.entries.length) {
       return (
@@ -159,7 +198,7 @@ export const register: Register = on => {
       await update($, msg, () => (r.isCopied ? `copied the enhanced prompt (${cur.after.length} characters)` : NO_CLIPBOARD))
     }
     const analyse = async () => {
-      const r = await run($, ['--enhance', cur.key])
+      const r = await run($, s.session ? ['--enhance', cur.key, '--session', s.session] : ['--enhance', cur.key])
       await update($, msg, () => (r.ok ? r.out.trim() : r.err))
       await refresh($)
     }
@@ -176,14 +215,12 @@ export const register: Register = on => {
         return (
           <Box key={`l${n}`} justifyContent="space-between">
             <Text bold color={HEAD_COLOR[section] ?? 'blueBright'}>{text}</Text>
-            {action === 'copy' ? <Button key="copy" label={right || 'Copy'} onPress={copy} />
-              : action === 'enhance' ? <Button key="analyse" label="Analyse" onPress={analyse} />
+            {action === 'copy' ? <Button key="copy" label="Copy" onPress={copy} />
               : right ? <Text dimColor>{right}</Text> : null}
           </Box>
         )
       }
       if (action === 'enter') return <Button key="whole" label="Show the whole prompt" onPress={() => update($, full, () => true)} />
-      if (action === 'enhance') return <Button key={`an${n}`} label={text} onPress={analyse} />
       return <Text key={`l${n}`} color={COLOR[kind]} dimColor={kind === 'bluedim' || kind === 'meta'} bold={kind === 'prompt'}>{text}</Text>
     }
 
@@ -191,11 +228,14 @@ export const register: Register = on => {
       ? [<Text key="fullhead" bold>Your prompt</Text>, <Text key="fulltext" color="whiteBright">{cur.text}</Text>,
          <Button key="less" label="Show less" onPress={() => update($, full, () => false)} />]
       : cur.lines.map(line)
+    // watch.py's card names keys ("press e"); here one Analyse button stands for them, whatever the prompt's state
+    const canAnalyse = !cur.after && cur.state !== 'off'
 
     return (
       <Box flexDirection="column">
         {header}
         <Box flexDirection="column" marginY={1}>{card}</Box>
+        {canAnalyse && <Button key="analyse" label={cur.state === 'pending' ? 'Analyse again' : 'Analyse'} onPress={analyse} />}
         {s.patterns.length > 0 && (
           <Box flexDirection="column">
             <Button key="patterns" label={pats ? 'Hide patterns' : `${s.patterns.length} pattern${s.patterns.length === 1 ? '' : 's'} from your past chats`}

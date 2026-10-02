@@ -1,6 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+// the test runner has timers; the hooks environment's typings do not declare them
+declare const setTimeout: (fn: (value?: unknown) => void, ms: number) => unknown
+
 const STATE = (over = {}) =>
   JSON.stringify({ ai: true, auto_open: true, session: 's1', entries: [], patterns: [], skill: null, notice: null, ...over })
 
@@ -34,10 +37,13 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number } = {}) 
 }
 
 const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const
+// session.start leaves its pane.py run in the background (the first prompt never waits for it): let it finish
+const settle = () => new Promise(r => setTimeout(r, 50))
 
 test('opens the pane at session start on macOS', async ($, on) => {
   const w = world(on)
   await $.session.start(START)
+  await settle()
   expect(w.opened).toEqual(['coachline'])
   expect(w.ran.some(a => a.includes('--json') && a.includes('s1'))).toBe(true)
 })
@@ -45,7 +51,9 @@ test('opens the pane at session start on macOS', async ($, on) => {
 test('does nothing on Windows', async ($, on) => {
   const w = world(on, { os: 'Windows_NT' })
   await $.session.start(START)
+  await settle()
   await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+  await settle()
   expect(w.opened).toEqual([])
   expect(w.ran).toEqual([])
 })
@@ -53,7 +61,9 @@ test('does nothing on Windows', async ($, on) => {
 test('skips headless sessions', async ($, on) => {
   const w = world(on)
   await $.session.start({ ...START, surface: null, isInteractive: false })
+  await settle()
   await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+  await settle()
   expect(w.opened).toEqual([])
   expect(w.ran).toEqual([])
 })
@@ -61,14 +71,18 @@ test('skips headless sessions', async ($, on) => {
 test('does not open when auto-open is off', async ($, on) => {
   const w = world(on, { out: STATE({ auto_open: false }) })
   await $.session.start(START)
+  await settle()
   await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+  await settle()
   expect(w.opened).toEqual([])
 })
 
 test('opens again on a prompt while the pane is not placed', async ($, on) => {
   const w = world(on)
   await $.session.start(START)
+  await settle()
   await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+  await settle()
   expect(w.opened).toEqual(['coachline', 'coachline'])
 })
 
@@ -95,9 +109,118 @@ test('keeps the last good state when pane.py fails', async ($, on) => {
     },
   }))
   await $.session.start(START)
+  await settle()
   exit = 1
   await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+  await settle()
   const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
   expect(await ui.find({ text: /make the shoe site premium/ })).toBeDefined()
   expect(await ui.find({ text: /boom · run \/coach doctor/ })).toBeDefined()
+})
+
+const SUBMIT = { text: 'hi', wait: false, origin: { kind: 'composer' } } as const
+const RESULT = (stdout: string, exitCode = 0) => ({
+  value: { exitCode, stdout, stderr: exitCode ? 'boom' : '', isStdoutTruncated: false, isStderrTruncated: false },
+})
+
+function base(on: On) {
+  mock.env(on, {})
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.id', () => ({ value: 's1' }))
+  on('ui.panes', () => ({ value: [] }))
+}
+
+test('runs one pane.py at a time and catches up once afterwards', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  let running = 0
+  let most = 0
+  let runs = 0
+  on('process.run', async ($, e) => {
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    runs += 1
+    running += 1
+    most = Math.max(most, running)
+    await Promise.resolve()
+    await Promise.resolve()
+    running -= 1
+    return RESULT(STATE())
+  })
+  await $.session.start(START)
+  await settle()
+  await Promise.all([$.prompt.submit(SUBMIT), $.prompt.submit(SUBMIT), $.prompt.submit(SUBMIT)])
+  await settle()
+  expect(most).toBe(1)
+  expect(runs).toBeLessThanOrEqual(3)
+})
+
+test('opens the pane even without Python, so its error can be read', async ($, on) => {
+  base(on)
+  const opened: string[] = []
+  on('ui.open', ($, e) => { opened.push(e.id); return { value: { isPlaced: true } } })
+  on('process.run', () => { throw new Error('not found') })
+  await $.session.start(START)
+  await settle()
+  expect(opened).toEqual(['coachline'])
+})
+
+test('asks for Python once, not on every prompt', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  let asked = 0
+  on('process.run', ($, e) => {
+    if (e.argv.includes('--version')) asked += 1
+    throw new Error('not found')
+  })
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit(SUBMIT)
+  await settle()
+  await $.prompt.submit(SUBMIT)
+  expect(asked).toBe(2)          // python3, then python; never again this session
+})
+
+test('session start does not wait for pane.py', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  let release: () => void = () => {}
+  const held = new Promise<void>(r => { release = r })
+  on('process.run', async ($, e) => {
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    await held
+    return RESULT(STATE())
+  })
+  let started = false
+  const start = $.session.start(START).then(() => { started = true })
+  await Promise.race([start, new Promise(r => setTimeout(r, 200))])
+  expect(started).toBe(true)
+  release()
+  await settle()
+})
+
+const NO_ANSWER = {
+  ...ENTRY, glyph: '×', state: 'error', words: 'no answer yet, press e to retry',
+  lines: [['prompt', 'head', 'Your prompt', '15:28 · × no answer yet', null], ['prompt', 'prompt', 'make the shoe site premium', '', null]],
+}
+
+test('Analyse is there whenever there is no enhanced prompt, and it names the session', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const ran: string[][] = []
+  on('process.run', ($, e) => {
+    ran.push([...e.argv])
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    return RESULT(e.argv.includes('--enhance') ? 'asking Claude' : STATE({ entries: [NO_ANSWER] }))
+  })
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit(SUBMIT)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  await ui.press({ key: 'analyse' })
+  const enhance = ran.find(a => a.includes('--enhance'))
+  expect(enhance).toBeDefined()
+  expect(enhance?.slice(-4)).toEqual(['--enhance', 'k1', '--session', 's1'])
 })
