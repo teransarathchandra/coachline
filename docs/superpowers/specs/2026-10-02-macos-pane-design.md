@@ -93,8 +93,8 @@ button: the existing `review.py --install` path). Copying needs no Python: the m
 
 A value the user wrote (`/coach panel-ai off`) always wins. `auto_rewrite`, the old name of `panel_ai`, is still honoured.
 
-**First-run notice.** Until the user has seen it once (`notice_seen` in config, written by `pane.py` once it has returned the notice
-three times), the pane shows one dim line: `Claude analysis is on: prompts are sent redacted through your subscription ·
+**First-run notice.** During the user's first three sessions with analysis on by default (session ids kept in `notice_sessions` in
+config; never once the user has written `panel_ai` themselves), the pane shows one dim line: `Claude analysis is on: prompts are sent redacted through your subscription ·
 /coach panel-ai off`.
 
 **README.** The privacy section changes from "off until you turn it on" to "on by default on macOS and Linux, off on Windows", with
