@@ -3,6 +3,8 @@
   python pane.py --json --session ID [--width N]   this thread's state as JSON; queues Claude's analysis when it is on
   python pane.py --enhance KEY [--session ID]      ask Claude about one prompt now (the pane's Analyse button)
   python pane.py --install SLUG                    install a skill Claude drafted (the pane's Install button)
+  python pane.py --mark dismissed|adopted ID       hide a web suggestion for good, or note that you use it (the pane's buttons)
+  python pane.py --research KEY [--session ID]     search the web again for one analysed prompt (the pane's Look again button)
 
 Each call is a fresh process, so what watch.py keeps in memory between frames (which prompts were sent, when the history review is
 next due) is kept in ~/.claude/coach/pane-<session>.json. When a standalone panel (watch.py) is open, it does the background work.
@@ -89,7 +91,7 @@ def tick(session, width=80, io=None, now=None):
     for i, e in enumerate(st["entries"]):
         state, glyph, _kind, words = watch.status(e, st, ui)
         entries.append({"key": e["key"], "stamp": watch.stamp(e["ts"]), "glyph": glyph, "state": state, "words": words,
-                        "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw)]})
+                        "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True)]})
     skill = next((x["slug"] for x in st["insights"] if x.get("slug")), None)
     return {"ai": st["ai"], "auto_open": coach.auto_open_on(), "session": st["session"], "entries": entries,
             "patterns": watch.pattern_texts(st), "skill": skill, "notice": st["notice"]}
@@ -99,6 +101,7 @@ def main(argv):
     ap = argparse.ArgumentParser(description="coachline panel state for the Claude Code pane")
     ap.add_argument("--json", action="store_true"); ap.add_argument("--session"); ap.add_argument("--width", type=int, default=80)
     ap.add_argument("--enhance", metavar="KEY"); ap.add_argument("--install", metavar="SLUG")
+    ap.add_argument("--mark", nargs=2, metavar=("STATUS", "ID")); ap.add_argument("--research", metavar="KEY")
     a = ap.parse_args(argv)
     if a.enhance:
         coach.spawn_key(a.enhance)
@@ -107,6 +110,15 @@ def main(argv):
         print("asking Claude in the background (about 20 seconds)"); return 0
     if a.install:
         ok, msg = review.install_skill(a.install); print(msg); return 0 if ok else 1
+    if a.mark:
+        import memory
+        status, iid = a.mark
+        if status not in memory.STATUSES: print("status must be dismissed or adopted", file=sys.stderr); return 2
+        if not memory.mark(iid, status): print("could not save that choice", file=sys.stderr); return 1
+        print("hidden: it will not be suggested again" if status == "dismissed" else "noted: it will not be suggested again"); return 0
+    if a.research:
+        coach.spawn_research(a.research)
+        print("searching the web for this task in the background (up to ~4 minutes)"); return 0
     if a.json and a.session:
         sys.stdout.write(json.dumps(tick(a.session, a.width), ensure_ascii=False)); return 0
     ap.print_help(); return 2
