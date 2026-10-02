@@ -259,7 +259,7 @@ export const register: Register = on => {
         {header}
         <Box flexDirection="column" marginY={1}>{card}</Box>
         {canAnalyse && <Button key="analyse" label={cur.state === 'pending' ? 'Analyse again' : 'Analyse'} onPress={analyse} />}
-        {!!cur.after && cur.state !== 'off' && <Button key="research" label="Look again on the web" onPress={research} />}
+        {s.research && !!cur.after && cur.state !== 'off' && <Button key="research" label="Look again on the web" onPress={research} />}
         {s.patterns.length > 0 && (
           <Box flexDirection="column">
             <Button key="patterns" label={pats ? 'Hide patterns' : `${s.patterns.length} pattern${s.patterns.length === 1 ? '' : 's'} from your past chats`}

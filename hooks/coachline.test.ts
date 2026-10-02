@@ -5,7 +5,7 @@ import type { On } from 'claude-code'
 declare const setTimeout: (fn: (value?: unknown) => void, ms: number) => unknown
 
 const STATE = (over = {}) =>
-  JSON.stringify({ ai: true, auto_open: true, session: 's1', entries: [], patterns: [], skill: null, notice: null, ...over })
+  JSON.stringify({ ai: true, research: true, auto_open: true, session: 's1', entries: [], patterns: [], skill: null, notice: null, ...over })
 
 function world(on: On, opts: { os?: string; out?: string; exit?: number } = {}) {
   const opened: string[] = []
@@ -252,4 +252,28 @@ test('Hide, I use this and Look again call pane.py with the item and the prompt'
   expect(tail('dismissed')).toEqual(['--mark', 'dismissed', 'x.example.com/g'])
   expect(tail('adopted')).toEqual(['--mark', 'adopted', 'x.example.com/g'])
   expect(ran.find(a => a.includes('--research'))?.slice(-4)).toEqual(['--research', 'k1', '--session', 's1'])
+})
+
+test('Look again is not offered while web research is off', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const ran: string[][] = []
+  on('process.run', ($, e) => {
+    ran.push([...e.argv])
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    return RESULT(STATE({ entries: [WITH_WEB], research: false }))
+  })
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit(SUBMIT)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  let pressed = true
+  try {
+    await ui.press({ key: 'research' })
+  } catch {
+    pressed = false
+  }
+  expect(pressed).toBe(false)
+  expect(ran.some(a => a.includes('--research'))).toBe(false)
 })

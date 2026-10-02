@@ -93,7 +93,7 @@ def tick(session, width=80, io=None, now=None):
         entries.append({"key": e["key"], "stamp": watch.stamp(e["ts"]), "glyph": glyph, "state": state, "words": words,
                         "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True)]})
     skill = next((x["slug"] for x in st["insights"] if x.get("slug")), None)
-    return {"ai": st["ai"], "auto_open": coach.auto_open_on(), "session": st["session"], "entries": entries,
+    return {"ai": st["ai"], "research": coach.research_on(), "auto_open": coach.auto_open_on(), "session": st["session"], "entries": entries,
             "patterns": watch.pattern_texts(st), "skill": skill, "notice": st["notice"]}
 
 
@@ -117,6 +117,9 @@ def main(argv):
         if not memory.mark(iid, status): print("could not save that choice", file=sys.stderr); return 1
         print("hidden: it will not be suggested again" if status == "dismissed" else "noted: it will not be suggested again"); return 0
     if a.research:
+        import discover
+        why = discover.research_refusal(a.research)
+        if why: print(why, file=sys.stderr); return 1
         coach.spawn_research(a.research)
         print("searching the web for this task in the background (up to ~4 minutes)"); return 0
     if a.json and a.session:

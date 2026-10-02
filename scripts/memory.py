@@ -19,9 +19,17 @@ def item_id(item):
     return (host + u.path.rstrip("/")) or str(item.get("name", "")).strip().lower()
 
 
+def _record(v):
+    """A stored item with fields we can rely on, whatever a hand edit or an older version left in the file."""
+    v = dict(v); shown = v.get("shown")
+    v["shown"] = [k for k in shown if isinstance(k, str)] if isinstance(shown, list) else []
+    if not isinstance(v.get("ts"), (int, float)): v["ts"] = 0
+    return v
+
+
 def _items():
     d = discover._load(NAME).get("items")
-    return {k: v for k, v in d.items() if isinstance(v, dict)} if isinstance(d, dict) else {}
+    return {k: _record(v) for k, v in d.items() if isinstance(v, dict)} if isinstance(d, dict) else {}
 
 
 def _save(its):

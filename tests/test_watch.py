@@ -762,6 +762,20 @@ class Research(Base):
         self.analyse(0, SOLID, discovery=[KIT])
         self.assertNotEqual(before, watch.signature(watch.build(self.path)))
 
+    def test_new_research_with_the_same_number_of_items_redraws(self):
+        self.analyse(0, SOLID, discovery=[KIT])
+        before = watch.signature(watch.build(self.path))
+        self.analyse(0, SOLID, discovery=[WCAG])
+        self.assertNotEqual(before, watch.signature(watch.build(self.path)))
+        before = watch.signature(watch.build(self.path)); memory.mark(memory.item_id(WCAG), "adopted")
+        self.assertNotEqual(before, watch.signature(watch.build(self.path)))
+
+    def test_the_pane_note_names_its_buttons_not_keys(self):
+        self.analyse(0, SOLID, discovery=[KIT])
+        st = watch.build(self.path); e = st["entries"][0]
+        pane = " ".join(l[2] for l in watch.card_lines(st, watch.new_ui(), 0, e, 80, acts=True))
+        self.assertIn("Includes references from web research", pane); self.assertNotIn("x hides one", pane)
+
     def test_the_pane_gets_hide_and_use_actions_per_item(self):
         self.analyse(0, SOLID, discovery=[WCAG, KIT])
         st = watch.build(self.path); e = st["entries"][0]
@@ -803,7 +817,19 @@ class WebKeys(Base):
         self.analyse(0, SOLID)
         self.assertIn("no web suggestions on this prompt", flat(self.drive(["x"], io=self.io)[-1]))
 
+    def test_a_click_or_another_prompt_cancels_a_pending_choice(self):
+        self.analyse(0, SOLID, discovery=[WCAG, KIT])
+        st = watch.build(self.path); ui = watch.new_ui()
+        watch.handle(ui, st, "x", self.io); watch.handle(ui, st, ("mouse", 64, 1, 1, True), self.io); watch.handle(ui, st, "2", self.io)
+        watch.handle(ui, st, "x", self.io); st["entries"][0]["key"] = "another prompt"; watch.handle(ui, st, "2", self.io)
+        self.assertEqual(self.io.marks, [])
+
+    def test_r_respects_research_off(self):
+        self.write_json("config.json", {"panel_ai": True, "research": False}); self.analyse(0, SOLID)
+        self.assertIn("web research is off", flat(self.drive(["r"], io=self.io)[-1])); self.assertEqual(self.io.researched, [])
+
     def test_r_researches_the_selected_prompt_again_once_it_is_analysed(self):
+        self.write_json("config.json", {"panel_ai": True})
         self.assertIn("analyse this prompt first", flat(self.drive(["r"], io=self.io)[-1]))
         self.analyse(0, SOLID)
         frames = self.drive(["r"], io=self.io)

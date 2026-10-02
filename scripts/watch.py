@@ -212,8 +212,8 @@ def build(path, session=None, notice=True):
 
 def signature(st):
     return (st.get("session"), len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
-            st["learned"].get("generated"), st["review_running"], st["ai"], sum(len(e.get("items", [])) for e in st["entries"]),
-            st.get("research_paused"))
+            st["learned"].get("generated"), st["review_running"], st["ai"],
+            tuple((memory.item_id(x), x.get("status")) for e in st["entries"] for x in e.get("items", [])), st.get("research_paused"))
 
 
 # ---------------------------------------------------------------- presentation helpers
@@ -284,7 +284,8 @@ def card_lines(st, ui, i, e, iw, acts=False):
             out += [("", "blank", "", "", None), ("enh", "head", "Enhanced prompt", "✓ Copied" if copied else "c Copy", "copy")]
             for ln in e["after"].splitlines(): out += [("enh", "enh", w, "", None) for w in wrap(ln, iw)]
             if e.get("refs"):
-                out += [("enh", "bluedim", w, "", None) for w in wrap("Includes references from web research: x hides one, a marks one you use, r looks again.", iw)]
+                note = "Includes references from web research." if acts else "Includes references from web research: x hides one, a marks one you use, r looks again."
+                out += [("enh", "bluedim", w, "", None) for w in wrap(note, iw)]
         if e.get("items"):
             out += [("", "blank", "", "", None), ("web", "head", "Worth a look", "found on the web, not installed", None)]
             for n, it in enumerate(e["items"], 1):
@@ -547,13 +548,13 @@ def _mark(ui, it, action, io):
 def handle(ui, st, key, io=None):
     """Apply one key or mouse event to ui. True = quit. `io` (copy, enhance, review, install) is swapped for fakes in tests."""
     io = io or IO
-    if isinstance(key, tuple): ui["msg"] = ""; return _click(ui, st, key, io)
+    pick, ui["pick"] = ui.get("pick"), None                                   # x or a asked "which one?": only a number, on that same prompt, answers
+    if isinstance(key, tuple): ui["msg"] = ""; return _click(ui, st, key, io)   # a click or the wheel cancels it
     key = ALIASES.get(key, key); ui["msg"] = ""
     n = len(st["entries"]); i, e = cur_entry(ui, st)
-    pick, ui["pick"] = ui.get("pick"), None
-    if pick:                                                                  # x or a asked "which one?": a number answers, anything else cancels
-        its = e["items"] if e else []
-        if isinstance(key, str) and key.isdigit() and 1 <= int(key) <= len(its): return _mark(ui, its[int(key) - 1], pick, io)
+    if pick:
+        its = e["items"] if e and e["key"] == pick[1] else []
+        if isinstance(key, str) and key.isdigit() and 1 <= int(key) <= len(its): return _mark(ui, its[int(key) - 1], pick[0], io)
         ui["msg"] = "cancelled"
         return False
     if key == "q": return True
@@ -562,12 +563,13 @@ def handle(ui, st, key, io=None):
         if not its: ui["msg"] = "no web suggestions on this prompt"
         elif len(its) == 1: return _mark(ui, its[0], key, io)
         else:
-            ui["pick"] = key
+            ui["pick"] = (key, e["key"])
             ui["msg"] = f"which one? press 1-{len(its)} to {'hide it' if key == 'dismiss' else 'mark it as one you use'} (any other key cancels)"
         return False
     if key == "research":
         if e is None or not e["advice"]: ui["msg"] = "analyse this prompt first (e), then r looks on the web again"
         elif e["off"]: ui["msg"] = "this project is in llm-off.txt: not sending it anywhere"
+        elif not coach.research_on(): ui["msg"] = "web research is off (turn on: /coach research on)"
         else:
             io.research(e["key"])
             ui["msg"] = "searching the web for this task in the background (up to ~4 minutes); the card updates by itself"
