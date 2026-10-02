@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import advisor
 import coach
 import discover
+import memory
 import review
 
 POSIX_KEYS = {"[A": "up", "[B": "down", "[5~": "pgup", "[6~": "pgdn", "[H": "home", "[F": "end", "[1~": "home", "[4~": "end",
@@ -187,15 +188,19 @@ def build(path, session=None, notice=True):
           "research_paused": None}
     if not rows: st["session"] = session; return st
     cur = st["session"] = session or current_session(rows); prev = None
+    mem = memory.statuses()
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
         if sid != cur or not coach.scorable(text) or text.startswith("/coach"): continue
         fails = [n for n, fn in coach.RULES if not fn(text, gap)]
         key = coach.prompt_key((ts, proj, text)); rec = aft.get(key) or {}; adv = rec.get("advice") or {}
         after = adv.get("after") or (re.sub(r"^AFTER:\s*", "", rec.get("text", "")).strip() if rec.get("text") else "")
+        items = [dict(x, status=mem.get(memory.item_id(x))) for x in rec.get("discovery") or []
+                 if isinstance(x, dict) and x.get("url") and mem.get(memory.item_id(x)) != "dismissed"]
+        refs = discover.references(items) if after else ""
         st["entries"].append({"ts": ts, "key": key, "text": tidy(coach.redact(text))[:2000], "fails": fails,
-                              "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "advice": adv, "after": after,
-                              "disc": discover.lines(rec["discovery"], 200) if rec.get("discovery") else [],
+                              "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "advice": adv, "after": after + ("\n\n" + refs if refs else ""),
+                              "refs": bool(refs), "items": items, "disc": discover.lines(items, 200, numbered=True),
                               "error": None if adv else rec.get("error"), "off": coach.llm_off(proj), "advisable": coach.advisable(text, fails)})
     st["research_paused"] = discover.paused_until() if st["ai"] else None
     st["insights"] = insights(st["entries"], rows, L)
@@ -205,7 +210,8 @@ def build(path, session=None, notice=True):
 
 def signature(st):
     return (st.get("session"), len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
-            st["learned"].get("generated"), st["review_running"], st["ai"])
+            st["learned"].get("generated"), st["review_running"], st["ai"], sum(len(e.get("items", [])) for e in st["entries"]),
+            st.get("research_paused"))
 
 
 # ---------------------------------------------------------------- presentation helpers
@@ -250,7 +256,7 @@ def cur_entry(ui, st):
     return i, es[i]
 
 
-def card_lines(st, ui, i, e, iw):
+def card_lines(st, ui, i, e, iw, acts=False):
     """[(section, kind, text, right, action)]: the prompt you are looking at, what to improve, the enhanced prompt.
     section picks the gutter colour; kind 'head' is a section title with an optional right-hand label (a button when it has an action).
     Nothing in Improve is ever dropped or cut. When the card is taller than the pane the enhanced prompt, which is last, scrolls (PgDn, wheel)."""
@@ -275,10 +281,13 @@ def card_lines(st, ui, i, e, iw):
             copied = time.time() - ui["copied"].get(e["key"], 0) < 8
             out += [("", "blank", "", "", None), ("enh", "head", "Enhanced prompt", "✓ Copied" if copied else "c Copy", "copy")]
             for ln in e["after"].splitlines(): out += [("enh", "enh", w, "", None) for w in wrap(ln, iw)]
-        found = [(k, x) for k, x in e["disc"] if k != "dim"]
-        if found:
+            if e.get("refs"):
+                out += [("enh", "bluedim", w, "", None) for w in wrap("Includes references from web research: x hides one, a marks one you use, r looks again.", iw)]
+        if e.get("items"):
             out += [("", "blank", "", "", None), ("web", "head", "Worth a look", "found on the web, not installed", None)]
-            for k, x in found: out += [("web", k, w, "", None) for w in wrap(x, iw, "  ")]
+            for n, it in enumerate(e["items"], 1):
+                for k, x in discover.item_lines(it, n, 200): out += [("web", k, w, "", None) for w in wrap(x, iw, "  ")]
+                if acts: out.append(("web", "itemacts", "", "", "item:" + memory.item_id(it)))
         elif st.get("research_paused"):
             out.append(("", "blank", "", "", None))
             out += [("info", "bluedim", w, "", None) for w in wrap(f"web research paused until {st['research_paused']} (usage limit); the enhanced prompt still works", iw)]

@@ -2,7 +2,7 @@ import json, os, re, subprocess, sys, tempfile, time, unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
-import coach, watch  # noqa: E402
+import coach, memory, watch  # noqa: E402
 os.environ["COACHLINE_PLATFORM"] = "Windows"   # these tests pin the opt-in defaults; tests/test_defaults.py covers macOS and Linux
 
 T0 = 1750000000000
@@ -717,6 +717,57 @@ class Notice(unittest.TestCase):
                                capture_output=True, text=True, encoding="utf-8", env=env, input="")
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn("prompts go redacted to your subscription", flat(r.stdout))
+
+
+WCAG = {"name": "WCAG 2.2", "kind": "docs", "why": "accessibility rules to follow", "url": "https://www.w3.org/TR/WCAG22/", "install": "", "stars": None, "pushed": None}
+KIT = {"name": "GreatKit", "kind": "tool", "why": "better", "url": "https://x.example.com/g", "install": "npm i g", "stars": None, "pushed": None}
+
+
+class Research(Base):
+    def setUp(self):
+        super().setUp(); history(self.cfg, [("now", "p", SOLID)])
+
+    def entry(self):
+        return watch.build(self.path)["entries"][0]
+
+    def test_research_adds_references_to_the_enhanced_prompt_you_copy(self):
+        self.analyse(0, SOLID, discovery=[WCAG, KIT])
+        e = self.entry()
+        self.assertTrue(e["after"].endswith("References (checked links from web research):\n"
+                                            "- Follow WCAG 2.2: https://www.w3.org/TR/WCAG22/\n- Use GreatKit: https://x.example.com/g"))
+        card = card_of(once(self.cfg, 100, 60))
+        for want in ("1. better: WCAG 2.2 (docs)", "2. better: GreatKit (tool)", "Includes references from web research: x hides one"):
+            self.assertIn(want, card)
+
+    def test_a_hidden_suggestion_leaves_the_card_and_the_references_and_a_used_one_is_marked(self):
+        self.analyse(0, SOLID, discovery=[WCAG, KIT])
+        memory.mark(memory.item_id(KIT), "dismissed"); memory.mark(memory.item_id(WCAG), "adopted")
+        e = self.entry()
+        self.assertEqual([x["name"] for x in e["items"]], ["WCAG 2.2"]); self.assertNotIn("GreatKit", e["after"])
+        self.assertIn("1. better: WCAG 2.2 (docs) · you use this", " ".join(t for _k, t in e["disc"]))
+
+    def test_no_references_without_an_enhanced_prompt_or_without_research(self):
+        self.analyse(0, SOLID)
+        self.assertNotIn("References", self.entry()["after"]); self.assertFalse(self.entry()["refs"])
+
+    def test_p1_records_still_show_with_references(self):
+        self.analyse(0, SOLID, discovery=[{"name": "OldKit", "kind": "mcp", "why": "old", "url": "https://old.example.com/k", "install": "", "stars": 5, "pushed": None}])
+        e = self.entry()
+        self.assertIn("- Use OldKit: https://old.example.com/k", e["after"])
+        self.assertIn("1. better: OldKit (mcp)", " ".join(t for _k, t in e["disc"]))
+
+    def test_research_landing_redraws_the_standalone_panel(self):
+        self.analyse(0, SOLID)
+        before = watch.signature(watch.build(self.path))
+        self.analyse(0, SOLID, discovery=[KIT])
+        self.assertNotEqual(before, watch.signature(watch.build(self.path)))
+
+    def test_the_pane_gets_hide_and_use_actions_per_item(self):
+        self.analyse(0, SOLID, discovery=[WCAG, KIT])
+        st = watch.build(self.path); e = st["entries"][0]
+        acts = [l[4] for l in watch.card_lines(st, watch.new_ui(), 0, e, 80, acts=True) if l[1] == "itemacts"]
+        self.assertEqual(acts, ["item:w3.org/tr/wcag22", "item:x.example.com/g"])
+        self.assertFalse([l for l in watch.card_lines(st, watch.new_ui(), 0, e, 80) if l[1] == "itemacts"])   # never in the terminal panel
 
 
 if __name__ == "__main__":
