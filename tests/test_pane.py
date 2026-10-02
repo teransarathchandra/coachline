@@ -97,5 +97,22 @@ class Tick(unittest.TestCase):
         self.assertEqual(json.loads(r.stdout)["entries"][0]["text"], VAGUE)
 
 
+class Actions(unittest.TestCase):
+    def test_enhance_starts_one_background_analysis(self):
+        with mock.patch.object(coach, "spawn_key") as spawn:
+            self.assertEqual(pane.main(["--enhance", "123.0:abc"]), 0)
+        spawn.assert_called_once_with("123.0:abc")
+
+    def test_install_reports_what_happened(self):
+        with mock.patch.object(pane.review, "install_skill", return_value=(False, "no draft at x; run the review first")):
+            with mock.patch("sys.stdout") as out:
+                self.assertEqual(pane.main(["--install", "write-commit"]), 1)
+        self.assertIn("no draft", "".join(c.args[0] for c in out.write.call_args_list))
+
+    def test_no_arguments_is_an_error_not_a_crash(self):
+        with mock.patch("sys.stdout"):
+            self.assertEqual(pane.main([]), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
