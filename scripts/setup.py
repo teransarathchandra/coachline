@@ -4,10 +4,11 @@
   python setup.py --panel-ai on|off     Claude analyses your history and every prompt of this thread (background `claude -p`
                                         calls on your subscription; no API key; llm-off.txt projects are never sent)
   python setup.py --auto-open on|off    split a pane with the panel at session start (tmux or Windows Terminal only)
-  python setup.py --discover on|off     web search for better tools per kind of task (inside the analysis; verified locally)
+  python setup.py --research on|off     web research once per new task: tools, modern approaches, docs, reference sites (verified here)
+  python setup.py --model fast|research haiku|sonnet|opus   the model of each pass (defaults: fast haiku, research sonnet)
   python setup.py --uninstall           remove the old coachline statusline entry from settings.json
   python setup.py --refresh             silent: used by the SessionStart hook (refreshes the launcher, records which session started, migrates the old statusline)
-Old names still work: --advisor and --auto-rewrite mean --panel-ai.
+Old names still work: --advisor and --auto-rewrite mean --panel-ai, --discover means --research.
 """
 import json, os, shutil, sys, threading
 
@@ -16,7 +17,7 @@ import coach
 import launch
 
 SETTINGS = os.path.join(coach.CONFIG, "settings.json")
-KNOWN = {"--panel-ai", "--advisor", "--auto-rewrite", "--auto-open", "--discover", "--uninstall", "--refresh"}
+KNOWN = {"--panel-ai", "--advisor", "--auto-rewrite", "--auto-open", "--research", "--discover", "--model", "--uninstall", "--refresh"}
 
 
 def ours(sl):
@@ -79,16 +80,24 @@ def main(argv):
         on = onoff(argv, next(f for f in ("--panel-ai", "--advisor", "--auto-rewrite") if f in argv))
         coach.set_setting("panel_ai", on)
         print("Claude analysis ON. In the background, on your Claude subscription (no API key): (1) each prompt of the current thread is "
-              "redacted and sent to `claude -p` (Haiku) with the names of your installed skills and plugins, to get improvements and an enhanced "
+              f"redacted and sent to `claude -p` ({coach.model_for('fast')}) with the names of your installed skills and plugins, to get improvements and an enhanced "
               "prompt; (2) every ~2 days Claude analyses your last 90 days of redacted prompts to find requests you repeat and mistakes you "
               "keep making. Projects in llm-off.txt are never sent. Turn off: setup.py --panel-ai off" if on else "Claude analysis OFF.")
         return
-    if "--discover" in argv:
-        on = onoff(argv, "--discover")
-        coach.set_setting("discover", on)
-        print("Discovery ON (it runs inside Claude analysis, so keep --panel-ai on): once per kind of task, Claude searches the web for "
-              "better tools/skills/plugins and every suggestion is verified here before it is shown. Only a generic description of "
-              "the kind of task is used in searches, never your prompt. Nothing is installed. Turn off: setup.py --discover off" if on else "Discovery OFF.")
+    if "--research" in argv or "--discover" in argv:
+        on = onoff(argv, "--research" if "--research" in argv else "--discover")
+        coach.set_setting("research", on)
+        print("Research ON (part of Claude analysis): once per new task, Claude searches the web for better tools, modern approaches, "
+              "official docs and reference sites, and every suggestion is verified here before it is shown. Searches get a generic "
+              "task topic, your stack's framework names and versions, and your installed skill names, never your prompt. Nothing is "
+              "installed. Turn off: setup.py --research off" if on else "Research OFF.")
+        return
+    if "--model" in argv:
+        k = argv.index("--model"); which, name = (argv[k + 1:k + 3] + ["", ""])[:2]
+        if which not in ("fast", "research") or name not in coach.MODELS:
+            sys.exit("usage: setup.py --model fast|research haiku|sonnet|opus")
+        coach.set_setting("model_" + which, name)
+        print(f"The {which} pass now uses {name}.")
         return
     if "--auto-open" in argv:
         on = onoff(argv, "--auto-open")
@@ -100,7 +109,8 @@ def main(argv):
     print(f"coachline settings ({coach.USER_CFG})")
     print(f"  Claude analysis (--panel-ai):  {'ON' if coach.ai_on() else 'off'}")
     print(f"  auto-open a split pane (--auto-open):  {'ON' if coach.auto_open_on() else 'off'}")
-    print(f"  web discovery (--discover):  {'ON' if coach.setting('discover', False) else 'off'}")
+    print(f"  web research per new task (--research):  {'ON' if coach.research_on() else 'off'}")
+    print(f"  fast model:  {coach.model_for('fast')}   research model:  {coach.model_for('research')}   (--model fast|research <name>)")
     print(f"open the panel by hand, in a second tab or pane:\n  {launch.panel_command()}")
 
 

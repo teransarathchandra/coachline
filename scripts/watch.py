@@ -183,7 +183,8 @@ def build(path, session=None, notice=True):
     """State for render(): THIS thread's prompts (the session you are in, see current_session, or `session` when the caller knows it,
     as the Claude Code pane does) plus what Claude knows from the rest."""
     rows = load_full(path); aft = rewrites(); L = coach.learned()
-    st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None, "notice": None}
+    st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None, "notice": None,
+          "research_paused": None}
     if not rows: st["session"] = session; return st
     cur = st["session"] = session or current_session(rows); prev = None
     for ts, proj, text, sid in rows:
@@ -196,6 +197,7 @@ def build(path, session=None, notice=True):
                               "fixes": [f"{n}: {coach.FIX[n]}" for n in fails], "advice": adv, "after": after,
                               "disc": discover.lines(rec["discovery"], 200) if rec.get("discovery") else [],
                               "error": None if adv else rec.get("error"), "off": coach.llm_off(proj), "advisable": coach.advisable(text, fails)})
+    st["research_paused"] = discover.paused_until() if st["ai"] else None
     st["insights"] = insights(st["entries"], rows, L)
     st["notice"] = coach.notice(cur) if notice and cur else None
     return st
@@ -277,6 +279,9 @@ def card_lines(st, ui, i, e, iw):
         if found:
             out += [("", "blank", "", "", None), ("web", "head", "Worth a look", "found on the web, not installed", None)]
             for k, x in found: out += [("web", k, w, "", None) for w in wrap(x, iw, "  ")]
+        elif st.get("research_paused"):
+            out.append(("", "blank", "", "", None))
+            out += [("info", "bluedim", w, "", None) for w in wrap(f"web research paused until {st['research_paused']} (usage limit); the enhanced prompt still works", iw)]
         return out + notice_lines(st, iw)
     out.append(("", "blank", "", "", None))
     if e["error"]:

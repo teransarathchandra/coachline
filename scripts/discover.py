@@ -1,14 +1,16 @@
-"""discover.py - web discovery: better tools, skills, plugins or workflows for the kind of task you are doing.
+"""discover.py - the research pass: better tools, modern approaches, official docs and reference sites for the task you started.
 
-Claude (your own subscription via `claude -p`; its only tools are WebSearch and WebFetch) searches the web for
-things that do this job better than what you have. Nothing it says is trusted: every suggestion is verified HERE
+Claude (your own subscription via `claude -p`, model `coach.model_for("research")`; its only tools are WebSearch and WebFetch)
+gets a generic topic, your stack (framework names and major versions, from stackinfo.py) and the names of your installed skills,
+never your prompt. Nothing it says is trusted: every suggestion is verified HERE
   - https URL on a public host (no localhost / private IPs; redirects are checked too),
   - the URL answers HTTP 200 and the page mentions the name,
   - a GitHub repo must exist (the API returns real stars and last push); archived or ~18-month-stale repos are dropped,
+  - something made only for an older major version than your stack uses is dropped,
   - anything you already have is dropped.
 Unverifiable suggestions are dropped. Nothing is ever installed. Text is stripped of terminal escapes before display.
-It runs once per kind of task (cached 24h). Opt in with: setup.py --discover on
-  python discover.py --last        run it now for your last prompt's kind of task (ignores the cache)
+It runs once per new task (cached per topic and stack for 7 days); a usage limit pauses it until the reset time.
+  python discover.py --last        run it now for your last prompt (ignores the cache and any pause)
 """
 import argparse, datetime as dt, ipaddress, json, os, re, socket, sys, time, urllib.error, urllib.parse, urllib.request
 
@@ -16,8 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import coach
 from review import parse_json
 
-TTL, MAX_ITEMS, STALE_DAYS = 24 * 3600, 3, 550
-KINDS = {"skill", "plugin", "mcp", "tool", "library", "workflow"}
+TTL, MAX_ITEMS, MAX_RAW, STALE_DAYS, PAUSE = 7 * 86400, 4, 8, 550, 3600
+KINDS = {"tool", "tech", "docs", "inspo"}       # anything else (skill, plugin, mcp, library, workflow, from older answers) is a tool
+LIMIT = re.compile(r"usage limit|rate limit|limit reached|hit your limit|too many requests|\b429\b|\blimit\b.{0,60}\breset", re.I)
 STOP = set("the and for with your that this from into make have using want need over under about more less very".split())
 
 
@@ -68,16 +71,31 @@ def github_repo(url):
 def _tokens(s): return [t for t in re.findall(r"[a-z0-9]{3,}", s.lower()) if t not in STOP]
 
 
+def older_major(item, stack):
+    """True when the item's NAME names a framework of the stack only at majors older than the project's ('Next.js 13' on next@15).
+    Only whole version numbers right after the framework's own name count: not 'eslint-plugin-react 7', 'react 3d' or the 'why'."""
+    text = coach.clean(item.get("name", "")).lower()
+    for s in stack:
+        name, _, major = s.rpartition("@")
+        if not name or not major.isdigit(): continue
+        base = re.escape(name[1:].split("/")[0] if name.startswith("@") else name.split("/")[-1].split(".")[0])   # @angular/core -> angular
+        seen = [int(m) for m in re.findall(r"(?<![a-z0-9/@.-])" + base + r"(?:\.?js)?\s*v?(\d+)(?![a-z0-9.])", text)]
+        if seen and max(seen) < int(major): return True
+    return False
+
+
 # ---------------------------------------------------------------- verification
-def verify_item(item, have, get=http_get, now=None):
+def verify_item(item, have, get=http_get, now=None, stack=()):
     """(clean item, None) or (None, reason). Never trusts the model's claims."""
     if not isinstance(item, dict): return None, "not an object"
     name, url = coach.clean(item.get("name", ""))[:60], str(item.get("url", "")).strip()
     if not name or not public_https(url): return None, f"'{name}': no usable https url"
     if name.lower() in have: return None, f"'{name}': you already have it"
+    kind = item.get("kind") if item.get("kind") in KINDS else "tool"
+    if older_major(item, stack): return None, f"'{name}': made for an older version than this project uses"
     toks = _tokens(name)
-    out = {"name": name, "kind": item.get("kind") if item.get("kind") in KINDS else "tool", "why": coach.clean(item.get("why", ""))[:140],
-           "url": url, "install": coach.clean(item.get("install", "")).lstrip("$ ")[:120], "stars": None, "pushed": None}
+    out = {"name": name, "kind": kind, "why": coach.clean(item.get("why", ""))[:140], "url": url,
+           "install": coach.clean(item.get("install", "")).lstrip("$ ")[:120] if kind == "tool" else "", "stars": None, "pushed": None}
     gh = github_repo(url)
     if gh:
         st, txt = get(f"https://api.github.com/repos/{gh[0]}/{gh[1]}")
@@ -101,32 +119,46 @@ def verify_item(item, have, get=http_get, now=None):
     return out, None
 
 
-def verify_all(raw, have, get=http_get):
+def verify_all(raw, have, get=http_get, stack=()):
     ok, dropped = [], []
-    for it in (raw if isinstance(raw, list) else [])[:6]:
-        v, why = verify_item(it, have, get)
+    for it in (raw if isinstance(raw, list) else [])[:MAX_RAW]:
+        v, why = verify_item(it, have, get, stack=stack)
         if v and v["url"] not in [o["url"] for o in ok]: ok.append(v)
         elif why: dropped.append(why)
     return ok[:MAX_ITEMS], dropped
 
 
 # ---------------------------------------------------------------- asking Claude
-def topic_key(advice):
-    words = sorted({w for w in _tokens(advice.get("summary", "")) if len(w) >= 4})[:3]
-    return advice.get("task", "other") + ":" + " ".join(words)
+def topic_key(advice, stack=()):
+    """The same task on the same stack is researched once a week, across sessions and projects."""
+    words = sorted({w for w in _tokens(advice.get("topic") or advice.get("summary", "")) if len(w) >= 3})[:6]
+    return advice.get("task", "other") + ":" + " ".join(words) + "|" + ",".join(sorted(stack))
 
 
-PROMPT = """You help a developer find BETTER tools for a kind of task. Kind of task (generic; this is all you know): "{task}: {summary}".
-Use WebSearch, and WebFetch to confirm, to find up to 3 currently maintained things that could do this job better than a plain
-Claude Code session: Claude Code skills or plugins, MCP servers, CLI tools, libraries, or proven workflows. Search generic terms only.
-Only report a url you actually saw in the results or opened; do not guess urls.
+PROMPT = """You research for a developer who is about to give a task to Claude Code (a coding agent).
+Task (generic; this is all you know about it): "{task}: {topic}".
+Project stack, from its manifest files: {stack}.
+Already installed in their Claude Code (do not recommend these or near-duplicates): {have}.
+Use WebSearch, and WebFetch to confirm, to find up to 4 CURRENT things that would make the result clearly better. Mix kinds when it helps:
+ - "tool": a Claude Code skill or plugin, an MCP server, a CLI or a library
+ - "tech": a modern approach, API or framework feature to use instead of the obvious one
+ - "docs": official documentation, a design guideline or a spec to follow (for example WCAG, Apple HIG, the framework's own docs)
+ - "inspo": a real, live site or gallery that shows what a great result looks like
+Prefer things maintained or updated in the last 12 months. Match the stack's major versions: never suggest something made for an
+older major version, or a deprecated API. Search generic terms only. Every item needs the url of its official page, one you actually
+saw in results or opened; do not guess urls.
 Return ONLY a JSON object, no prose, no code fence:
-{{"items":[{{"name":"official name","kind":"skill|plugin|mcp|tool|library|workflow","why":"at most 20 words: why it does this job better","url":"https://...","install":"exact install command, or empty"}}]}}
-Empty list if nothing clearly better exists."""
+{{"items":[{{"name":"official name","kind":"tool|tech|docs|inspo","why":"at most 20 words: what it makes better for THIS task","url":"https://...","install":"exact install command for a tool, else empty"}}]}}
+Empty list if nothing is clearly better than a plain Claude Code session."""
 
 
-def find(advice, timeout=150):
-    text = coach.ask_claude(PROMPT.format(task=advice.get("task", "other"), summary=advice.get("summary", "")), timeout=timeout, web=True)
+def find(advice, stack=(), have=None, timeout=240):
+    have = sorted(have_names() if have is None else have)
+    text = coach.ask_claude(PROMPT.format(task=advice.get("task", "other"), topic=advice.get("topic") or advice.get("summary", ""),
+                                          stack=", ".join(stack) or "unknown",
+                                          have=", ".join(have[:80]) or "nothing"),
+                            model=coach.model_for("research"), timeout=timeout, web=True)
+    if LIMIT.search(text) and "{" not in text: raise RuntimeError(text[:300])     # a limit notice printed as the answer
     return parse_json(text).get("items", [])
 
 
@@ -136,28 +168,157 @@ def have_names():
     return {n.lower() for i in inst for n in (i["name"], i["name"].split(":")[-1])}
 
 
-def _cache():
+def _load(name):
     try:
-        with open(os.path.join(coach.STATE, "discover-cache.json"), encoding="utf-8") as f: d = json.load(f)
+        with open(os.path.join(coach.STATE, name), encoding="utf-8") as f: d = json.load(f)
         return d if isinstance(d, dict) else {}
     except (OSError, ValueError):
         return {}
 
 
-def for_advice(advice, fresh=False, get=http_get):
-    """Verified items for this kind of task. Cached per topic for 24h. Never raises: discovery is a bonus."""
+def _dump(name, d):
+    """Write whole or not at all: another research or analysis job may be reading it."""
+    os.makedirs(coach.STATE, exist_ok=True)
+    tmp = os.path.join(coach.STATE, f"{name}.{os.getpid()}.tmp")
+    with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f)
+    for i in range(5):                            # Windows refuses to replace a file another process is reading: wait a moment
+        try:
+            os.replace(tmp, os.path.join(coach.STATE, name)); return
+        except PermissionError:
+            if i == 4:
+                try: os.remove(tmp)
+                except OSError: pass
+                raise
+            time.sleep(0.05 * (i + 1))
+
+
+def pause_until(err, now=None):
+    """When the subscription says no (a usage limit): the epoch time research may try again. The reset time Claude names
+    ('...|1759420800' or 'resets 2pm' / 'resets at 14:00'), else an hour from now."""
+    now = time.time() if now is None else now
+    m = re.search(r"\|(\d{10})\b", err)
+    if m and float(m.group(1)) > now: return float(m.group(1))
+    m = re.search(r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", err, re.I)
+    if m:
+        h, mi, ap = int(m.group(1)), int(m.group(2) or 0), (m.group(3) or "").lower()
+        if ap == "pm" and h < 12: h += 12
+        if ap == "am" and h == 12: h = 0
+        if h < 24 and mi < 60:
+            t = dt.datetime.fromtimestamp(now).replace(hour=h, minute=mi, second=0, microsecond=0)
+            if t.timestamp() <= now: t += dt.timedelta(days=1)
+            return t.timestamp()
+    return now + PAUSE
+
+
+def paused_until(now=None):
+    """'HH:MM' while a usage limit pauses research, else None."""
+    t = _load("research-state.json").get("paused_until", 0)
+    now = time.time() if now is None else now
+    return dt.datetime.fromtimestamp(t).strftime("%H:%M") if isinstance(t, (int, float)) and t > now else None
+
+
+def for_advice(advice, stack=(), fresh=False, get=http_get):
+    """Verified items for this task on this stack. Cached per topic and stack for 7 days. Never raises: research is a bonus.
+    A usage limit pauses research; fresh (a run the user asked for) ignores the cache and the pause."""
     try:
-        key, cache = topic_key(advice), _cache()
+        if not fresh and paused_until(): return []
+        key, cache = topic_key(advice, stack), _load("discover-cache.json")
         hit = cache.get(key)
         if hit and not fresh and time.time() - hit.get("ts", 0) < TTL: return hit.get("items", [])
-        items, _dropped = verify_all(find(advice), have_names() | {u["name"].lower() for u in advice.get("use", [])}, get)
-        cache = {k: v for k, v in cache.items() if time.time() - v.get("ts", 0) < 7 * 86400}
+        try: raw = find(advice, stack)
+        except RuntimeError as e:
+            if LIMIT.search(str(e)):
+                st = _load("research-state.json"); st["paused_until"] = pause_until(str(e)); _dump("research-state.json", st)
+            return []
+        items, _dropped = verify_all(raw, have_names() | {u["name"].lower() for u in advice.get("use", [])}, get, stack)
+        cache = {k: v for k, v in cache.items() if isinstance(v, dict) and time.time() - v.get("ts", 0) < TTL}
         cache[key] = {"ts": time.time(), "items": items}
-        os.makedirs(coach.STATE, exist_ok=True)
-        with open(os.path.join(coach.STATE, "discover-cache.json"), "w", encoding="utf-8") as f: json.dump(cache, f)
+        try: _dump("discover-cache.json", cache)
+        except OSError: pass                      # the results still count; only the cache missed them
         return items
-    except (RuntimeError, ValueError, OSError, KeyError):
+    except (RuntimeError, ValueError, OSError, KeyError, TypeError, AttributeError):
         return []
+
+
+LOCK_STALE = 600
+
+
+def wanted(session, advice):
+    """Research this prompt? When it starts a new task, or when this session has had no research yet and none is under way."""
+    if advice.get("new_task") is not False: return True
+    st = _load("research-state.json")
+    return session not in (st.get("done") or {}) and time.time() - (st.get("pending") or {}).get(session, 0) > 2 * LOCK_STALE
+
+
+def _mark(session, done=False, pending=False):
+    """Record a session as researched (done) or as waiting for research (pending); neither clears both."""
+    st, now = _load("research-state.json"), time.time()
+    for k in ("done", "pending"):
+        st[k] = {s: t for s, t in (st.get(k) or {}).items() if isinstance(t, (int, float)) and now - t < TTL and s != session}
+    if done: st["done"][session] = now
+    if pending: st["pending"][session] = now
+    _dump("research-state.json", st)
+
+
+def _lock():
+    """A token when this job may research (the lock file holds it), else None."""
+    p = os.path.join(coach.STATE, "research.running")
+    try:
+        if time.time() - os.path.getmtime(p) > LOCK_STALE: os.remove(p)      # a crashed job never blocks research for good
+    except OSError:
+        pass
+    tok = f"{os.getpid()}-{time.time()}"
+    try:
+        os.makedirs(coach.STATE, exist_ok=True)
+        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY); os.write(fd, tok.encode()); os.close(fd)
+        return tok
+    except OSError:
+        return None
+
+
+def _unlock(tok):
+    """Remove the lock only if it is still ours (it may have been taken over as stale)."""
+    p = os.path.join(coach.STATE, "research.running")
+    try:
+        with open(p, encoding="utf-8") as f: mine = f.read() == tok
+        if mine: os.remove(p)
+    except OSError:
+        pass
+
+
+def _research(w, save):
+    items = for_advice(w["advice"], w.get("stack") or ())
+    if items: save(w["key"], w["advice"], items)
+    # a usage limit: the session is not researched, and its next prompt tries again
+    _mark(w.get("session", ""), done=not paused_until())
+
+
+def request(key, session, advice, stack, save):
+    """Research for this prompt, newest request first. If another job is researching, leave the request for it and return: it
+    takes the newest waiting request when it finishes, so an older one that never started is dropped. One web call at a time.
+    save(key, advice, items) records a result (coach._save_discovery appends it to rewrites.jsonl). Never raises."""
+    try: _request(key, session, advice, stack, save)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError): pass
+
+
+def _request(key, session, advice, stack, save):
+    _mark(session, pending=True)                   # its follow-ups wait for this research instead of asking again
+    _dump("research-want.json", {"key": key, "session": session, "advice": advice, "stack": list(stack), "ts": time.time()})
+    done, p = None, os.path.join(coach.STATE, "research.running")
+    while True:
+        tok = _lock()
+        if not tok: return
+        try:
+            while True:
+                w = _load("research-want.json")
+                if not w.get("key") or w["key"] == done: break
+                try: os.utime(p)                   # a long drain is not a crashed job
+                except OSError: pass
+                done = w["key"]; _research(w, save)
+        finally:
+            _unlock(tok)
+        w = _load("research-want.json")                # a request written just before the unlock must not be lost
+        if not w.get("key") or w["key"] == done: return
 
 
 # ---------------------------------------------------------------- display
@@ -204,8 +365,9 @@ def main(argv):
         pass
     try: adv = adv or advisor.advise(coach.redact(rows[i][2]), fails)
     except (RuntimeError, ValueError) as e: sys.exit(f"advice failed: {e}")
-    print(f"kind of task: {adv['task']} - {adv['summary']}\nsearching the web (up to ~2 min)...")
-    items = for_advice(adv, fresh=True)
+    import stackinfo
+    print(f"kind of task: {adv['task']} - {adv.get('topic') or adv['summary']}\nsearching the web (up to ~4 min)...")
+    items = for_advice(adv, stackinfo.detect(rows[i][1]), fresh=True)
     if not items: print("nothing verifiable found (suggestions that fail the checks are dropped)."); return 0
     for _k, t in lines(items, 100): print(t)
     return 0

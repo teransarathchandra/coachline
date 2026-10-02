@@ -125,7 +125,7 @@ class SetupSwitches(unittest.TestCase):
             self.assertEqual(self.run_setup(cfg, "--discover", "on").returncode, 0)
             self.run_setup(cfg, "--advisor", "off")                                   # old name = --panel-ai
             c = self.read(conf)
-            self.assertEqual((c["panel_ai"], c["auto_open_watch"], c["discover"]), (False, True, True))
+            self.assertEqual((c["panel_ai"], c["auto_open_watch"], c["research"]), (False, True, True))
             self.run_setup(cfg, "--auto-rewrite", "on")                               # the other old name
             self.assertTrue(self.read(conf)["panel_ai"])
             self.assertNotEqual(self.run_setup(cfg, "--auto-open", "maybe").returncode, 0)
