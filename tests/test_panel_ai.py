@@ -2,6 +2,7 @@ import datetime as dt, json, os, time, unittest
 
 from test_watch import Base, history, once, flat, T0, VAGUE, SOLID
 import coach, review, watch
+os.environ["COACHLINE_PLATFORM"] = "Windows"   # these tests pin the opt-in defaults; tests/test_defaults.py covers macOS and Linux
 
 
 class Fake:
