@@ -166,8 +166,9 @@ export const register: Register = on => {
     if (!s) return <Text dimColor>{err || 'coachline: loading…'}</Text>
 
     const header = (
-      <Box key="header" justifyContent="space-between">
+      <Box key="header">
         <Text bold>coachline · this thread · {s.entries.length} prompt{s.entries.length === 1 ? '' : 's'}</Text>
+        <Text>{'  '}</Text>
         <Text color={s.ai ? 'green' : 'gray'}>{s.ai ? '● Claude on' : '○ Claude off'}</Text>
       </Box>
     )
@@ -213,8 +214,10 @@ export const register: Register = on => {
       if (kind === 'blank') return <Text key={`l${n}`}> </Text>
       if (kind === 'head') {
         return (
-          <Box key={`l${n}`} justifyContent="space-between">
+          // the label or button sits right after the title, never against the pane's right edge, where the pane's own close mark is
+          <Box key={`l${n}`}>
             <Text bold color={HEAD_COLOR[section] ?? 'blueBright'}>{text}</Text>
+            <Text>{'  '}</Text>
             {action === 'copy' ? <Button key="copy" label="Copy" onPress={copy} />
               : right ? <Text dimColor>{right}</Text> : null}
           </Box>
