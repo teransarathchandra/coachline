@@ -144,6 +144,11 @@ class Scripts(unittest.TestCase):
             self.assertEqual(d.returncode, 0, d.stdout)
             self.assertIn("Claude analysis in the panel", d.stdout)
             self.assertIn("open the panel by hand:", d.stdout)
+            self.assertIn("--panel-ai off)", d.stdout); self.assertIn("--research off)", d.stdout)     # on by default: the hint turns it off
+            os.makedirs(os.path.join(cfg, "coach"), exist_ok=True)
+            with open(os.path.join(cfg, "coach", "config.json"), "w") as f: json.dump({"panel_ai": False}, f)
+            d = run("coach.py", cfg, "--doctor").stdout
+            self.assertIn("--panel-ai on)", d); self.assertIn("--research on)", d)                    # off: the hint turns it on
 
 
 if __name__ == "__main__":
