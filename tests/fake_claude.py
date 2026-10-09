@@ -1,6 +1,7 @@
 """Stand-in for `claude -p` in tests: logs its arguments and stdin, answers from env.
 FAKE_JSON answers normal calls; FAKE_JSON_WEB answers calls that were given the web tools."""
 import os, sys
+sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")   # like the real CLI, whatever the console code page
 data = sys.stdin.read()
 web = "WebSearch,WebFetch" in sys.argv
 if os.environ.get("FAKE_LOG"):
