@@ -1,4 +1,4 @@
-"""watch.py - the coachline panel: THIS THREAD only, one column, analysed by Claude. No animation.
+"""watch.py - the coachline panel: THIS THREAD only, one column, analysed by Claude. Only a spinner moves, while Claude works.
 
 Top: the prompt you are looking at (the newest by default) in white, then what can be improved in blue, then the
 ENHANCED PROMPT, with a Copy button. Below: one line of patterns Claude found in your past chats (`i` to read) and a compact
@@ -22,7 +22,7 @@ Status glyphs: ✓ analysed   … analysing or queued   ! can be improved (local
 
 With Claude analysis on (setup.py --panel-ai on) the panel itself starts the background `claude -p` jobs on your subscription:
 the newest unanalysed prompts of this thread, and a review of your history every ~2 days. Redacted; llm-off.txt projects never sent.
-The screen redraws only on a key, a click or when new data arrives.
+The screen redraws on a key, a click, new data, or a spinner frame while Claude works. NO_COLOR turns colour off.
 """
 import argparse, datetime as dt, glob, json, os, re, sys, time, unicodedata
 
@@ -42,12 +42,32 @@ ALIASES = {"k": "up", "j": "down", "p": "up", "n": "down", "b": "pgup", " ": "pg
 IO = type("IO", (), {"copy": staticmethod(coach.copy_text), "enhance": staticmethod(coach.spawn_key),
                      "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill),
                      "mark": staticmethod(memory.mark), "research": staticmethod(coach.spawn_research)})  # swapped for fakes in tests
-# your words white; what can be improved blue (bright blue reads on dark and light terminals); structure in grey
-CODE = {"title": "1", "meta": "90", "prompt": "1;97", "label": "1;94", "blue": "94", "bluedim": "2;94", "enh": "94", "rule": "90", "blank": "0",
-        "ok": "92", "warn": "93", "bad": "91", "key": "1;97", "task": "2;94", "better": "1;94", "src": "2;94", "dim": "2;94", "use": "94",
-        "get": "94", "tip": "94", "flow": "2;94", "head": "1;94", "after": "94", "sel": "7", "chip": "1;97;44", "brand": "1;97;44",
-        "g_prompt": "97", "g_improve": "94", "g_enh": "1;94", "g_web": "2;94", "g_info": "90",
-        "h_prompt": "1;97", "h_improve": "1;94", "h_enh": "1;94", "h_web": "1;94", "h_info": "90"}
+# One warm accent on the terminal's own colours: text in its foreground (readable on dark and light themes), structure grey.
+# The accent and status colours keep 3.4:1 or more on black and on white alike. 24-bit colour, or the nearest of 256.
+# Never bold in the terminal's own colour: light themes such as One Half Light draw bold as their lighter "bright" variant.
+RGB = {"accent": (0xC9, 0x64, 0x42, 173), "grey": (0x80, 0x80, 0x80, 244), "ok": (0x2E, 0x9E, 0x5B, 35), "warn": (0xB8, 0x86, 0x0B, 136),
+       "bad": (0xD2, 0x48, 0x3C, 167)}
+TRUECOLOR = os.name == "nt" or bool(os.environ.get("WT_SESSION")) or os.environ.get("COLORTERM", "").lower() in ("truecolor", "24bit")
+
+
+def fg(name, ground=38):
+    r, g, b, n = RGB[name]
+    return f"{ground};2;{r};{g};{b}" if TRUECOLOR else f"{ground};5;{n}"
+
+
+A, G = fg("accent"), fg("grey")
+CODE = {"title": "0", "meta": "2", "prompt": "0", "label": "1;" + A, "blue": "0", "bluedim": "2", "enh": "0", "rule": G, "blank": "0",
+        "ok": fg("ok"), "warn": fg("warn"), "bad": fg("bad"), "key": "1;" + A, "task": "2", "better": "0", "src": "2", "dim": "2", "use": "0",
+        "get": "0", "tip": "0", "flow": "2", "head": "1;" + A, "after": "0", "sel": "0", "mark": "1;" + A, "bullet": A, "pat": A,
+        "chip": "1;97;" + fg("accent", 48), "chip_ok": "1;97;" + fg("ok", 48), "brand": "1;" + A,
+        "g_prompt": G, "g_improve": A, "g_enh": A, "g_web": G, "g_info": G,
+        "h_prompt": "0", "h_improve": "1;" + A, "h_enh": "1;" + A, "h_web": "0", "h_info": "2"}
+NO_COLOR = bool(os.environ.get("NO_COLOR"))      # https://no-color.org
+SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def spinner():
+    return SPIN[int(time.time() * 8) % len(SPIN)]
 PENDING_SECONDS = 150
 MAX_WIDTH = 100                      # lines longer than this are hard to read, however wide the pane is
 GLYPHS = {"done": ("✓", "ok"), "pending": ("…", "warn"), "error": ("×", "bad"), "off": ("–", "meta"),
@@ -331,10 +351,10 @@ def new_ui():
             "patterns": False, "copied": {}, "mouse": True, "hits": [], "list_rows": None}
 
 
-FOOT = [("↑↓", "prompt", None), ("c", "copy", "copy"), ("e", "analyse", "enhance"), ("Enter", "full", "enter"),
+FOOT = [("↑↓", "prompt", None), ("c", "copy", "copy"), ("e", "analyse", "enhance"), ("↵", "full", "enter"),
         ("i", "patterns", "patterns"), ("s", "skill", "skill"), ("q", "quit", "q"), ("m", "mouse", "mouse")]
 FOOT_DETAIL = [("Esc", "back", "esc"), ("c", "copy", "copy"), ("e", "analyse", "enhance"), ("↑↓", "scroll", None), ("q", "quit", "q"), ("m", "mouse", "mouse")]
-PRIORITY = ["↑↓", "c", "q", "Esc", "e", "Enter", "i", "s", "m"]       # what a narrow footer keeps, most important first
+PRIORITY = ["↑↓", "c", "q", "Esc", "e", "↵", "i", "s", "m"]           # what a narrow footer keeps, most important first
 
 
 def footer_row(W, items, P, hits, row):
@@ -342,13 +362,13 @@ def footer_row(W, items, P, hits, row):
     chosen, used = set(), 1
     for key in sorted((it[0] for it in items), key=lambda k: PRIORITY.index(k) if k in PRIORITY else 99):
         it = next(x for x in items if x[0] == key)
-        need = dw(it[0]) + 1 + dw(it[1]) + (2 if chosen else 0)
+        need = dw(it[0]) + 1 + dw(it[1]) + (3 if chosen else 0)
         if used + need > W - 1: continue
         chosen.add(key); used += need
     out, col = " ", 1
     for key, label, act in items:
         if key not in chosen: continue
-        if col > 1: out += "  "; col += 2
+        if col > 1: out += P("rule", " · "); col += 3
         w = dw(key) + 1 + dw(label)
         if act: hits.append((row, col, col + w, act))
         out += P("key", key) + " " + P("meta", label); col += w
@@ -356,23 +376,25 @@ def footer_row(W, items, P, hits, row):
 
 
 def render(st, ui, W, H, color=True):
-    """The frame as a list of lines. Click areas are recorded in ui['hits'] as (row, col0, col1, action | prompt index)."""
-    def P(kind, s): return f"\033[{CODE[kind]}m{s}\033[0m" if color and CODE[kind] != "0" and s else s
-    W = max(W, 30); H = max(H, 10)
+    """The frame as a list of lines. Click areas are recorded in ui['hits'] as (row, col0, col1, action | prompt index).
+    ui['animate'] is set while something moves (the spinner, the Copied flash), so the loop redraws without a key."""
+    def P(kind, s): return f"\033[{CODE[kind]}m{s}\033[0m" if color and not NO_COLOR and CODE[kind] != "0" and s else s
+    W = min(max(W, 30), MAX_WIDTH + 6); H = max(H, 10)                     # past this width lines get hard to read: the panel stays left
     hits = ui["hits"] = []; ui["list_rows"] = None
     i, e = cur_entry(ui, st)
     if ui["detail"] and e is not None: return detail_frame(st, ui, i, e, W, H, color)
-    iw = min(W - 4, MAX_WIDTH)
-    es = st["entries"]; n = len(es)
+    iw = min(W - 6, MAX_WIDTH); bw = iw + 4                                  # card text width; its boxes are "│ " + text + " │"
+    es = st["entries"]; n = len(es); spin = spinner()
     # header: where you are, and whether Claude is on
     working = st["review_running"] or any(status(x, st, ui)[0] == "pending" for x in es)
-    word, kind, dot = (("Claude off", "meta", "○") if not st["ai"] else ("Claude working…", "warn", "●") if working else ("Claude on", "ok", "●"))
-    left = f" · this thread · {n} prompt{'s' if n != 1 else ''}"
+    copied = e is not None and time.time() - ui["copied"].get(e["key"], 0) < 8
+    ui["animate"] = working or copied
+    word, kind, dot = (("Claude off", "meta", "○") if not st["ai"] else ("Claude working", "warn", spin) if working else ("Claude on", "ok", "●"))
+    left = f"   this thread · {n} prompt{'s' if n != 1 else ''}"
     right = f"{dot} {word} "
-    if 11 + dw(left) + dw(right) + 1 > W - 1: left = ""
-    if 11 + dw(left) + dw(right) + 1 > W - 1: right = f"{dot} "
-    head = " " + P("brand", " coachline") + P("meta", left) + " " * max(W - 1 - 11 - dw(left) - dw(right), 1) + P(kind, right)
-    rule = P("rule", " " + "─" * (W - 3))
+    if 12 + dw(left) + dw(right) + 1 > W - 1: left = ""
+    if 12 + dw(left) + dw(right) + 1 > W - 1: right = f"{dot} "
+    head = " " + P("brand", "✻ coachline") + P("meta", left) + " " * max(W - 1 - 12 - dw(left) - dw(right), 1) + P(kind, right)
     # patterns: one line, or the list when expanded
     pats = pattern_texts(st); pat_rows = []
     if pats and ui["patterns"]:
@@ -383,52 +405,62 @@ def render(st, ui, W, H, color=True):
         pat_rows += body[:cap] + ([("bluedim", " …", None)] if len(body) > cap else [])
     elif pats:
         skill = " · s installs a skill" if any(x.get("slug") for x in st["insights"]) else ""
-        pat_rows.append(("blue", clip(f" {len(pats)} pattern{'s' if len(pats) != 1 else ''} from your past chats · i to read{skill}", W - 1), "patterns"))
-    elif st["review_running"]: pat_rows.append(("bluedim", clip(" Claude is analysing your past chats now…", W - 1), None))
+        pat_rows.append(("pat", clip(f" ✻ {len(pats)} pattern{'s' if len(pats) != 1 else ''} from your past chats · i to read{skill}", W - 1), "patterns"))
+    elif st["review_running"]: pat_rows.append(("bluedim", clip(f" {spin} Claude is analysing your past chats now", W - 1), None))
     elif st["ai"] and not st["learned"].get("generated"): pat_rows.append(("bluedim", clip(" Claude will analyse your past chats in the background", W - 1), None))
     # the card first: it gets every row the header, patterns, footer and the two list rows do not need
-    fixed = 1 + 1 + 1 + (1 + len(pat_rows) if pat_rows else 0) + 1            # header, rule, rule under the card, patterns + rule, footer
+    fixed = 1 + 1 + 1 + (1 + len(pat_rows) if pat_rows else 0) + 1            # header, space, space under the card, patterns + space, footer
     min_list, pref_list = min(n, 2), (min(n, max(2, (H - 12) // 4)) if n else 0)
     room = max(H - 1 - fixed - ((1 + min_list) if n else 0), 3)               # the most rows the card can ever have
     if e is None:
-        card = [("info", "bluedim", "No prompts in this thread yet.", "", None), ("", "blank", "", "", None),
+        card = [("info", "head", "No prompts in this thread yet.", "", None),
                 ("info", "bluedim", "Send a prompt in Claude Code and it appears here.", "", None),
                 *[("info", "bluedim", w, "", None) for w in (wrap("Analysis is off. Turn it on: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ") if not st["ai"] else [])]]
     else:
         card = card_lines(st, ui, i, e, iw)
+    if card and card[-1][1] != "blank": card = card + [("", "blank", "", "", None)]     # the blank after a section closes its box
     card_h = max(min(len(card), room), 3)
     list_n = min(pref_list, max(H - 1 - fixed - card_h - 1, min_list)) if n else 0   # leftover rows go to the list, up to its preferred size
     ui["cs"] = min(max(ui["cs"], 0), max(len(card) - card_h, 0))
     shown = list(card[ui["cs"]:ui["cs"] + card_h])
     if ui["cs"] > 0 and shown: shown[0] = ("", "meta", "▴ PgUp for the start", "", "pgup")
     if ui["cs"] + card_h < len(card) and shown: shown[-1] = ("", "meta", "▾ PgDn for more", "", "pgdn")
-    rows = [head, rule]
+    rows = [head, ""]
+    box = None                                                                # the section whose box is open
     for sect, k, text, rt, act in shown:
         r = len(rows)
-        if k == "blank": rows.append(""); continue
-        if not sect:                                                             # an indicator row, no gutter
+        if k == "blank":
+            rows.append(" " + P("g_" + box, "╰" + "─" * (bw - 2) + "╯") if box else ""); box = None
+            continue
+        if not sect:                                                             # an indicator row, no box
             rows.append(" " + P(k, fit(text, W - 2)))
             if act: hits.append((r, 1, 1 + min(dw(text), W - 2), act))
             continue
-        avail = W - 4; lead = " " + P("g_" + sect, "┃") + " "
+        box = sect                                                               # a section scrolled in from above has no top border
+        def g(s): return P("g_" + sect, s)
         if k == "head":
-            title = P("h_" + sect, text)
+            title = clip(text, bw - 7)
             if rt:
-                rt = clip(rt, max(avail - dw(text) - 3, 4)); rw = dw(rt) + (2 if act else 0); gap = max(avail - dw(text) - rw, 1)
-                chip = P("chip", f" {rt} ") if act else P("meta", rt)
-                if act: hits.append((r, 3 + dw(text) + gap, 3 + dw(text) + gap + rw, act))
-                rows.append(lead + title + " " * gap + chip)
-            else: rows.append(lead + title)
+                done = act == "copy" and copied
+                rt = "✓ Copied" if done else rt
+                rt = clip(rt, max(bw - dw(title) - 9 - (2 if act else 0), 4)); rw = dw(rt) + (2 if act else 0)
+                gap = bw - dw(title) - rw - 8
+                chip = P("chip_ok" if done else "chip", f" {rt} ") if act else P("meta", rt)
+                if act: hits.append((r, dw(title) + gap + 6, dw(title) + gap + 6 + rw, act))
+                rows.append(" " + g("╭─ ") + P("h_" + sect, title) + " " + g("─" * gap) + " " + chip + g(" ─╮"))
+            else:
+                rows.append(" " + g("╭─ ") + P("h_" + sect, title) + " " + g("─" * (bw - dw(title) - 5) + "╮"))
             continue
-        t = fit(text, avail)
-        rows.append(lead + P(k, t))
+        t = fit(text, iw)
+        body = P("bullet", "•") + P(k, t[1:]) if t.startswith("• ") else P(k, t)
+        rows.append(" " + g("│") + " " + body + " " * (iw - dw(t)) + " " + g("│"))
         if act: hits.append((r, 3, 3 + dw(t), act))
     while len(rows) < 2 + card_h: rows.append("")
-    rows.append(rule)
+    rows.append("")
     for k, t, act in pat_rows:
         if act: hits.append((len(rows), 0, dw(t), act))
         rows.append(P(k, t))
-    if pat_rows: rows.append(rule)
+    if pat_rows: rows.append("")
     # the list
     if n:
         lo = ui["lo"]; lo = i if i < lo else (i - list_n + 1 if i >= lo + list_n else lo); lo = min(max(lo, 0), max(n - list_n, 0)); ui["lo"] = lo
@@ -437,10 +469,11 @@ def render(st, ui, W, H, color=True):
         ui["list_rows"] = (len(rows), len(rows) + list_n)
         sw = max(len(stamp(x["ts"])) for x in es[lo:lo + list_n])
         for idx in range(lo, lo + list_n):
-            x = es[idx]; _s, glyph, gk, _w = status(x, st, ui)
+            x = es[idx]; state, glyph, gk, _w = status(x, st, ui)
+            if state == "pending": glyph = spin
             text = clip(x["text"], max(W - 8 - sw, 8))
             hits.append((len(rows), 0, W - 1, idx))
-            if idx == i: rows.append(P("sel", pad(f" › {glyph} {stamp(x['ts']):<{sw}}  {text}", W - 1)))
+            if idx == i: rows.append(" " + P("mark", "❯") + " " + P(gk, glyph) + " " + P("sel", f"{stamp(x['ts']):<{sw}}  {text}"))
             else: rows.append("   " + P(gk, glyph) + " " + P("meta", f"{stamp(x['ts']):<{sw}}  ") + text)
     # footer: a message, or the keys that fit (as clickable buttons)
     rows.append(P("warn", fit(" " + ui["msg"], W - 1)) if ui["msg"] else footer_row(W, FOOT, P, hits, len(rows)))
@@ -449,7 +482,7 @@ def render(st, ui, W, H, color=True):
 
 def detail_frame(st, ui, i, e, W, H, color=True):
     """One prompt, full width, as plain text: what you wrote, what can be improved, the task and workflow, the ENHANCED PROMPT to copy."""
-    def P(kind, s): return f"\033[{CODE[kind]}m{s}\033[0m" if color and CODE[kind] != "0" and s else s
+    def P(kind, s): return f"\033[{CODE[kind]}m{s}\033[0m" if color and not NO_COLOR and CODE[kind] != "0" and s else s
     iw = max(min(W - 4, MAX_WIDTH), 20)
     L = [("label", "YOUR PROMPT")] + [("prompt", w) for w in wrap(e["text"], iw)] + [("blank", "")]
     adv = e["advice"]
@@ -466,7 +499,7 @@ def detail_frame(st, ui, i, e, W, H, color=True):
     else: L.append(("bluedim", "None yet. Press e to have Claude write one for this prompt (sends this redacted prompt to your Claude subscription)."))
     body_h = H - 3
     ui["dscroll"] = min(max(ui["dscroll"], 0), max(len(L) - body_h, 0))
-    rows = [" " + P("brand", " coachline ") + P("meta", fit(f"  prompt {i + 1} of {len(st['entries'])}  ·  {stamp(e['ts'])}", max(W - 14, 0)))]
+    rows = [" " + P("brand", "✻ coachline") + P("meta", fit(f"   prompt {i + 1} of {len(st['entries'])}  ·  {stamp(e['ts'])}", max(W - 14, 0)))]
     part = L[ui["dscroll"]:ui["dscroll"] + body_h]
     rows += [P(k, "  " + fit(x, W - 3)) if k != "blank" else "" for k, x in part] + [""] * (body_h - len(part))
     rows.append(P("warn", fit(" " + ui["msg"], W - 1)) if ui["msg"] else footer_row(W, FOOT_DETAIL, P, ui["hits"], len(rows)))
@@ -771,6 +804,7 @@ def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0, s
             write(render(st, ui, W, H)); last_size = (W, H); dirty = False
         k = next_key(0.25)
         if k is None:
+            if ui.get("animate"): dirty = True                                  # the spinner turns, a Copied flash ends
             if clock() - last_load >= reload_every:
                 new = load_state(); last_load = clock()
                 if signature(new) != signature(st):
