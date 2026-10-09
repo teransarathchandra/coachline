@@ -338,10 +338,10 @@ def ai_on():
     return True if v is None else bool(v)
 
 def research_on():
-    """Web research once per new task (the slower second pass). On wherever analysis is on; 'discover' is its old name."""
+    """Web research once per new task (the slower second pass). Off unless turned on, never without analysis; 'discover' is its old name."""
     v = setting("research")
     if v is None: v = setting("discover")
-    return ai_on() and (True if v is None else bool(v))
+    return ai_on() and bool(v)
 
 def model_for(kind):
     """The model of a pass: 'fast' (advice and the enhanced prompt, default haiku) or 'research' (web research, default sonnet)."""
@@ -353,7 +353,7 @@ def auto_open_on():
     v = setting("auto_open_watch")
     return bool(defaults_on() if v is None else v)
 
-NOTICE = "Claude analysis is on: prompts go redacted to your subscription, task topics to web search · /coach panel-ai off"
+NOTICE = "Claude analysis is on: prompts go redacted to your subscription · /coach panel-ai off"
 NOTICE_SESSIONS = 3
 
 def notice(session):
@@ -509,7 +509,7 @@ def doctor(path):
     line(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} at {sys.executable}")
     print(("ok   " if shutil.which("claude") else "warn ") + "claude CLI on PATH (needed only for the /coach rewrite)")
     print(("ok   " if ai_on() else "off  ") + "Claude analysis in the panel (turn on: " + py_cmd("setup.py", "--panel-ai", "on") + ")")
-    print(("ok   " if research_on() else "off  ") + f"web research per new task, {model_for('research')} (turn off: " + py_cmd("setup.py", "--research", "off") + ")")
+    print(("ok   " if research_on() else "off  ") + f"web research per new task, {model_for('research')} (turn {'off' if research_on() else 'on'}: " + py_cmd("setup.py", "--research", "off" if research_on() else "on") + ")")
     print(("ok   " if auto_open_on() else "off  ") + "panel opens itself at session start (turn on: " + py_cmd("setup.py", "--auto-open", "on") + ")")
     print("     open the panel by hand: " + py_cmd("watch.py"))
     sys.exit(0 if ok else 1)

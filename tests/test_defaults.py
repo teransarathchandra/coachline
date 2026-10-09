@@ -42,9 +42,10 @@ class Defaults(unittest.TestCase):
         self.write(auto_rewrite=True)
         with self.on("Windows"): self.assertTrue(coach.ai_on())
 
-    def test_research_follows_analysis_and_honours_the_old_discover_name(self):
+    def test_research_is_off_by_default_and_honours_the_old_discover_name(self):
         for system in ("Darwin", "Linux", "Windows"):
-            with self.on(system): self.assertTrue(coach.research_on(), system)
+            with self.on(system): self.assertFalse(coach.research_on(), system)
+        self.write(discover=True); self.assertTrue(coach.research_on())
         self.write(discover=False); self.assertFalse(coach.research_on())
         self.write(discover=False, research=True); self.assertTrue(coach.research_on())      # the new name wins
         self.write(research=True, panel_ai=False); self.assertFalse(coach.research_on())     # never without analysis
