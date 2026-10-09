@@ -508,9 +508,12 @@ def doctor(path):
     line(bool(rows), f"parsed {len(rows)} prompts (needs JSONL with 'display' and 'timestamp' fields)")
     line(sys.version_info >= (3, 9), f"python {sys.version.split()[0]} at {sys.executable}")
     print(("ok   " if shutil.which("claude") else "warn ") + "claude CLI on PATH (needed only for the /coach rewrite)")
-    print(("ok   " if ai_on() else "off  ") + "Claude analysis in the panel (turn on: " + py_cmd("setup.py", "--panel-ai", "on") + ")")
-    print(("ok   " if research_on() else "off  ") + f"web research per new task, {model_for('research')} (turn off: " + py_cmd("setup.py", "--research", "off") + ")")
-    print(("ok   " if auto_open_on() else "off  ") + "panel opens itself at session start (turn on: " + py_cmd("setup.py", "--auto-open", "on") + ")")
+    def switch(on, msg, flag):  # the hint names the way to the other state
+        to = "off" if on else "on"
+        print(("ok   " if on else "off  ") + f"{msg} (turn {to}: " + py_cmd("setup.py", flag, to) + ")")
+    switch(ai_on(), "Claude analysis in the panel", "--panel-ai")
+    switch(research_on(), f"web research per new task, {model_for('research')}", "--research")
+    switch(auto_open_on(), "panel opens itself at session start", "--auto-open")
     print("     open the panel by hand: " + py_cmd("watch.py"))
     sys.exit(0 if ok else 1)
 
