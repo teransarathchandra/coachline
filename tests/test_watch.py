@@ -829,7 +829,7 @@ class WebKeys(Base):
         self.assertIn("web research is off", flat(self.drive(["r"], io=self.io)[-1])); self.assertEqual(self.io.researched, [])
 
     def test_r_researches_the_selected_prompt_again_once_it_is_analysed(self):
-        self.write_json("config.json", {"panel_ai": True})
+        self.write_json("config.json", {"panel_ai": True, "research": True})
         self.assertIn("analyse this prompt first", flat(self.drive(["r"], io=self.io)[-1]))
         self.analyse(0, SOLID)
         frames = self.drive(["r"], io=self.io)

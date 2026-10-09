@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 import coach, pane  # noqa: E402
 from test_watch import history, VAGUE, SOLID  # noqa: E402
 
-NOTICE = "Claude analysis is on: prompts go redacted to your subscription, task topics to web search · /coach panel-ai off"
+NOTICE = "Claude analysis is on: prompts go redacted to your subscription · /coach panel-ai off"
 
 
 class FakeIO:
@@ -153,6 +153,7 @@ class Tick(unittest.TestCase):
         history(self.cfg, [("s1", "p", SOLID)])
         from test_watch import key_for, ADVICE
         key = key_for(0, SOLID)
+        coach.set_setting("research", True)
         with mock.patch.object(coach, "spawn_research") as sr:
             self.assertEqual(pane.main(["--research", key, "--session", "s1"]), 1)          # not analysed yet: says why, sends nothing
             self.write_rec({"key": key, "text": "AFTER: x", "advice": ADVICE})

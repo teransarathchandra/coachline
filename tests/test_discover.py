@@ -4,8 +4,16 @@ from unittest import mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import coach, discover, memory  # noqa: E402
-from test_review import run, write_history, read  # noqa: E402
+from test_review import run, read, write_history as _write_history  # noqa: E402
+
 from test_advisor import make_config  # noqa: E402
+
+
+def write_history(cfg, texts):
+    """History plus research turned on (it is off by default)."""
+    _write_history(cfg, texts)
+    os.makedirs(os.path.join(cfg, "coach"), exist_ok=True)
+    with open(os.path.join(cfg, "coach", "config.json"), "w") as f: json.dump({"research": True}, f)
 
 FAKE = os.path.join(ROOT, "tests", "fake_claude.py").replace("\\", "/")
 PY = sys.executable.replace("\\", "/")
@@ -159,7 +167,7 @@ class AskingBase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); s = self.tmp.name
         self.saved = (coach.STATE, coach.CONFIG, coach.USER_CFG); coach.STATE = os.path.join(s, "coach"); coach.CONFIG = s
         coach.USER_CFG = os.path.join(s, "coach", "config.json")
-        make_config(s)
+        make_config(s); coach.set_setting("research", True)
         self.env = {k: os.environ.get(k) for k in ("COACHLINE_CLAUDE", "FAKE_LOG", "FAKE_JSON_WEB", "FAKE_MODE", "FAKE_ERR", "FAKE_STDOUT", "COACHLINE_FETCH_STUB")}
         os.environ["COACHLINE_CLAUDE"] = f'"{PY}" "{FAKE}"'; os.environ["FAKE_LOG"] = os.path.join(s, "sent.log"); os.environ.pop("FAKE_MODE", None)
         self.stub = os.path.join(s, "stub.json"); os.environ["COACHLINE_FETCH_STUB"] = self.stub
@@ -368,7 +376,7 @@ class EndToEnd(unittest.TestCase):
             write_history(cfg, [self.TEXT])
             stub = os.path.join(cfg, "stub.json")
             with open(stub, "w") as f: json.dump({"https://tools.example.com/g": {"status": 200, "text": "GreatKit"}}, f)
-            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)   # on by default: no setting
+            r = self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB, COACHLINE_FETCH_STUB=stub)
             self.assertEqual(r.returncode, 0, r.stderr)
             recs = [json.loads(l) for l in read(os.path.join(cfg, "coach", "rewrites.jsonl")).splitlines()]
             self.assertEqual(len(recs), 2)                                     # advice first, then advice + discovery, same key
@@ -403,7 +411,7 @@ class EndToEnd(unittest.TestCase):
     def test_the_panel_says_when_research_is_paused(self):
         with tempfile.TemporaryDirectory() as cfg:
             write_history(cfg, [self.TEXT])
-            os.makedirs(os.path.join(cfg, "coach"))
+            os.makedirs(os.path.join(cfg, "coach"), exist_ok=True)
             with open(os.path.join(cfg, "coach", "research-state.json"), "w") as f: json.dump({"paused_until": time.time() + 3600}, f)
             self.assertEqual(self.job(cfg, FAKE_JSON=self.ADVICE, FAKE_JSON_WEB=self.WEB).returncode, 0)
             self.assertNotIn("WebSearch", read(os.path.join(cfg, "sent.log")))                          # paused: no web call
