@@ -1,4 +1,5 @@
 import json, os, re, subprocess, sys, tempfile, time, unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -42,10 +43,9 @@ def flat(s):
 
 
 def card_of(frame):
-    """The text between the first and second rule: the card for the selected prompt."""
-    lines = plain(frame).replace("\u2503", " ").splitlines()                 # the coloured gutter bars are decoration
-    rules = [n for n, l in enumerate(lines) if l.strip().startswith("\u2500")]
-    return " ".join(" ".join(lines[rules[0] + 1:rules[1]]).split())
+    """The text of the card for the selected prompt: its boxes and scroll marks, without the box drawing."""
+    lines = [l for l in plain(frame).splitlines()[1:] if l.strip()[:1] in ("\u256d", "\u2502", "\u2570", "\u25b4", "\u25be")]
+    return " ".join(re.sub("[\u256d\u256e\u2570\u256f\u2502\u2500]", " ", " ".join(lines)).split())
 
 
 def list_of(frame):
@@ -215,38 +215,55 @@ class Colours(Base):
         ui = watch.new_ui(); ui.update(kw)
         return watch.render(watch.build(self.path), ui, 100, 40, color=True)
 
-    def test_your_prompt_is_white_and_what_can_be_improved_is_blue(self):
-        rows = self.rows()
-        prompt = next(r for r in rows if "UNIQUEPROMPT" in r and "\u203a" not in r)
-        self.assertIn("\x1b[1;97mUNIQUEPROMPT", prompt)                                   # bright white, after a white gutter bar
-        self.assertIn("\x1b[97m\u2503", prompt)
-        label = next(r for r in rows if "Improve" in r)
-        self.assertIn("\x1b[1;94mImprove", label)                                         # bright blue title and gutter
-        hint = next(r for r in rows if "carefully/best/clean" in r)
-        self.assertIn("\x1b[94m\u2022", hint)
+    def code(self, kind): return f"[{watch.CODE[kind]}m"
 
-    def test_claudes_advice_and_the_enhanced_prompt_are_blue_too(self):
+    def test_your_prompt_is_bold_in_a_grey_box_and_improve_has_the_accent(self):
+        rows = self.rows()
+        prompt = next(r for r in rows if "UNIQUEPROMPT" in r and "❯" not in r)
+        self.assertNotIn("[1m", prompt)                                               # the terminal's own colour, never bold (light themes fade it)
+        self.assertIn(self.code("g_prompt") + "│", prompt)                           # a grey box
+        label = next(r for r in rows if "Improve" in r)
+        self.assertIn(self.code("h_improve") + "Improve", label)                          # accent title and border
+        self.assertIn(self.code("g_improve") + "╭", label)
+        hint = next(r for r in rows if "carefully/best/clean" in r)
+        self.assertIn(self.code("bullet") + "•", hint)
+
+    def test_claudes_advice_and_the_enhanced_prompt_use_the_terminals_own_colour(self):
         self.analyse(0, "UNIQUEPROMPT " + VAGUE)
         rows = self.rows()
         for needle in ("Ask for every usage first.", "Rework the tax code"):
             row = next(r for r in rows if needle in r)
-            self.assertIn("\x1b[94m", row.split(needle)[0].split("┃")[-1])             # the text after the gutter bar is blue
+            self.assertNotRegex(row, "38;[0-9;]*m[^]*" + re.escape(needle))            # no colour of ours on it: readable on dark and light
 
-    def test_structure_is_grey_and_the_selected_row_is_marked_even_without_colour(self):
+    def test_the_selected_row_is_marked_even_without_colour(self):
         rows = self.rows()
-        self.assertTrue(rows[1].startswith("\x1b[90m"))                                  # rules are grey
-        sel = next(r for r in rows if "\u203a" in r)
-        self.assertTrue(sel.startswith("\x1b[7m"))                                       # reverse video...
-        self.assertIn("\u203a", plain(sel))                                              # ...and a marker, for terminals without it
+        sel = next(r for r in rows if "❯" in r)
+        self.assertIn(self.code("mark") + "❯", sel)
+        self.assertIn("❯", plain(sel))                                             # the marker shows on terminals without colour
 
-    def test_the_header_dot_shows_whether_claude_is_on(self):
-        off = self.rows()[0]
-        self.assertIn("\x1b[90m\u25cb Claude off", off)
+    def test_the_header_shows_whether_claude_is_on_and_spins_while_it_works(self):
+        ui = watch.new_ui()
+        self.assertIn(self.code("meta") + "○ Claude off", watch.render(watch.build(self.path), ui, 100, 40)[0])
+        self.assertFalse(ui["animate"])
         self.write_json("config.json", {"panel_ai": True})
         self.analyse(0, "UNIQUEPROMPT " + VAGUE)
-        self.assertIn("\x1b[92m\u25cf Claude on", self.rows()[0])
+        self.assertIn(self.code("ok") + "● Claude on", self.rows()[0])
         history(self.cfg, [("now", "p", "UNIQUEPROMPT " + VAGUE), ("now", "p", VAGUE + " newer one")])
-        self.assertIn("\x1b[93m\u25cf Claude working", self.rows()[0])                     # a recent prompt is queued
+        head = watch.render(watch.build(self.path), ui, 100, 40)[0]                      # a recent prompt is queued
+        self.assertTrue(any(self.code("warn") + f"{c} Claude working" in head for c in watch.SPIN))
+        self.assertTrue(ui["animate"])                                                    # the loop redraws to turn the spinner
+
+    def test_no_color_turns_colour_off(self):
+        with mock.patch.object(watch, "NO_COLOR", True):
+            self.assertFalse(any("[" in r for r in self.rows()))
+
+    def test_every_row_fits_the_width_and_boxes_line_up(self):
+        self.analyse(0, "UNIQUEPROMPT " + VAGUE)
+        for W in (40, 60, 90, 140):
+            rows = [plain(r) for r in watch.render(watch.build(self.path), watch.new_ui(), W, 40)]
+            self.assertTrue(all(watch.dw(r) <= W - 1 for r in rows), W)
+            edges = {watch.dw(r.rstrip()) for r in rows if r.strip()[:1] in ("╭", "│", "╰")}
+            self.assertEqual(len(edges), 1, (W, edges))                                   # every box row ends in the same column
 
 
 class Status(Base):
@@ -411,7 +428,7 @@ class Mouse(Base):
 
     def test_a_click_on_a_list_row_selects_that_prompt(self):
         st = watch.build(self.path); ui = watch.new_ui(); f = self.frame(ui, st)
-        row = next(n for n, l in enumerate(f) if "P09" in l and "›" not in l)
+        row = next(n for n, l in enumerate(f) if "P09" in l and "❯" not in l)
         self.assertFalse(watch.handle(ui, st, ("mouse", 0, 21, row + 1, True)))
         self.assertIn("P09", card_of("\n".join(self.frame(ui, st))))
         f = self.frame(ui, st)
@@ -587,7 +604,7 @@ class Navigation(Base):
 
     def test_the_list_scrolls_to_keep_the_selected_row_visible(self):
         f = self.drive(["home"], W=90, H=24)
-        self.assertTrue(any("P01" in r and "\u203a" in r for r in list_of(f[1])))
+        self.assertTrue(any("P01" in r and "❯" in r for r in list_of(f[1])))
 
     def test_a_new_prompt_takes_over_the_card_only_while_you_are_on_the_newest(self):
         def run(seq):
