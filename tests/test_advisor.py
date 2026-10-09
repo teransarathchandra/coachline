@@ -129,6 +129,16 @@ class Advise(AdvisorBase):
         self.assertTrue(c[1].startswith("tip: Name the style"))
 
 
+class Trim(unittest.TestCase):
+    def test_a_long_enhanced_prompt_ends_at_a_whole_sentence_never_mid_word(self):
+        s = "Improve the panel. " * 60 + "Finish by summarizing what changed and showing before and after."
+        out = advisor.trim(s, 900)
+        self.assertLessEqual(len(out), 900); self.assertTrue(out.endswith("panel."))
+        self.assertEqual(advisor.trim("short prompt", 900), "short prompt")
+        self.assertEqual(advisor.trim("word " * 300, 900).split()[-1], "word")          # no sentence: a whole word
+        self.assertEqual(advisor.validate({"after": s}, [], [])["after"], s)            # 1200 characters are kept whole
+
+
 class Instructions(unittest.TestCase):
     def test_the_enhanced_prompt_is_complete_and_not_a_questionnaire(self):
         text = advisor.INSTRUCTIONS

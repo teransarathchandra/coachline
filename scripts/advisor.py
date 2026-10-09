@@ -16,6 +16,7 @@ from review import parse_json
 
 MAX_CATALOG = 500
 MAX_USE, MAX_GET, MAX_TIPS, MAX_FLOW = 3, 2, 3, 4
+MAX_AFTER = 2000                     # characters of the enhanced prompt; a longer one ends at its last whole sentence
 
 
 def _read_skill(path):
@@ -113,6 +114,15 @@ def _pick(raw, allowed, limit):
     return out[:limit]
 
 
+def trim(s, n=MAX_AFTER):
+    """s in at most n characters, ending at a sentence (or else a word), never mid-word: it is pasted into Claude Code as it is."""
+    if len(s) <= n: return s
+    cut = s[:n + 1]
+    ends = [m.end() for m in re.finditer(r"[.!?:](?=\s)|\n", cut)]
+    if ends and ends[-1] > n // 2: return cut[:ends[-1]].rstrip()
+    return cut[:n].rsplit(None, 1)[0].rstrip()
+
+
 def _strs(raw, limit, width=160):
     return [coach.clean(s)[:width] for s in (raw if isinstance(raw, list) else []) if coach.clean(s)][:limit]
 
@@ -127,7 +137,7 @@ def validate(d, inst, avail):
     return {"task": task, "summary": coach.clean(d.get("summary", ""))[:100], "topic": topic, "new_task": d.get("new_task") is not False,
             "use": use, "get": get,
             "tips": _strs(d.get("tips"), MAX_TIPS, 220), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
-            "after": coach.clean(d.get("after", ""), keep_newlines=True).strip()[:800], "dropped": max(dropped, 0)}
+            "after": trim(coach.clean(d.get("after", ""), keep_newlines=True).strip()), "dropped": max(dropped, 0)}
 
 
 def advise(text, fails, timeout=120, model=None, context=()):
