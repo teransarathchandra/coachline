@@ -6,7 +6,8 @@
   python launch.py --command    print the command that opens the panel by hand (works in any terminal)
 
 Only real splits are used: tmux, or Windows Terminal. No separate windows. In any other terminal nothing opens by
-itself; run the --command line in a second tab or pane. It never opens a second panel: watch.py keeps a heartbeat.
+itself; run the --command line in a second tab or pane. One panel per Windows Terminal tab, showing that tab's conversation (one in
+all for tmux): watch.py keeps a heartbeat, and a tab whose panel is up gets no second one.
 """
 import os, platform, shlex, shutil, subprocess, sys, time
 
@@ -58,9 +59,21 @@ def panel_command():
     return f"{name or (chr(34) + exe + chr(34) if ' ' in exe else exe)} " + (f'"{p}"' if " " in p else p)
 
 
+def own_no_color():
+    """NO_COLOR from your own Windows user environment (not one inherited from Claude Code)."""
+    if os.name != "nt": return bool(os.environ.get("NO_COLOR"))
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as k: return bool(winreg.QueryValueEx(k, "NO_COLOR")[0])
+    except OSError: return False
+
+
 def spawn(argv):
+    # Claude Code sets NO_COLOR=1 for the commands it runs, and wt.exe hands its environment to the new pane: the panel would lose
+    # its colours. A NO_COLOR you set yourself (your user environment) is kept.
+    env = {k: v for k, v in os.environ.items() if k != "NO_COLOR" or own_no_color()}
     kw = {"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}   # wt.exe / tmux: no window of their own
-    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, **kw)
+    subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True, env=env, **kw)
 
 
 KNOWN = {"--auto", "--dry-run", "--command", "--watch-args"}
@@ -76,17 +89,21 @@ def main(argv, system=None, env=None, opener=spawn, which=shutil.which):
     ensure_shim()
     if auto and (system or platform.system()) != "Windows": return 0     # macOS / Linux: hooks/coachline.tsx opens a Claude Code pane instead
     if auto and not coach.setting("auto_open_watch", False): return 0
-    if coach.panel_alive():
+    env = env if env is not None else os.environ
+    tab = coach.tab_key(env) if (system or platform.system()) == "Windows" else ""
+    lock = coach.per_tab(LOCK, tab)
+    if tab: extra += ("--tab", tab)
+    if coach.panel_alive(tab=tab):
         if not auto: print("the panel is already open")
         return 0
-    if not dry and os.path.exists(LOCK) and time.time() - os.path.getmtime(LOCK) < 10: return 0  # another session is opening it
-    a = plan(system or platform.system(), env if env is not None else os.environ, sys.executable, WATCH, which=which, extra=extra)
+    if not dry and os.path.exists(lock) and time.time() - os.path.getmtime(lock) < 10: return 0  # another session is opening it
+    a = plan(system or platform.system(), env, sys.executable, WATCH, which=which, extra=extra)
     if dry: print(a); return 0
     if a is None:
         if not auto: print("this terminal cannot split a pane (only tmux and Windows Terminal can). Open a second tab or pane and run:\n  " + panel_command())
         return 0 if auto else 1
     os.makedirs(coach.STATE, exist_ok=True)
-    with open(LOCK, "w") as f: f.write(str(time.time()))
+    with open(lock, "w") as f: f.write(str(time.time()))
     try: opener(a)
     except OSError as e:
         if not auto: print(f"could not split a pane: {e}")

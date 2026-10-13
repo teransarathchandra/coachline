@@ -280,30 +280,44 @@ ALIVE = os.path.join(STATE, "watch.alive")  # watch.py touches this every second
 REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished analyses, keyed by prompt_key; later lines win
 REVIEW_LOCK = os.path.join(STATE, "review.running")  # review.py holds this while it runs
 
-def panel_alive(max_age=6):
-    try: return time.time() - os.path.getmtime(ALIVE) < max_age
+def tab_key(env=None):
+    """The Windows Terminal tab Claude Code runs in (each has its own WT_SESSION), as a file-name part; '' outside Windows Terminal.
+    Each tab gets its own panel, which shows the conversation of that tab."""
+    return re.sub(r"[^0-9A-Za-z-]", "", (os.environ if env is None else env).get("WT_SESSION", ""))[:64]
+
+def per_tab(path, tab):
+    """watch.alive -> watch-<tab>.alive: one file per tab, the shared one when there is no tab."""
+    if not tab: return path
+    base, ext = os.path.splitext(path)
+    return f"{base}-{tab}{ext}"
+
+def panel_alive(max_age=6, tab=""):
+    try: return time.time() - os.path.getmtime(per_tab(ALIVE, tab)) < max_age
     except OSError: return False
 
 def session_file():
     return os.path.join(STATE, "current-session.json")
 
-def record_session(raw):
+def record_session(raw, tab=""):
     """The SessionStart hook's JSON (it names the session that just started or resumed) -> current-session.json, so the panel knows a fresh
     session is the one you are in before it has a single prompt or transcript. Silent on anything unexpected."""
     try:
         d = json.loads(raw)
         sid = d.get("session_id")
         if not (isinstance(sid, str) and re.fullmatch(r"[0-9A-Za-z-]{8,64}", sid)): return
+        if tab and d.get("source") in ("startup", "resume", "clear"):    # this tab's panel shows exactly this session, resumed ones too
+            os.makedirs(STATE, exist_ok=True)
+            with open(per_tab(session_file(), tab), "w", encoding="utf-8") as f: json.dump({"id": sid, "ts": time.time()}, f)
         if d.get("source") not in ("startup", "clear"): return      # a resumed session is found by its transcript; only a brand-new one needs announcing
         os.makedirs(STATE, exist_ok=True)
         with open(session_file(), "w", encoding="utf-8") as f: json.dump({"id": sid, "ts": time.time(), "source": str(d.get("source", ""))[:20]}, f)
     except (ValueError, AttributeError, OSError):
         pass
 
-def started_session():
-    """(session id, when) the hook last recorded, or None."""
+def started_session(tab=""):
+    """(session id, when) the hook last recorded (in this Windows Terminal tab, when `tab` is given), or None."""
     try:
-        with open(session_file(), encoding="utf-8") as f: d = json.load(f)
+        with open(per_tab(session_file(), tab), encoding="utf-8") as f: d = json.load(f)
         return (d["id"], float(d["ts"])) if isinstance(d["id"], str) else None
     except (OSError, ValueError, KeyError, TypeError):
         return None

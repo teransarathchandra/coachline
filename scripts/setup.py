@@ -57,7 +57,7 @@ def hook_json(wait=1.0):
 
 def main(argv):
     if "-h" in argv or "--help" in argv: print(__doc__); return
-    if "--refresh" in argv: coach.record_session(hook_json())      # the hook's JSON: which session just started
+    if "--refresh" in argv: coach.record_session(hook_json(), tab=coach.tab_key())      # the hook's JSON: which session just started
     bad = [a for a in argv if a.startswith("-") and a not in KNOWN]
     if bad: sys.exit(f"unknown option {bad[0]}; nothing was changed (see --help)")
     try:

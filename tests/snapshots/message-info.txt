@@ -1,0 +1,47 @@
+message-info 80x24
+--- plain ---
+  coachline · this thread · 6 prompts                             ○ Claude off 
+
+ ╭─ Your prompt ────────────────────────────────── Jun 15 09:30 · ✓ analysed ─╮
+ │ P06 handle this carefully and make it good for all the customers we have   │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ ╭─ Improve ──────────────────────────────────────────────────── refactoring ─╮
+ │ tax rework                                                                 │
+ │ • Ask for every usage first.                                               │
+ │ • Name the files that must not change.                                     │
+ │ • use /simplify: clean up after                                            │
+ │ • get shiny@mk: codemods                                                   │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ ╭─ Enhanced prompt ───────────────────────────────────────────────  c Copy  ─╮
+ │ Rework the tax code in the invoice module.                                 │
+ │ Done when: the unit tests pass.                                            │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ ─────────────────────────────────────────────────────────────────────────────
+ Prompts in this thread  ▴ 
+   ! Jun 15 09:30  P04 handle this carefully and make it good for all the cust…
+   ! Jun 15 09:30  P05 handle this carefully and make it good for all the cust…
+ › ✓ Jun 15 09:30  P06 handle this carefully and make it good for all the cust…
+ asking Claude in the background (about 20 seconds); the panel updates by itse…
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                             ␛[37m○ Claude off ␛[0;100m␛[0m
+
+ ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m──────────────────────────────────␛[0m ␛[90mJun 15 09:30 · ✓ analysed␛[0m ␛[97m─╮␛[0m
+ ␛[97m│␛[0m ␛[1;97mP06 handle this carefully and make it good for all the customers we have␛[0m   ␛[97m│␛[0m
+ ␛[97m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
+ ␛[94m╭─ ␛[0m␛[1;94mImprove␛[0m ␛[94m────────────────────────────────────────────────────␛[0m ␛[90mrefactoring␛[0m ␛[94m─╮␛[0m
+ ␛[94m│␛[0m ␛[90mtax rework␛[0m                                                                 ␛[94m│␛[0m
+ ␛[94m│␛[0m ␛[94m• Ask for every usage first.␛[0m                                               ␛[94m│␛[0m
+ ␛[94m│␛[0m ␛[94m• Name the files that must not change.␛[0m                                     ␛[94m│␛[0m
+ ␛[94m│␛[0m ␛[94m• use /simplify: clean up after␛[0m                                            ␛[94m│␛[0m
+ ␛[94m│␛[0m ␛[94m• get shiny@mk: codemods␛[0m                                                   ␛[94m│␛[0m
+ ␛[94m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
+ ␛[96m╭─ ␛[0m␛[1;96mEnhanced prompt␛[0m ␛[96m───────────────────────────────────────────────␛[0m ␛[1;97;44m c Copy ␛[0m ␛[96m─╮␛[0m
+ ␛[96m│␛[0m ␛[96mRework the tax code in the invoice module.␛[0m                                 ␛[96m│␛[0m
+ ␛[96m│␛[0m ␛[96mDone when: the unit tests pass.␛[0m                                            ␛[96m│␛[0m
+ ␛[96m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
+␛[90m ─────────────────────────────────────────────────────────────────────────────␛[0m
+␛[90m Prompts in this thread  ▴ ␛[0m
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP04 handle this carefully and make it good for all the cust…
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP05 handle this carefully and make it good for all the cust…
+␛[7m › ✓ Jun 15 09:30  P06 handle this carefully and make it good for all the cust…␛[0m
+␛[100m ␛[94masking Claude in the background (about 20 seconds); the panel updates by itse…␛[0;100m␛[0m
