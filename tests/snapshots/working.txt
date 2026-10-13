@@ -1,0 +1,43 @@
+working 80x24
+--- plain ---
+  coachline · this thread · 6 prompts                         ⠋ Claude working 
+
+ ╭─ Your prompt ─────────────────────── Jun 15 09:30 · … queued for analysis ─╮
+ │ P06 handle this carefully and make it good for all the customers we have   │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ ╭─ Analysing ────────────────────────────────────────────────────────────────╮
+ │ Claude is analysing this prompt, usually about 20 seconds. This updates by │
+ │ itself.                                                                    │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ ╭─ While you wait ───────────────────────────────────────────────────────────╮
+ │ • replace 'carefully/best/clean' with a checkable rule or a reference      │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+ ─────────────────────────────────────────────────────────────────────────────
+ Claude will analyse your past chats in the background
+ ─────────────────────────────────────────────────────────────────────────────
+ Prompts in this thread  ▴ 
+   … Jun 15 09:30  P04 handle this carefully and make it good for all the cust…
+   … Jun 15 09:30  P05 handle this carefully and make it good for all the cust…
+ › … Jun 15 09:30  P06 handle this carefully and make it good for all the cust…
+ ↑↓ prompt  c copy  e analyse  Enter full  i patterns  s skill  q quit  m mouse
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                         ␛[93m⠋ Claude working ␛[0;100m␛[0m
+
+ ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m───────────────────────␛[0m ␛[90mJun 15 09:30 · … queued for analysis␛[0m ␛[97m─╮␛[0m
+ ␛[97m│␛[0m ␛[1;97mP06 handle this carefully and make it good for all the customers we have␛[0m   ␛[97m│␛[0m
+ ␛[97m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
+ ␛[90m╭─ ␛[0m␛[1;90mAnalysing␛[0m ␛[90m───────────────────────────────────────────────────────────────␛[0m␛[90m─╮␛[0m
+ ␛[90m│␛[0m ␛[90mClaude is analysing this prompt, usually about 20 seconds. This updates by␛[0m ␛[90m│␛[0m
+ ␛[90m│␛[0m ␛[90mitself.␛[0m                                                                    ␛[90m│␛[0m
+ ␛[90m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
+ ␛[94m╭─ ␛[0m␛[1;94mWhile you wait␛[0m ␛[94m──────────────────────────────────────────────────────────␛[0m␛[94m─╮␛[0m
+ ␛[94m│␛[0m ␛[94m• replace 'carefully/best/clean' with a checkable rule or a reference␛[0m      ␛[94m│␛[0m
+ ␛[94m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
+␛[90m ─────────────────────────────────────────────────────────────────────────────␛[0m
+␛[90m Claude will analyse your past chats in the background␛[0m
+␛[90m ─────────────────────────────────────────────────────────────────────────────␛[0m
+␛[90m Prompts in this thread  ▴ ␛[0m
+   ␛[93m…␛[0m ␛[90mJun 15 09:30  ␛[0mP04 handle this carefully and make it good for all the cust…
+   ␛[93m…␛[0m ␛[90mJun 15 09:30  ␛[0mP05 handle this carefully and make it good for all the cust…
+␛[7m › … Jun 15 09:30  P06 handle this carefully and make it good for all the cust…␛[0m
+␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mprompt␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97me␛[0;100m ␛[37manalyse␛[0;100m  ␛[1;97mEnter␛[0;100m ␛[37mfull␛[0;100m  ␛[1;97mi␛[0;100m ␛[37mpatterns␛[0;100m  ␛[1;97ms␛[0;100m ␛[37mskill␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m  ␛[1;97mm␛[0;100m ␛[37mmouse␛[0;100m␛[0m

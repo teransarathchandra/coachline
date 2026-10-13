@@ -1,5 +1,4 @@
 import json, os, re, subprocess, sys, tempfile, time, unittest
-from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
@@ -43,9 +42,11 @@ def flat(s):
 
 
 def card_of(frame):
-    """The text of the card for the selected prompt: its boxes and scroll marks, without the box drawing."""
-    lines = [l for l in plain(frame).splitlines()[1:] if l.strip()[:1] in ("\u256d", "\u2502", "\u2570", "\u25b4", "\u25be")]
-    return " ".join(re.sub("[\u256d\u256e\u2570\u256f\u2502\u2500]", " ", " ".join(lines)).split())
+    """The text between the header and the first rule: the card for the selected prompt, without its box edges."""
+    lines = plain(frame).splitlines()
+    rules = [n for n, l in enumerate(lines) if l.strip().startswith("\u2500")]
+    body = re.sub("[\u2502\u256d\u256e\u2570\u256f]|\u2500+", " ", " ".join(lines[1:rules[0]]))
+    return " ".join(body.split())
 
 
 def list_of(frame):
@@ -86,10 +87,10 @@ class Base(unittest.TestCase):
     def analyse(self, i, text, advice=ADVICE, **extra):
         self.add_record(key_for(i, text), text="AFTER: " + advice["after"], advice=advice, **extra)
 
-    def drive(self, keys, W=100, H=30, io=None, work=None):
+    def drive(self, keys, W=100, H=30, io=None, work=None, color=True):
         """Run the real loop with injected keys; return every frame that was drawn."""
         frames, it = [], iter(keys)
-        watch.loop(lambda t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (W, H), lambda: watch.build(self.path), io=io, work=work)
+        watch.loop(lambda t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (W, H), lambda: watch.build(self.path), io=io, work=work, color=color)
         return frames
 
 
@@ -133,11 +134,11 @@ class Scope(Base):
         self.analyse(11, "N11 " + VAGUE)
         self.write_json("learned.json", {"generated": "2026-09-30", "prompts": 99, "requests": [{"name": "carefully-things", "keywords": ["carefully"], "count": 4}], "mistakes": []})
         for patterns in (False, True):
-            for W, H in [(30, 10), (40, 14), (44, 22), (56, 34), (90, 40), (120, 50), (200, 60)]:
+            for W, H in [(12, 5), (22, 12), (30, 10), (40, 14), (44, 22), (56, 34), (90, 40), (120, 50), (200, 60)]:
                 st = watch.build(self.path); ui = watch.new_ui(); ui["patterns"] = patterns
                 lines = watch.render(st, ui, W, H, color=False)
                 self.assertLessEqual(len(lines), H - 1, (W, H))
-                self.assertTrue(all(len(l) <= max(W, 30) for l in lines), (W, H, [len(l) for l in lines if len(l) > max(W, 30)]))
+                self.assertTrue(all(watch.dw(l) <= W - 1 for l in lines), (W, H, [watch.dw(l) for l in lines if watch.dw(l) > W - 1]))
 
 
 class TheCard(Base):
@@ -215,58 +216,57 @@ class Colours(Base):
         ui = watch.new_ui(); ui.update(kw)
         return watch.render(watch.build(self.path), ui, 100, 40, color=True)
 
-    def code(self, kind): return f"[{watch.CODE[kind]}m"
-
-    def test_your_prompt_is_bold_in_a_grey_box_and_improve_has_the_accent(self):
+    def test_your_prompt_is_white_and_what_can_be_improved_is_blue(self):
         rows = self.rows()
-        prompt = next(r for r in rows if "UNIQUEPROMPT" in r and "❯" not in r)
-        self.assertNotIn("[1m", prompt)                                               # the terminal's own colour, never bold (light themes fade it)
-        self.assertIn(self.code("g_prompt") + "│", prompt)                           # a grey box
+        prompt = next(r for r in rows if "UNIQUEPROMPT" in r and "\u203a" not in r)
+        self.assertIn("\x1b[1;97mUNIQUEPROMPT", prompt)                                   # bright white, after a white gutter bar
+        self.assertIn("\x1b[97m\u2502", prompt)                                            # in a white box
         label = next(r for r in rows if "Improve" in r)
-        self.assertIn(self.code("h_improve") + "Improve", label)                          # accent title and border
-        self.assertIn(self.code("g_improve") + "╭", label)
+        self.assertIn("\x1b[1;94mImprove", label)                                         # bright blue title and gutter
         hint = next(r for r in rows if "carefully/best/clean" in r)
-        self.assertIn(self.code("bullet") + "•", hint)
+        self.assertIn("\x1b[94m\u2022", hint)
 
-    def test_claudes_advice_and_the_enhanced_prompt_use_the_terminals_own_colour(self):
+    def test_each_section_has_its_own_colour(self):
         self.analyse(0, "UNIQUEPROMPT " + VAGUE)
         rows = self.rows()
-        for needle in ("Ask for every usage first.", "Rework the tax code"):
+        for needle, code in (("Ask for every usage first.", "94"), ("Rework the tax code", "96"), ("Improve", "1;94"), ("Enhanced prompt", "1;96")):
             row = next(r for r in rows if needle in r)
-            self.assertNotRegex(row, "38;[0-9;]*m[^]*" + re.escape(needle))            # no colour of ours on it: readable on dark and light
+            self.assertIn(f"\x1b[{code}m", row.split(needle)[0].split("┃")[-1], needle)    # improve blue, the enhanced prompt cyan
 
-    def test_the_selected_row_is_marked_even_without_colour(self):
+    def test_structure_is_grey_and_the_selected_row_is_marked_even_without_colour(self):
         rows = self.rows()
-        sel = next(r for r in rows if "❯" in r)
-        self.assertIn(self.code("mark") + "❯", sel)
-        self.assertIn("❯", plain(sel))                                             # the marker shows on terminals without colour
+        self.assertTrue(any(r.startswith("\x1b[90m ─") for r in rows))                 # the rule above the list is grey
+        self.assertTrue(rows[0].startswith("\x1b[100m") and rows[-1].startswith("\x1b[100m"))   # header and footer are solid bars
+        sel = next(r for r in rows if "\u203a" in r)
+        self.assertTrue(sel.startswith("\x1b[7m"))                                       # reverse video...
+        self.assertIn("\u203a", plain(sel))                                              # ...and a marker, for terminals without it
 
-    def test_the_header_shows_whether_claude_is_on_and_spins_while_it_works(self):
-        ui = watch.new_ui()
-        self.assertIn(self.code("meta") + "○ Claude off", watch.render(watch.build(self.path), ui, 100, 40)[0])
-        self.assertFalse(ui["animate"])
+    def test_the_header_dot_shows_whether_claude_is_on(self):
+        off = self.rows()[0]
+        self.assertIn("\x1b[37m\u25cb Claude off", off)                                   # light grey: it sits on the header bar
         self.write_json("config.json", {"panel_ai": True})
         self.analyse(0, "UNIQUEPROMPT " + VAGUE)
-        self.assertIn(self.code("ok") + "● Claude on", self.rows()[0])
+        self.assertIn("\x1b[92m\u25cf Claude on", self.rows()[0])
         history(self.cfg, [("now", "p", "UNIQUEPROMPT " + VAGUE), ("now", "p", VAGUE + " newer one")])
-        head = watch.render(watch.build(self.path), ui, 100, 40)[0]                      # a recent prompt is queued
-        self.assertTrue(any(self.code("warn") + f"{c} Claude working" in head for c in watch.SPIN))
-        self.assertTrue(ui["animate"])                                                    # the loop redraws to turn the spinner
-
-    def test_no_color_turns_colour_off(self):
-        with mock.patch.object(watch, "NO_COLOR", True):
-            self.assertFalse(any("[" in r for r in self.rows()))
-
-    def test_every_row_fits_the_width_and_boxes_line_up(self):
-        self.analyse(0, "UNIQUEPROMPT " + VAGUE)
-        for W in (40, 60, 90, 140):
-            rows = [plain(r) for r in watch.render(watch.build(self.path), watch.new_ui(), W, 40)]
-            self.assertTrue(all(watch.dw(r) <= W - 1 for r in rows), W)
-            edges = {watch.dw(r.rstrip()) for r in rows if r.strip()[:1] in ("╭", "│", "╰")}
-            self.assertEqual(len(edges), 1, (W, edges))                                   # every box row ends in the same column
+        self.assertRegex(self.rows()[0], "\x1b\\[93m[" + re.escape(watch.SPIN) + "] Claude working")      # a recent prompt is queued: it spins
 
 
 class Status(Base):
+    def test_no_color_draws_the_interactive_panel_without_colour_but_keeps_the_selection_marker(self):
+        history(self.cfg, [("now", "p", VAGUE)])
+        frame = self.drive(["down"], color=False)[-1]
+        self.assertNotIn("[", frame)
+        self.assertIn("›", frame)
+
+    def test_the_spinner_turns_only_while_claude_works(self):
+        history(self.cfg, [("now", "p", VAGUE)])
+        idle = self.drive([None, None, None])
+        self.assertEqual(len(idle), 1)                                                   # nothing happening: drawn once, no redraws
+        self.write_json("config.json", {"panel_ai": True})
+        heads = [f.splitlines()[0] for f in self.drive([None, None, None])]
+        self.assertEqual(len(heads), 4)                                                  # each idle tick moves the spinner
+        self.assertEqual(len(set(heads)), 4, heads)
+
     def test_old_prompts_are_never_queued_so_the_header_does_not_spin_forever(self):
         self.write_json("config.json", {"panel_ai": True})
         texts = [f"P{i:02d} " + VAGUE for i in range(1, 9)]
@@ -383,6 +383,7 @@ class WideText(Base):
         self.assertEqual((watch.dw("abc"), watch.dw("日本"), watch.dw("\U0001F680 go"), watch.dw("é")), (3, 4, 5, 1))
         self.assertEqual(watch.dw(watch.clip("日本語のテスト", 7)), 7)           # 3 wide characters plus the ellipsis
         self.assertTrue(all(watch.dw(l) <= 10 for l in watch.wrap("日本語 " * 12 + "x" * 30, 10)))
+        self.assertEqual(watch.dw("☀️"), 2)                                                 # ☀️ is drawn as an emoji, two columns
         self.assertEqual(watch.tidy("a\tb\x07c"), "a b c")                                          # no control characters reach the screen
 
     def test_a_prompt_full_of_wide_characters_never_overflows_the_pane(self):
@@ -428,7 +429,7 @@ class Mouse(Base):
 
     def test_a_click_on_a_list_row_selects_that_prompt(self):
         st = watch.build(self.path); ui = watch.new_ui(); f = self.frame(ui, st)
-        row = next(n for n, l in enumerate(f) if "P09" in l and "❯" not in l)
+        row = next(n for n, l in enumerate(f) if "P09" in l and "›" not in l)
         self.assertFalse(watch.handle(ui, st, ("mouse", 0, 21, row + 1, True)))
         self.assertIn("P09", card_of("\n".join(self.frame(ui, st))))
         f = self.frame(ui, st)
@@ -560,6 +561,15 @@ class Resume(Base):
         coach.record_session(json.dumps({"session_id": "abcd1234-aaaa-bbbb", "source": "startup"}))
         self.assertEqual(coach.started_session()[0], "abcd1234-aaaa-bbbb")
 
+    def test_a_tabs_panel_shows_the_session_started_or_resumed_in_that_tab(self):
+        history(self.cfg, [("sess-aaaa-1", "p", VAGUE + " in tab A"), ("sess-bbbb-2", "p", VAGUE + " in tab B")])
+        coach.record_session(json.dumps({"session_id": "sess-aaaa-1", "source": "resume"}), tab="tab-a")
+        coach.record_session(json.dumps({"session_id": "sess-bbbb-2", "source": "startup"}), tab="tab-b")
+        for tab, want, other in (("tab-a", "in tab A", "in tab B"), ("tab-b", "in tab B", "in tab A")):
+            texts = [e["text"] for e in watch.build(self.path, session=watch.tab_session(tab))["entries"]]
+            self.assertTrue(any(want in t for t in texts), (tab, texts)); self.assertFalse(any(other in t for t in texts), (tab, texts))
+        self.assertIsNone(watch.tab_session(""))                                         # no tab: the newest conversation, as before
+
     def test_a_session_with_no_transcript_is_never_chosen_over_one_with_a_transcript(self):
         self.transcript("audit", 100)                                             # 'throwaway' has no file, as in real life
         self.assertEqual(watch.build(self.path)["session"], "audit")
@@ -604,7 +614,7 @@ class Navigation(Base):
 
     def test_the_list_scrolls_to_keep_the_selected_row_visible(self):
         f = self.drive(["home"], W=90, H=24)
-        self.assertTrue(any("P01" in r and "❯" in r for r in list_of(f[1])))
+        self.assertTrue(any("P01" in r and "\u203a" in r for r in list_of(f[1])))
 
     def test_a_new_prompt_takes_over_the_card_only_while_you_are_on_the_newest(self):
         def run(seq):
