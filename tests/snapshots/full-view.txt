@@ -1,0 +1,61 @@
+full-view 80x30
+--- plain ---
+  coachline   prompt 6 of 6  ·  Jun 15 09:30
+  YOUR PROMPT
+  P06 handle this carefully and make it good for all the customers we have
+
+  CAN BE IMPROVED
+  task: refactoring - tax rework
+  use: /simplify - clean up after
+  get: /plugin install shiny@mk - codemods
+  tip: Ask for every usage first.
+  tip: Name the files that must not change.
+  flow: 1) Search  2) Rename  3) Test
+
+  ENHANCED PROMPT   (press c to copy it; [ASK: ...] and <email> placeholders ar
+  Rework the tax code in the invoice module.
+  Done when: the unit tests pass.
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Esc back  c copy  e analyse  ↑↓ scroll  q quit  m mouse
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline ␛[0;100m␛[37m  prompt 6 of 6  ·  Jun 15 09:30␛[0;100m                                   ␛[0m
+␛[1;97m  YOUR PROMPT␛[0m
+␛[1;97m  P06 handle this carefully and make it good for all the customers we have␛[0m
+
+␛[1;94m  CAN BE IMPROVED␛[0m
+␛[90m  task: refactoring - tax rework␛[0m
+␛[94m  use: /simplify - clean up after␛[0m
+␛[94m  get: /plugin install shiny@mk - codemods␛[0m
+␛[94m  tip: Ask for every usage first.␛[0m
+␛[94m  tip: Name the files that must not change.␛[0m
+␛[90m  flow: 1) Search  2) Rename  3) Test␛[0m
+
+␛[1;96m  ENHANCED PROMPT   (press c to copy it; [ASK: ...] and <email> placeholders ar␛[0m
+␛[96m  Rework the tax code in the invoice module.␛[0m
+␛[96m  Done when: the unit tests pass.␛[0m
+
+
+
+
+
+
+
+
+
+
+
+
+
+␛[100m ␛[1;97mEsc␛[0;100m ␛[37mback␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97me␛[0;100m ␛[37manalyse␛[0;100m  ␛[1;97m↑↓␛[0;100m ␛[37mscroll␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m  ␛[1;97mm␛[0;100m ␛[37mmouse␛[0;100m                       ␛[0m

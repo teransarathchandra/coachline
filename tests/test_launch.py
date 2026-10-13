@@ -9,6 +9,22 @@ HAVE = lambda x: "/usr/bin/" + x
 NONE = lambda x: None
 
 
+class Colour(unittest.TestCase):
+    def test_the_panel_does_not_inherit_claude_codes_no_color(self):
+        seen = {}
+        class Fake:
+            def __init__(self, argv, **kw): seen.update(kw["env"])
+        old, launch.subprocess.Popen = launch.subprocess.Popen, Fake
+        own, launch.own_no_color = launch.own_no_color, lambda: False
+        prev = os.environ.get("NO_COLOR"); os.environ["NO_COLOR"] = "1"
+        try: launch.spawn(["x"])
+        finally:
+            launch.subprocess.Popen, launch.own_no_color = old, own
+            if prev is None: os.environ.pop("NO_COLOR")
+            else: os.environ["NO_COLOR"] = prev
+        self.assertNotIn("NO_COLOR", seen); self.assertIn("PATH", {k.upper() for k in seen})
+
+
 class Plan(unittest.TestCase):
     def test_tmux_splits_the_current_window_and_keeps_focus(self):
         a = launch.plan("Linux", {"TMUX": "/tmp/tmux-1/default,1,0", "CLAUDE_CONFIG_DIR": "/c"}, PY, W, which=HAVE)
@@ -65,11 +81,21 @@ class Main(unittest.TestCase):
         coach.set_setting("auto_open_watch", True)
         self.run_main("--auto"); self.assertEqual(len(self.opened), 1)
         self.run_main("--auto"); self.assertEqual(len(self.opened), 1)      # a session starting right behind it: launch lock
-        os.remove(launch.LOCK)
-        with open(coach.ALIVE, "w") as f: f.write("x")                      # the panel is up and beating
+        os.remove(coach.per_tab(launch.LOCK, "x"))
+        alive = coach.per_tab(coach.ALIVE, "x")
+        with open(alive, "w") as f: f.write("x")                            # the panel is up and beating
         self.run_main("--auto"); self.assertEqual(len(self.opened), 1)
-        os.utime(coach.ALIVE, (0, 0))                                       # heartbeat gone stale: the panel was closed
+        os.utime(alive, (0, 0))                                             # heartbeat gone stale: the panel was closed
         self.run_main("--auto"); self.assertEqual(len(self.opened), 2)
+
+    def test_each_windows_terminal_tab_gets_its_own_panel_for_its_own_conversation(self):
+        coach.set_setting("auto_open_watch", True)
+        self.run_main("--auto", env={"WT_SESSION": "tab-a"})
+        with open(coach.per_tab(coach.ALIVE, "tab-a"), "w") as f: f.write("x")   # tab A's panel is up
+        self.run_main("--auto", env={"WT_SESSION": "tab-b"})                 # a new Claude window: its own panel
+        self.run_main("--auto", env={"WT_SESSION": "tab-a"})                 # tab A again: already has one
+        self.assertEqual(len(self.opened), 2)
+        self.assertEqual([a[a.index("--tab") + 1] for a in self.opened], ["tab-a", "tab-b"])     # each panel knows its tab
 
     def test_where_it_cannot_split_it_stays_silent_for_hooks_and_prints_the_command_by_hand(self):
         coach.set_setting("auto_open_watch", True)

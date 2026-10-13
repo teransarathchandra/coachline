@@ -29,7 +29,7 @@ It sits in a split pane next to Claude, shows the prompts of your current conver
 
 ## Features
 
-- **Per-prompt coaching**: your prompt in white, what to improve in blue, and a complete enhanced prompt with a copy button.
+- **Per-prompt coaching**: each part in its own rounded card and colour: your prompt in white, what to improve in blue, the enhanced prompt in cyan with a copy button, web finds in magenta.
 - **Skill suggestions**: Claude reads your past chats and spots requests you keep repeating, so you can turn them into a skill.
 - **Research for each new task**: Claude searches the web for tools, modern approaches, official docs and reference sites that would make the result better (not only what you already have), matched to your project's framework versions. Every link is checked on your machine before you see it.
 - **Remembers what it showed you**: a suggestion appears with two prompts at most, never again once you hide it or say you use it, and its checked links are added to the enhanced prompt as References, so Claude Code gets them with your task.
@@ -56,11 +56,11 @@ Restart Claude Code.
 
 On macOS and Linux that is all: the panel opens inside Claude Code (from 144 columns at start, otherwise with your first prompt), and Claude analysis and web research are on. Turn either off with `/coach auto-open off` or `/coach panel-ai off`.
 
-On Windows, Claude analysis is on as well; run `/coach auto-open on` to open the panel in a Windows Terminal split on every session (or use the command from `/coach watch`).
+On Windows, Claude analysis is on as well; run `/coach auto-open on` to open the panel in a Windows Terminal split on every session (or use the command from `/coach watch`). Each Windows Terminal tab gets its own panel, showing that tab's conversation.
 
 ## Usage
 
-Keep the panel open next to Claude Code and send prompts as usual. The panel follows the conversation you are in: a new session starts empty, and a resumed one shows its prompts at once.
+Keep the panel open next to Claude Code and send prompts as usual. The panel follows the conversation you are in: a new session (or `/clear`) starts empty, and a resumed one shows its prompts at once. A spinner in the header turns while Claude works. `NO_COLOR` turns colour off; on Windows set it in your user environment, since the panel ignores the `NO_COLOR` that Claude Code sets for its own commands.
 
 ### Keys
 

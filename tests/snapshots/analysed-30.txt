@@ -1,0 +1,25 @@
+analysed-30 30x12
+--- plain ---
+  coachline     ○ Claude off 
+
+ ╭─ Your prompt ── Jun 15… ─╮
+ │ P06 handle this          │
+ │ carefully and make it    │
+ ╰─ ▾ PgDn for more ────────╯
+ ───────────────────────────
+ Prompts in this thread  ▴ 
+   ! Jun 15 09:30  P05 handl…
+ › ✓ Jun 15 09:30  P06 handl…
+ ↑↓ prompt  c copy  q quit
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline␛[0;100m     ␛[37m○ Claude off ␛[0;100m␛[0m
+
+ ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m──␛[0m ␛[90mJun 15…␛[0m ␛[97m─╮␛[0m
+ ␛[97m│␛[0m ␛[1;97mP06 handle this␛[0m          ␛[97m│␛[0m
+ ␛[97m│␛[0m ␛[1;97mcarefully and make it␛[0m    ␛[97m│␛[0m
+ ␛[97m╰─ ␛[0m␛[90m▾ PgDn for more␛[0m ␛[97m────────╯␛[0m
+␛[90m ───────────────────────────␛[0m
+␛[90m Prompts in this thread  ▴ ␛[0m
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP05 handl…
+␛[7m › ✓ Jun 15 09:30  P06 handl…␛[0m
+␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mprompt␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m   ␛[0m

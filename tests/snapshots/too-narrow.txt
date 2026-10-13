@@ -1,0 +1,7 @@
+too-narrow 22x12
+--- plain ---
+  coachline
+ needs 30 × 10
+--- ansi (␛ = ESC) ---
+ ␛[1;97;44m coachline␛[0m
+␛[90m needs 30 × 10␛[0m
