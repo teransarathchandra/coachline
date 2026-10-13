@@ -1,0 +1,21 @@
+empty 100x30
+--- plain ---
+  coachline · this thread · 0 prompts                                                 ○ Claude off 
+
+ ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ No prompts in this thread yet.                                                                 │
+ │ Send a prompt in Claude Code and it appears here.                                              │
+ │ Analysis is off. Turn it on: python setup.py --panel-ai on                                     │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ─────────────────────────────────────────────────────────────────────────────────────────────────
+ ↑↓ prompt  c copy  e analyse  Enter full  i patterns  s skill  q quit  m mouse
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 0 prompts␛[0;100m                                                 ␛[37m○ Claude off ␛[0;100m␛[0m
+
+ ␛[90m╭────────────────────────────────────────────────────────────────────────────────────────────────╮␛[0m
+ ␛[90m│␛[0m ␛[90mNo prompts in this thread yet.␛[0m                                                                 ␛[90m│␛[0m
+ ␛[90m│␛[0m ␛[90mSend a prompt in Claude Code and it appears here.␛[0m                                              ␛[90m│␛[0m
+ ␛[90m│␛[0m ␛[90mAnalysis is off. Turn it on: python setup.py --panel-ai on␛[0m                                     ␛[90m│␛[0m
+ ␛[90m╰────────────────────────────────────────────────────────────────────────────────────────────────╯␛[0m
+␛[90m ─────────────────────────────────────────────────────────────────────────────────────────────────␛[0m
+␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mprompt␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97me␛[0;100m ␛[37manalyse␛[0;100m  ␛[1;97mEnter␛[0;100m ␛[37mfull␛[0;100m  ␛[1;97mi␛[0;100m ␛[37mpatterns␛[0;100m  ␛[1;97ms␛[0;100m ␛[37mskill␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m  ␛[1;97mm␛[0;100m ␛[37mmouse␛[0;100m                    ␛[0m

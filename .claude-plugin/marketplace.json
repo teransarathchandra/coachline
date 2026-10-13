@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "coachline",
-      "description": "This thread's prompts (white) and what can be improved (blue), analysed by Claude on your subscription (no API key) with your past chats; drafts skills for what you repeat. Stdlib Python.",
+      "description": "This thread's prompts and what can be improved, in colour-coded cards, analysed by Claude on your subscription (no API key) with your past chats; drafts skills for what you repeat. Stdlib Python.",
       "source": "./",
       "category": "productivity"
     }
