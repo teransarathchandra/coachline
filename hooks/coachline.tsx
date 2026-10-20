@@ -85,7 +85,8 @@ async function refresh($: EngineInterface): Promise<PaneState | null> {
 }
 
 async function refreshOnce($: EngineInterface): Promise<PaneState | null> {
-  const r = await run($, ['--json', '--session', await $.session.id(), '--width', String(width)])
+  // --width 0: unwrapped. The pane may sit beside the conversation, narrower than the viewport's columns, so its Text wraps each line
+  const r = await run($, ['--json', '--session', await $.session.id(), '--width', '0'])
   let s: PaneState | null = null
   if (r.ok) {
     try {

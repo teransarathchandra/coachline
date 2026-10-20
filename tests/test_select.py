@@ -128,7 +128,7 @@ class EnhanceOneJob(Base):
 
     def setUp(self):
         super().setUp()
-        self.text = "Z01 " + VAGUE
+        self.text = "Z01 " + VAGUE + " [Pasted text #1 +28 lines]"      # the paste the enhanced prompt (AFTER) refers to
         history(self.cfg, [("now", "p", "warm up the earlier thing first please now"), ("now", "p", self.text), ("now", "p", "Z02 " + VAGUE)])
         self.key = key_for(1, self.text)
 
@@ -185,8 +185,9 @@ class AnalysisContext(Base):
         for never in ("EARLIERONE", "OTHERSESSION", "SECRETPROMPT"): self.assertNotIn(never, sent)   # sixth back, another conversation, opted out
 
     def test_a_prose_answer_is_retried_automatically_and_the_panel_gets_the_result(self):
-        history(self.cfg, [("now", "p", "TARGETPROMPT make the checkout faster for every customer please")])
-        r = run(self.cfg, "coach.py", "--bg-rewrite", "--key", key_for(0, "TARGETPROMPT make the checkout faster for every customer please"),
+        text = "TARGETPROMPT make the checkout faster for every customer please [Pasted text #1 +28 lines]"
+        history(self.cfg, [("now", "p", text)])
+        r = run(self.cfg, "coach.py", "--bg-rewrite", "--key", key_for(0, text),
                 FAKE_JSON=self.ADV, FAKE_BAD_ONCE=os.path.join(self.cfg, "bad-once"))
         self.assertEqual(r.returncode, 0, r.stderr)
         with open(os.path.join(self.cfg, "sent.log"), encoding="utf-8") as f: self.assertEqual(f.read().count("====="), 2)
@@ -195,7 +196,7 @@ class AnalysisContext(Base):
 
 class CoachCommand(Base):
     def test_coach_prints_one_clean_block_and_copies_only_when_asked(self):
-        history(self.cfg, [("now", "p", VAGUE)])
+        history(self.cfg, [("now", "p", VAGUE + " [Pasted text #1 +28 lines]")])
         out_file = os.path.join(self.cfg, "clip.bin")
         env = dict(FAKE_JSON=json.dumps(ADVICE), COACHLINE_CLIPBOARD=f'"{PY}" "{SINK}"', CLIP_OUT=out_file)
         r = run(self.cfg, "coach.py", "--coach", **env)

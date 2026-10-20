@@ -4,6 +4,8 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- The Claude Code pane wraps its text once, to its own width: lines are no longer pre-wrapped to the conversation's width and then wrapped again in a narrower side pane.
+- The enhanced prompt never cites a paste you didn't make: a sentence pointing at a `[Pasted text …]` marker that isn't in your prompt is dropped, and the model is told not to add one.
 - Claude Code's own commands with arguments (`/plugin marketplace add …`, `/model …`) no longer show up in the panel as prompts. A skill called with a task still does.
 - A new README that shows installing coachline and the panel opening beside Claude Code, then a prompt being improved; install per platform and the must-know keys; the details moved to `docs/` (usage, privacy and accuracy, troubleshooting).
 - The GIFs are recorded with VHS and tmux against made-up chats, with a stand-in for the Claude Code prompt and for `claude -p` (`docs/demo/`), so no real data appears in them.
