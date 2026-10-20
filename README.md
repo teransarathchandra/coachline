@@ -27,15 +27,15 @@
 
 ### 1 · Install, and the panel opens beside Claude Code
 
-Two commands in Claude Code. After a restart, coachline opens in a side panel by itself.
+Two commands in Claude Code, and coachline opens in a side panel right away. No restart, no API key.
 
-<img src="docs/assets/install.gif" alt="The two /plugin commands are typed in Claude Code; after a restart the coachline panel opens on the right" width="100%">
+<img src="docs/assets/install.gif" alt="In Claude Code, /plugin marketplace add and /plugin install coachline@coachline; the coachline panel opens on the right at once" width="100%">
 
 ### 2 · Type a prompt, see how to make it better
 
-Work as usual. The panel picks up each prompt and shows what to **improve** and an **enhanced prompt**. Press `c` to copy it and fill in the `[ASK: …]` parts.
+Work as usual. While Claude works on your prompt, the panel shows what to **improve** and an **enhanced prompt** to copy, with `[ASK: …]` where only you know the answer.
 
-<img src="docs/assets/prompt.gif" alt="A vague prompt is typed in Claude Code; the panel analyses it and shows tips and an enhanced prompt, which is copied with c" width="100%">
+<img src="docs/assets/prompt.gif" alt="A vague prompt is sent in Claude Code; while Claude works on it, the coachline panel shows tips and an enhanced prompt" width="100%">
 
 <details>
 <summary><b>More:</b> browse the whole thread, and patterns from your past chats</summary>
@@ -59,12 +59,12 @@ You need [Claude Code](https://claude.com/claude-code) (signed in, `claude` work
 /plugin install coachline@coachline
 ```
 
-Then restart Claude Code.
+coachline is active straight away.
 
 <details open>
 <summary><img src="https://cdn.simpleicons.org/apple/000000/ffffff" height="16" alt=""> <b>macOS</b> · <img src="https://cdn.simpleicons.org/linux/000000/ffffff" height="16" alt=""> <b>Linux</b>: nothing else to do</summary>
 
-<br>The panel opens inside Claude Code at the start of a session (from 144 columns wide, otherwise with your first prompt). Needs Claude Code 2.1.287 or newer; with an older one, use `/coach watch` as described under *any terminal* below.
+<br>The panel opens inside Claude Code, beside the conversation: as soon as it is installed, then at the start of every session (from 144 columns wide; narrower, with your first prompt). Needs Claude Code 2.1.287 or newer; with an older one, use `/coach watch` as described under *any terminal* below.
 
 </details>
 
@@ -97,7 +97,7 @@ Then restart Claude Code.
 | `i` | patterns from past chats | `s` | install a drafted skill |
 | `m` | mouse on or off | `q` | quit |
 
-Every key, mark and `/coach` command: [usage guide](docs/usage.md).
+In the Claude Code pane, click its buttons (`[ Copy ]`, `[ Analyse ]`); the keys are for the standalone panel (Windows and `/coach watch`). Every key, mark and `/coach` command: [usage guide](docs/usage.md).
 
 ## Private by design
 
