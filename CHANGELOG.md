@@ -4,6 +4,7 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- Claude Code's own commands with arguments (`/plugin marketplace add …`, `/model …`) no longer show up in the panel as prompts. A skill called with a task still does.
 - A new README that shows installing coachline and the panel opening beside Claude Code, then a prompt being improved; install per platform and the must-know keys; the details moved to `docs/` (usage, privacy and accuracy, troubleshooting).
 - The GIFs are recorded with VHS and tmux against made-up chats, with a stand-in for the Claude Code prompt and for `claude -p` (`docs/demo/`), so no real data appears in them.
 - Contributing guide, code of conduct, security policy, issue and PR templates, Dependabot and `.editorconfig`.
