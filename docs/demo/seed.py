@@ -4,6 +4,7 @@ One conversation in a shoe-shop project, Claude's analysis of each prompt, web f
 skill. Nothing here is real data, and nothing is sent anywhere.
 
   python3 docs/demo/seed.py              write the world
+  python3 docs/demo/seed.py --fresh      the same earlier chats, but the conversation has no prompts yet
   python3 docs/demo/seed.py --send TEXT  add TEXT to the conversation, as Claude Code does when you send a prompt
 """
 import json, os, sys, time
@@ -22,14 +23,14 @@ THREAD = [
         "after": "Add a size picker to the product page (src/app/product/[id]/page.tsx).\n\nSizes come from the product API's `variants`. "
                  "Show sold-out sizes disabled and mark low stock (under 3).\n\nDone when: choosing a size updates the price and the Add to cart "
                  "button, and the existing product page tests pass."}),
-    (22, "fix the login bug", {
+    (22, "fix the login bug, users can't sign in", {
         "task": "debugging", "summary": "a login failure with no details",
-        "tips": ["Paste the error and the steps that trigger it.", "Name the file or route: src/auth/login.ts.",
+        "tips": ["Paste the error and the steps that trigger it.", "Name the file or route, e.g. src/auth/login.ts.",
                  "Say what fixed means: a test that fails now and passes after."],
         "use": [{"name": "systematic-debugging", "why": "find the cause before changing code"}],
-        "after": "Users with a + in their email cannot log in: POST /api/login returns 401 although the password is right.\n\n"
-                 "Find the cause in src/auth/login.ts before changing anything, then write a test that fails now.\n\n"
-                 "Done when: that test passes and the existing auth tests still pass."}),
+        "after": "Fix the login bug: [ASK: what happens, e.g. the error or status code] when [ASK: the steps that trigger it].\n\n"
+                 "Find the cause in [ASK: the file or route, e.g. src/auth/login.ts] before changing anything, then write a test "
+                 "that fails now.\n\nDone when: that test passes and the existing auth tests still pass."}),
     (11, "make the shoe site look more premium", {
         "task": "ui-design", "summary": "a premium look for a shoe store",
         "tips": ["Name the pages you want: home, catalog, product, cart.", "Give two or three reference sites you like.",
@@ -55,16 +56,8 @@ PAST = ["commit and open a pr for the cart fix", "fix the bug in checkout", "ope
         "commit and open a pr, describe the refactor", "fix the bug where the search is empty", "commit this and open a pr",
         "please open a pr for the new footer"]
 
-LIVE_ADVICE = {
-    "task": "performance", "summary": "a slow product page", "topic": "product page performance", "new_task": True,
-    "tips": ["Say what slow means: the LCP on a phone, or the API time.", "Give a target: LCP under 2.5 s on 4G.",
-             "Say what must not change: the page layout."],
-    "use": [{"name": "systematic-debugging", "why": "measure before you optimise"}],
-    "workflow": ["Measure", "Find the cause", "Fix", "Measure again"],
-    "after": "The product page (src/app/product/[id]/page.tsx) takes about 4 s to show its main image on a phone.\n\n"
-             "Measure first with Lighthouse in mobile mode and name the biggest cause before changing code. Keep the layout as it is.\n\n"
-             "Done when: LCP is under 2.5 s on simulated 4G and the product page tests pass.",
-}
+# what the stand-in for `claude -p` answers for a prompt sent while recording (fake_claude.py): the advice for the login bug
+LIVE_ADVICE = dict(THREAD[1][2], topic="login bug", new_task=True, workflow=["Reproduce", "Find the cause", "Test", "Fix"])
 
 
 def put(path, text):
@@ -76,10 +69,11 @@ def line(ts, text, sid):
     return json.dumps({"display": text, "timestamp": str(int(ts * 1000)), "project": PROJECT, "sessionId": sid}) + "\n"
 
 
-def world():
+def world(fresh=False):
+    """fresh: earlier chats only, and an empty conversation you have just started."""
     hist = [line(NOW - 86400 * (9 - i), t, f"past-{i}") for i, t in enumerate(PAST)]
     recs = []
-    for mins, text, advice, *web in THREAD:
+    for mins, text, advice, *web in ([] if fresh else THREAD):
         ts = NOW - mins * 60
         hist.append(line(ts, text, SESSION))
         rec = {"key": coach.prompt_key((float(int(ts * 1000)) / 1000, PROJECT, text)), "text": "AFTER: " + advice["after"], "advice": advice}
@@ -102,4 +96,4 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--send"]:
         with open(coach.HIST, "a", encoding="utf-8") as f: f.write(line(time.time(), " ".join(sys.argv[2:]), SESSION))
     else:
-        world()
+        world(fresh=sys.argv[1:2] == ["--fresh"])

@@ -41,10 +41,10 @@ To try your copy in Claude Code: `/plugin marketplace add /path/to/coachline`, t
 
 ## Re-recording the GIFs
 
-The GIFs in `docs/assets/` are recorded with [VHS](https://github.com/charmbracelet/vhs) in a temporary Claude config with a made-up conversation (`docs/demo/seed.py`) and a stand-in for `claude`, so no real data appears in them:
+The GIFs in `docs/assets/` are recorded with [VHS](https://github.com/charmbracelet/vhs) and tmux in a temporary Claude config with made-up chats (`docs/demo/seed.py`). The left pane is a bare stand-in for the Claude Code prompt (`docs/demo/claude_stand_in.py`) and `claude -p` is replaced by `docs/demo/fake_claude.py`; the panel on the right is the real one. No real data appears and nothing is sent:
 
 ```bash
-vhs docs/demo/coach.tape && vhs docs/demo/browse.tape && vhs docs/demo/patterns.tape
+for t in install prompt browse patterns; do vhs docs/demo/$t.tape; done
 ```
 
 ## Releasing (maintainer)
