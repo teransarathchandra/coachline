@@ -115,6 +115,14 @@ class Scope(Base):
         self.assertNotIn("a.b@example.org", out); self.assertNotIn("hunter2", out)
         self.assertIn("<email>", out)
 
+    def test_built_in_commands_are_not_prompts_even_with_arguments(self):
+        history(self.cfg, [("now", "p", "/plugin marketplace add teransarathchandra/coachline"), ("now", "p", "/model claude-sonnet-5-5 for this one"),
+                           ("now", "p", "/frontend-design make the shoe site look more premium")])
+        out = once(self.cfg)
+        self.assertIn("this thread · 1 prompt", out)
+        self.assertNotIn("marketplace add", out); self.assertNotIn("claude-sonnet", out)
+        self.assertIn("make the shoe site look more premium", out)      # a skill with a task is still a prompt
+
     def test_empty_and_one_liner_histories_do_not_crash(self):
         history(self.cfg, [("now", "p", "continue")])
         self.assertIn("No prompts in this thread yet.", once(self.cfg))
