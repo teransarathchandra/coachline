@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
 import type { PaneEntry, PaneLine, PaneState } from '../types'
 
@@ -15,11 +15,37 @@ const showPatterns = atom({ plugin: 'coachline', key: 'showPatterns' } as const,
 const closed = atom({ plugin: 'coachline', key: 'closed' } as const, false)
 const msg = atom({ plugin: 'coachline', key: 'msg' } as const, '')
 
-// watch.py's colours, by line kind (see CODE in scripts/watch.py)
+// watch.py's colours (see CODE in scripts/watch.py): text by line kind, and each section's box and title by section
 const COLOR: Record<string, string> = {
-  prompt: 'whiteBright', blue: 'blueBright', bluedim: 'blueBright', enh: 'blueBright', task: 'blueBright', meta: 'gray',
+  prompt: 'whiteBright', blue: 'blueBright', bluedim: 'blueBright', enh: 'cyanBright', task: 'blueBright', meta: 'gray',
+  better: 'magentaBright', src: 'gray',
 }
-const HEAD_COLOR: Record<string, string> = { prompt: 'whiteBright', improve: 'blueBright', enh: 'blueBright', info: 'blueBright', web: 'green' }
+const SECTION_COLOR: Record<string, string> = {
+  prompt: 'whiteBright', improve: 'blueBright', enh: 'cyanBright', web: 'magentaBright', info: 'gray', bad: 'redBright',
+}
+
+// discover.item_lines: "1. better: Name (kind) · you use this - why"
+const FIND = /^(\d+\. )better: (.+?) \(([a-z]+)\)( · you use this)? - (.*)$/s
+
+type Section = { section: string; head: PaneLine | null; rows: PaneLine[] }
+
+// watch.py's boxed(): a section's title opens its box, and a blank line, a new title or another section closes it
+function sections(lines: PaneLine[]): Section[] {
+  const out: Section[] = []
+  let cur: Section | null = null
+  for (const l of lines) {
+    const [section, kind] = l
+    if (cur && (kind === 'blank' || section !== cur.section || kind === 'head')) cur = null
+    if (kind === 'blank') continue
+    if (!cur) {
+      cur = { section, head: kind === 'head' ? l : null, rows: [] }
+      out.push(cur)
+      if (kind === 'head') continue
+    }
+    cur.rows.push(l)
+  }
+  return out
+}
 
 // Background work can outlive the module (a reload, the session ending): nothing is left to report to then.
 const ignore = () => undefined
@@ -220,24 +246,11 @@ export const register: Register = on => {
     }
 
     const line = (l: PaneLine, n: number) => {
-      const [section, kind, text, right, action] = l
-      if (kind === 'blank') return <Text key={`l${n}`}> </Text>
-      if (kind === 'head') {
-        return (
-          // the label or button sits right after the title, never against the pane's right edge, where the pane's own close mark is
-          <Box key={`l${n}`}>
-            <Text bold color={HEAD_COLOR[section] ?? 'blueBright'}>{text}</Text>
-            <Text>{'  '}</Text>
-            {action === 'copy' ? <Button key="copy" label="Copy" onPress={copy} />
-              : right ? <Text dimColor>{right}</Text> : null}
-          </Box>
-        )
-      }
+      const [, kind, text, , action] = l
       if (kind === 'itemacts' && action?.startsWith('item:')) {
         const id = action.slice('item:'.length)
         return (
-          <Box key={`l${n}`}>
-            <Text>{'  '}</Text>
+          <Box key={`l${n}`} paddingLeft={3}>
             <Button key={`hide:${id}`} label="Hide" onPress={() => mark('dismissed', id)} />
             <Text>{'  '}</Text>
             <Button key={`use:${id}`} label="I use this" onPress={() => mark('adopted', id)} />
@@ -245,20 +258,76 @@ export const register: Register = on => {
         )
       }
       if (action === 'enter') return <Button key="whole" label="Show the whole prompt" onPress={() => update($, full, () => true)} />
-      return <Text key={`l${n}`} color={COLOR[kind]} dimColor={kind === 'bluedim' || kind === 'meta'} bold={kind === 'prompt'}>{text}</Text>
+      const find = kind === 'better' ? FIND.exec(text) : null
+      if (find) {
+        const [, num, name, type, used, why] = find
+        return (
+          // a web find: its name and kind, then why, the source and the buttons beneath, each item apart from the one before
+          <Box key={`l${n}`} marginTop={n % 1000 ? 1 : 0}>
+            <Text color={COLOR.better}>{num}</Text>
+            <Box flexDirection="column">
+              <Box>
+                <Text bold color={COLOR.better}>{name}</Text>
+                <Text dimColor>{`  ${type}${used ?? ''}`}</Text>
+              </Box>
+              <Text>{why}</Text>
+            </Box>
+          </Box>
+        )
+      }
+      if (kind === 'src') {
+        return (
+          <Box key={`l${n}`} paddingLeft={3}>
+            <Text dimColor>{text.trim()}</Text>
+          </Box>
+        )
+      }
+      const dot = /^[•-] /.exec(text)?.[0]
+      if (dot) {
+        return (
+          // a bullet's wrapped lines start under its text, as watch.py's bullet() wraps them
+          <Box key={`l${n}`}>
+            <Text color={COLOR[kind]} dimColor={kind === 'bluedim'}>{dot}</Text>
+            <Text color={COLOR[kind]} dimColor={kind === 'bluedim'}>{text.slice(dot.length)}</Text>
+          </Box>
+        )
+      }
+      return <Text key={`l${n}`} color={COLOR[kind]} dimColor={kind === 'bluedim' || kind === 'meta' || kind === 'src'} bold={kind === 'prompt'}>{text}</Text>
+    }
+
+    // as on watch.py's panel: each section a rounded box in its colour. The title opens it (an element set on the border is not
+    // drawn), its label or Copy button right after, never against the pane's right edge, where the pane's own close mark is
+    const box = (sec: Section, n: number, body: RenderChildren[]) => {
+      const color = SECTION_COLOR[sec.section] ?? 'gray'
+      const [, , title, right, action] = sec.head ?? []
+      if (!sec.section) return <Box key={`s${n}`} flexDirection="column">{body}</Box>
+      return (
+        <Box key={`s${n}`} flexDirection="column" borderStyle="round" borderColor={color} paddingX={1}>
+          {title && (
+            <Box>
+              <Text bold color={color}>{title}</Text>
+              <Text>{'  '}</Text>
+              {action === 'copy' ? <Button key="copy" label="Copy" onPress={copy} /> : right ? <Text dimColor>{right}</Text> : null}
+            </Box>
+          )}
+          {body}
+        </Box>
+      )
     }
 
     const card = isFull
-      ? [<Text key="fullhead" bold>Your prompt</Text>, <Text key="fulltext" color="whiteBright">{cur.text}</Text>,
-         <Button key="less" label="Show less" onPress={() => update($, full, () => false)} />]
-      : cur.lines.map(line)
+      ? [box({ section: 'prompt', head: ['prompt', 'head', 'Your prompt', '', null], rows: [] }, 0, [
+          <Text key="fulltext" color="whiteBright">{cur.text}</Text>,
+          <Button key="less" label="Show less" onPress={() => update($, full, () => false)} />,
+        ])]
+      : sections(cur.lines).map((sec, n) => box(sec, n, sec.rows.map((l, k) => line(l, n * 1000 + k))))
     // watch.py's card names keys ("press e"); here one Analyse button stands for them, whatever the prompt's state
     const canAnalyse = !cur.after && cur.state !== 'off'
 
     return (
       <Box flexDirection="column">
         {header}
-        <Box flexDirection="column" marginY={1}>{card}</Box>
+        <Box flexDirection="column" marginY={1} gap={1}>{card}</Box>
         {canAnalyse && <Button key="analyse" label={cur.state === 'pending' ? 'Analyse again' : 'Analyse'} onPress={analyse} />}
         {s.research && !!cur.after && cur.state !== 'off' && <Button key="research" label="Look again on the web" onPress={research} />}
         {s.patterns.length > 0 && (
