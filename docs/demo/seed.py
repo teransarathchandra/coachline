@@ -4,7 +4,6 @@ One conversation in a shoe-shop project, Claude's analysis of each prompt, web f
 skill. Nothing here is real data, and nothing is sent anywhere.
 
   python3 docs/demo/seed.py              write the world
-  python3 docs/demo/seed.py --fresh      the same earlier chats, but the conversation has no prompts yet
   python3 docs/demo/seed.py --send TEXT  add TEXT to the conversation, as Claude Code does when you send a prompt
 """
 import json, os, sys, time
@@ -56,7 +55,7 @@ PAST = ["commit and open a pr for the cart fix", "fix the bug in checkout", "ope
         "commit and open a pr, describe the refactor", "fix the bug where the search is empty", "commit this and open a pr",
         "please open a pr for the new footer"]
 
-# what the stand-in for `claude -p` answers for a prompt sent while recording (fake_claude.py): the advice for the login bug
+# what fake_claude.py answers if the panel asks Claude while recording (every seeded prompt is analysed already)
 LIVE_ADVICE = dict(THREAD[1][2], topic="login bug", new_task=True, workflow=["Reproduce", "Find the cause", "Test", "Fix"])
 
 
@@ -69,11 +68,10 @@ def line(ts, text, sid):
     return json.dumps({"display": text, "timestamp": str(int(ts * 1000)), "project": PROJECT, "sessionId": sid}) + "\n"
 
 
-def world(fresh=False):
-    """fresh: earlier chats only, and an empty conversation you have just started."""
+def world():
     hist = [line(NOW - 86400 * (9 - i), t, f"past-{i}") for i, t in enumerate(PAST)]
     recs = []
-    for mins, text, advice, *web in ([] if fresh else THREAD):
+    for mins, text, advice, *web in THREAD:
         ts = NOW - mins * 60
         hist.append(line(ts, text, SESSION))
         rec = {"key": coach.prompt_key((float(int(ts * 1000)) / 1000, PROJECT, text)), "text": "AFTER: " + advice["after"], "advice": advice}
@@ -96,4 +94,4 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--send"]:
         with open(coach.HIST, "a", encoding="utf-8") as f: f.write(line(time.time(), " ".join(sys.argv[2:]), SESSION))
     else:
-        world(fresh=sys.argv[1:2] == ["--fresh"])
+        world()
