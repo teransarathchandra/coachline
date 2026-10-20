@@ -43,11 +43,18 @@ To try your copy in Claude Code: `/plugin marketplace add /path/to/coachline`, t
 
 The GIFs in `docs/assets/` are recorded with [VHS](https://github.com/charmbracelet/vhs).
 
-- `install.tape` and `prompt.tape` record the **real Claude Code**: they install coachline from GitHub `main` and send one prompt in a throwaway project (`/tmp/shoe-shop`). They run in a separate Claude config that holds only a demo login, so none of your own history, settings or plugins appear (`docs/demo/real.sh`). Sign in to it once, and record after merging, as the install comes from GitHub:
+- `install.tape`, `prompt.tape` and `website.tape` record the **real Claude Code**: they install coachline from GitHub `main` and send one prompt in a throwaway project (`/tmp/shoe-shop`). They run in a separate Claude config that holds only a demo login, so none of your own history, settings or plugins appear (`docs/demo/real.sh`). Sign in to it once, and record after merging, as the install comes from GitHub:
 
   ```bash
   CLAUDE_CONFIG_DIR=~/.claude-coachline-demo claude auth login
-  vhs docs/demo/install.tape && vhs docs/demo/prompt.tape     # a few calls on that login's subscription
+  vhs docs/demo/install.tape                                    # a few calls on that login's subscription
+  vhs docs/demo/prompt.tape && vhs docs/demo/website.tape       # recorded at twice the size, into docs/demo/.rec/
+  ```
+
+  `prompt.tape` and `website.tape` record at twice the GIF's size; `docs/demo/zoom.py` then cuts the waits and eases the view in on the panel, with the text still sharp. Its plans (`*.zoom.json`) give the parts to keep and the camera's moves, in seconds: check them against a new recording, as Claude's timing differs from take to take. It needs Pillow (`pip install pillow`) and writes `screenshot.png` too:
+
+  ```bash
+  python3 docs/demo/zoom.py docs/demo/prompt.zoom.json && python3 docs/demo/zoom.py docs/demo/website.zoom.json
   ```
 
 - `browse.tape` and `patterns.tape` record the standalone panel in a temporary config with made-up chats (`docs/demo/seed.py`) and a stand-in for `claude -p` (`docs/demo/fake_claude.py`), so nothing is sent:
