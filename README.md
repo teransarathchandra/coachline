@@ -25,23 +25,30 @@
 
 ## How it works
 
-### 1 · Every prompt, coached
+### 1 · Install, and the panel opens beside Claude Code
 
-Send a prompt as usual. A moment later the panel shows what to **improve** and an **enhanced prompt**. Press `c` to copy it.
+Two commands in Claude Code. After a restart, coachline opens in a side panel by itself.
 
-<img src="docs/assets/coach.gif" alt="A new prompt arrives, Claude analyses it, and the card fills with tips and an enhanced prompt that is copied with c" width="100%">
+<img src="docs/assets/install.gif" alt="The two /plugin commands are typed in Claude Code; after a restart the coachline panel opens on the right" width="100%">
 
-### 2 · The whole thread, one key away
+### 2 · Type a prompt, see how to make it better
 
-`↑` `↓` move through the conversation. Each prompt keeps its card, with links Claude found on the web and **checked on your machine** first.
+Work as usual. The panel picks up each prompt and shows what to **improve** and an **enhanced prompt**. Press `c` to copy it and fill in the `[ASK: …]` parts.
+
+<img src="docs/assets/prompt.gif" alt="A vague prompt is typed in Claude Code; the panel analyses it and shows tips and an enhanced prompt, which is copied with c" width="100%">
+
+<details>
+<summary><b>More:</b> browse the whole thread, and patterns from your past chats</summary>
+
+<br>`↑` `↓` move through the conversation. Each prompt keeps its card, with links Claude found on the web and **checked on your machine** first.
 
 <img src="docs/assets/browse.gif" alt="Moving back through the thread shows each prompt's card, its web finds and the full prompt" width="100%">
-
-### 3 · Learns from your past chats
 
 `i` shows the habits and repeated requests Claude spotted in your history. `s` turns a repeated request into a skill.
 
 <img src="docs/assets/patterns.gif" alt="Patterns from past chats, then the drafted skill is installed with s" width="100%">
+
+</details>
 
 ## Install
 
