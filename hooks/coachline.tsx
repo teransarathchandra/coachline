@@ -127,7 +127,8 @@ async function refreshOnce($: EngineInterface): Promise<PaneState | null> {
   }
   await update($, error, () => '')
   await update($, state, () => s)
-  const busy = s.entries.some(e => e.state === 'pending')
+  // an analysis or this session's web research still to come: keep checking, since the turn may go on long after either lands
+  const busy = s.entries.some(e => e.state === 'pending') || !!s.researching
   if (busy && !poll) poll = $.clock.every(3000, () => void refresh($).catch(ignore))
   if (!busy && poll) {
     poll.cancel()

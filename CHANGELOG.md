@@ -4,6 +4,7 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- The Claude Code pane shows the web research's finds as soon as they come in. It used to stop checking once the analysis was in, so finds that came later waited for the turn to end.
 - The Claude Code pane on macOS and Linux shows each part in its own rounded, coloured card, as the Windows panel does: your prompt white, Improve blue, the enhanced prompt cyan, web finds magenta. A web find shows its name in bold, then why, its link and its buttons beneath; bullets wrap under their text.
 - The Claude Code pane wraps its text once, to its own width: lines are no longer pre-wrapped to the conversation's width and then wrapped again in a narrower side pane.
 - The enhanced prompt never cites a paste you didn't make: a sentence pointing at a `[Pasted text …]` marker that isn't in your prompt is dropped, and the model is told not to add one.
