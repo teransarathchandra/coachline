@@ -1,30 +1,27 @@
-# Records docs/assets/install.gif. Run from the repo root: vhs docs/demo/install.tape
+# Records docs/assets/install.gif with the real Claude Code, installing coachline from GitHub. Needs the one-time demo login in
+# docs/demo/real.sh. Run from the repo root: vhs docs/demo/install.tape
 Output docs/assets/install.gif
 Source docs/demo/common.tape
 Set Width 1400
-Set Height 620
+Set Height 860
 Set FontSize 14
 
 Hide
-Type "DEMO_WORLD=--fresh source docs/demo/setup.sh && split" Enter
-Sleep 1.5s
+Type "source docs/demo/real.sh" Enter
+Sleep 8s
 Type "claude" Enter
-Sleep 1s
+Sleep 7s
 Show
 
-Sleep 1s
-Type@45ms "/plugin marketplace add teransarathchandra/coachline"
-Sleep 500ms
-Enter
 Sleep 1.5s
-Type@45ms "/plugin install coachline@coachline"
-Sleep 500ms
-Enter
-Sleep 2s
-# restart Claude Code: the panel opens beside it
-Type@60ms "/exit"
-Enter
+Type@45ms "/plugin marketplace add teransarathchandra/coachline"
 Sleep 600ms
-Type@60ms "claude"
 Enter
-Sleep 4s
+Sleep 8s
+Type@45ms "/plugin install coachline@coachline"
+Sleep 600ms
+Enter
+Sleep 3s
+# install for you (user scope): coachline is active at once and its panel opens
+Enter
+Sleep 9s
