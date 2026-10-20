@@ -4,8 +4,8 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
-- A new README with a GIF for each step, install per platform and the must-know keys; the details moved to `docs/` (usage, privacy and accuracy, troubleshooting).
-- The GIFs are recorded with VHS against a made-up conversation and a stand-in for `claude` (`docs/demo/`), so no real data appears in them.
+- A new README that shows installing coachline and the panel opening beside Claude Code, then a prompt being improved; install per platform and the must-know keys; the details moved to `docs/` (usage, privacy and accuracy, troubleshooting).
+- The GIFs are recorded with VHS and tmux against made-up chats, with a stand-in for the Claude Code prompt and for `claude -p` (`docs/demo/`), so no real data appears in them.
 - Contributing guide, code of conduct, security policy, issue and PR templates, Dependabot and `.editorconfig`.
 - CI runs on pushes to `main` and on pull requests, with read-only permissions and pinned actions. A release workflow creates the GitHub release from a `coachline--v<version>` tag (`claude plugin tag`).
 - Removed the internal design plans and specs (`docs/superpowers/`).
