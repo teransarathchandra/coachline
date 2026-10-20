@@ -14,6 +14,11 @@ OFF = os.path.join(STATE, "llm-off.txt")        # one path substring per line: n
 USER_CFG = os.path.join(STATE, "config.json")    # {"categories": {"name": "regex"}}
 PASTE = re.compile(r"\[Pasted text #\d+ \+(\d+) lines\]")
 BARE = re.compile(r"^(continue|yes|ok|confirm|go ahead|keep going|resume|clear)\W*$", re.I)
+# Claude Code's own commands: settings and housekeeping, never a task, even with arguments (/plugin install x, /model sonnet).
+# A skill or custom command called with a task (/frontend-design make it premium) is still a prompt.
+BUILTIN = re.compile(r"^/(add-dir|agents|bug|clear|compact|config|context|cost|doctor|effort|exit|export|fast|help|hooks|ide|login|logout|"
+                     r"mcp|memory|model|output-style|permissions|plugins?|release-notes|reload-plugins|resume|rewind|status|statusline|"
+                     r"terminal-setup|theme|upgrade|usage|vim)(\s|$)", re.I)
 
 _SECRETS = [
     (r"[\w.+-]+@[\w-]+\.[\w.]+", "<email>"),
@@ -103,7 +108,7 @@ def load_full(path):
     return sorted(rows)
 
 def scorable(t):
-    return not (BARE.match(t) or re.match(r"^/\S+$", t) or len(body(t).split()) < 3)
+    return not (BARE.match(t) or re.match(r"^/\S+$", t) or BUILTIN.match(t) or len(body(t).split()) < 3)
 
 def analyse(rows):
     fails = collections.Counter(); scored = 0; bare = 0
