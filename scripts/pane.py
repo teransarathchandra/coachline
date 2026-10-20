@@ -1,6 +1,7 @@
 """pane.py - the coachline panel for Claude Code's own pane (hooks/coachline.tsx): one tick, no drawing.
 
   python pane.py --json --session ID [--width N]   this thread's state as JSON; queues Claude's analysis when it is on
+                                                   (--width 0: lines unwrapped, for a pane that wraps them itself)
   python pane.py --enhance KEY [--session ID]      ask Claude about one prompt now (the pane's Analyse button)
   python pane.py --install SLUG                    install a skill Claude drafted (the pane's Install button)
   python pane.py --mark dismissed|adopted ID       hide a web suggestion for good, or note that you use it (the pane's buttons)
@@ -74,6 +75,9 @@ def standalone_shows(session):
     return shown in ("", session)
 
 
+UNWRAPPED = 10 ** 6                    # --width 0: one line per paragraph; the Claude Code pane wraps each to its own width
+
+
 def tick(session, width=80, io=None, now=None):
     work = coach.auto_open_on()                         # auto-open off: the pane never shows, so nothing is sent and no notice used up
     st = watch.build(coach.HIST, session=session, notice=work)
@@ -86,7 +90,7 @@ def tick(session, width=80, io=None, now=None):
         finally:
             try: os.remove(lock_path(session))
             except OSError: pass
-    iw = max(20, min(width, watch.MAX_WIDTH) - 4)
+    iw = UNWRAPPED if width <= 0 else max(20, min(width, watch.MAX_WIDTH) - 4)
     entries = []
     for i, e in enumerate(st["entries"]):
         state, glyph, _kind, words = watch.status(e, st, ui)

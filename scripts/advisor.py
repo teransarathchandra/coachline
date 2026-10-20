@@ -88,8 +88,9 @@ Return ONLY a JSON object, no prose, no code fence:
  "workflow":["at most 4 short ordered steps for doing this kind of task well with Claude Code"],
  "after":"a COMPLETE prompt the user can paste as it is. Keep their intent and facts and add what is missing. Where you must choose (style, scope, structure), make the most sensible choice and write it into the prompt as a normal sentence. Use [ASK: ...] ONLY for a fact nobody could guess (a name, a URL, a number), at most 2 in the whole prompt, never for style or scope choices. Never write bracketed alternatives like [modern/clean/other] or fill-in templates: choose one and say it plainly. Use the earlier prompts to know what 'it' refers to and be as concrete as they allow."}
 At most 3 use and 2 get; leave a list empty if nothing genuinely fits. Never invent a name.
-Text like "[Pasted text #1 +28 lines]" is a marker for content the user attached that you cannot see. Never ask for it again: keep the
-marker exactly where it belongs in "after" and write the rest so the prompt works once that content is pasted back at the marker."""
+If the user's prompt contains a marker like "[Pasted text #1 +28 lines]", it stands for content they attached that you cannot see.
+Never ask for it again: keep that marker exactly where it belongs in "after" and write the rest so the prompt works once that
+content is pasted back at the marker. Never add a marker the user's prompt does not contain."""
 
 
 def catalog_block(inst, avail):
@@ -127,8 +128,16 @@ def _strs(raw, limit, width=160):
     return [coach.clean(s)[:width] for s in (raw if isinstance(raw, list) else []) if coach.clean(s)][:limit]
 
 
-def validate(d, inst, avail):
-    """Keep only what the catalog supports; trim everything else. Returns the advice dict."""
+def unpasted(after, text):
+    """after without any sentence citing a paste marker that text (the user's prompt) does not have: the model copied the
+    example in the instructions, and the user would be told to paste back something they never pasted."""
+    for m in {x.group(0) for x in coach.PASTE.finditer(after)} - {x.group(0) for x in coach.PASTE.finditer(text)}:
+        after = re.sub(r"[^.!?\n]*" + re.escape(m) + r"[^.!?\n]*[.!?]?", "", after)
+    return re.sub(r"\n{3,}", "\n\n", re.sub(r"[ \t]+\n", "\n", after)).strip()
+
+
+def validate(d, inst, avail, text=""):
+    """Keep only what the catalog supports and the user's prompt (text) backs; trim everything else. Returns the advice dict."""
     a_names, i_names = {x["name"] for x in avail}, {x["name"] for x in inst}
     use, get = _pick(d.get("use"), i_names, MAX_USE), _pick(d.get("get"), a_names, MAX_GET)
     dropped = sum(1 for x in (d.get("use") or []) + (d.get("get") or []) if isinstance(x, dict)) - len(use) - len(get)
@@ -137,7 +146,7 @@ def validate(d, inst, avail):
     return {"task": task, "summary": coach.clean(d.get("summary", ""))[:100], "topic": topic, "new_task": d.get("new_task") is not False,
             "use": use, "get": get,
             "tips": _strs(d.get("tips"), MAX_TIPS, 220), "workflow": _strs(d.get("workflow"), MAX_FLOW, 110),
-            "after": trim(coach.clean(d.get("after", ""), keep_newlines=True).strip()), "dropped": max(dropped, 0)}
+            "after": trim(unpasted(coach.clean(d.get("after", ""), keep_newlines=True).strip(), text)), "dropped": max(dropped, 0)}
 
 
 def advise(text, fails, timeout=120, model=None, context=()):
@@ -147,10 +156,10 @@ def advise(text, fails, timeout=120, model=None, context=()):
     inst, avail = catalog()
     prompt = build_prompt(text, fails, inst, avail, context)
     try:
-        return validate(parse_json(coach.ask_claude(prompt, model=model, timeout=timeout)), inst, avail)
+        return validate(parse_json(coach.ask_claude(prompt, model=model, timeout=timeout)), inst, avail, text)
     except ValueError:
         again = prompt + "\n\nYour previous answer was not a JSON object. Do not answer the user prompt. Reply with ONLY the JSON object described above."
-        return validate(parse_json(coach.ask_claude(again, model=model, timeout=timeout)), inst, avail)
+        return validate(parse_json(coach.ask_claude(again, model=model, timeout=timeout)), inst, avail, text)
 
 
 # ---- display: one formatter shared by the statusline, the watch panel and /coach --------------------

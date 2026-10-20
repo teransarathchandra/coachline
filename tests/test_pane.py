@@ -46,6 +46,17 @@ class Tick(unittest.TestCase):
         self.assertTrue(all(len(l) == 5 for l in lines))
         json.dumps(st)                                                     # it must be JSON-safe
 
+    def test_width_0_leaves_wrapping_to_the_pane(self):
+        from test_watch import key_for, ADVICE
+        tip = "Paste the exact error text, the HTTP status and the browser or server logs so Claude can reproduce the failure first."
+        after = "Fix the bug where users cannot sign in: reproduce it, trace the login flow from the form to the session, and find the root cause."
+        history(self.cfg, [("s1", "p", SOLID)])
+        with open(coach.REWRITES, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"key": key_for(0, SOLID), "text": "AFTER: " + after, "advice": dict(ADVICE, tips=[tip], after=after)}) + "\n")
+        texts = [l[2] for l in pane.tick("s1", width=0, io=self.io)["entries"][0]["lines"]]
+        self.assertIn("• " + tip, texts)                                   # one line each: a side pane narrower than the
+        self.assertIn(after, texts)                                        # conversation wraps them itself, once
+
     def test_a_new_session_with_no_prompts_is_empty(self):
         history(self.cfg, [("old", "p", VAGUE)])
         st = self.tick("brand-new")

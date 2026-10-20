@@ -138,6 +138,14 @@ class Trim(unittest.TestCase):
         self.assertEqual(advisor.trim("word " * 300, 900).split()[-1], "word")          # no sentence: a whole word
         self.assertEqual(advisor.validate({"after": s}, [], [])["after"], s)            # 1200 characters are kept whole
 
+    def test_a_paste_the_user_never_made_is_not_in_the_enhanced_prompt(self):
+        after = "Fix the sign-in bug and add a test. The error users see is: [Pasted text #1 +28 lines]\n\nDone when: the test passes."
+        got = advisor.validate({"after": after}, [], [], text="fix the login bug, users can't sign in")["after"]
+        self.assertNotIn("Pasted text", got); self.assertNotIn("The error users see is", got)     # the sentence that cited it goes too
+        self.assertEqual(got, "Fix the sign-in bug and add a test.\n\nDone when: the test passes.")
+        real = "here is the trace [Pasted text #1 +28 lines] fix it"                              # a real paste keeps its marker
+        self.assertIn("[Pasted text #1 +28 lines]", advisor.validate({"after": after}, [], [], text=real)["after"])
+
 
 class Instructions(unittest.TestCase):
     def test_the_enhanced_prompt_is_complete_and_not_a_questionnaire(self):
