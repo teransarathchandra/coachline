@@ -2,7 +2,7 @@
 
 Keep the panel open next to Claude Code and send prompts as usual. It follows the conversation you are in: a new session (or `/clear`) starts empty, and a resumed one shows its prompts at once. A spinner in the header turns while Claude works.
 
-Each prompt gets a card, one colour per part:
+Each prompt gets a card: each part in a rounded box of its own colour, in the Claude Code pane and in the standalone panel alike.
 
 | Part | Colour | What it is |
 |---|---|---|

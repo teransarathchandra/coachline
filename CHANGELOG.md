@@ -4,6 +4,7 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- The README opens with a screenshot of the panel's cards. The prompt GIF eases in on the panel once the result appears, and a new GIF shows a shoe store website prompt getting a skill to use, an enhanced prompt and web finds. Recorded at twice the size and zoomed with `docs/demo/zoom.py`.
 - The Claude Code pane shows the web research's finds as soon as they come in. It used to stop checking once the analysis was in, so finds that came later waited for the turn to end.
 - The Claude Code pane on macOS and Linux shows each part in its own rounded, coloured card, as the Windows panel does: your prompt white, Improve blue, the enhanced prompt cyan, web finds magenta. A web find shows its name in bold, then why, its link and its buttons beneath; bullets wrap under their text.
 - The Claude Code pane wraps its text once, to its own width: lines are no longer pre-wrapped to the conversation's width and then wrapped again in a narrower side pane.
