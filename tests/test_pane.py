@@ -134,6 +134,16 @@ class Tick(unittest.TestCase):
         self.assertIsNone(st["notice"])
         self.assertEqual(coach.setting("notice_sessions", []), [])
 
+    def test_it_says_while_web_research_for_this_session_is_under_way(self):
+        import discover
+        history(self.cfg, [("s1", "p", VAGUE)])
+        self.assertFalse(self.tick()["researching"])
+        discover._mark("s1", pending=True)
+        self.assertTrue(self.tick()["researching"])                        # the pane keeps checking until the finds come in
+        self.assertFalse(self.tick("s2")["researching"])
+        discover._mark("s1", done=True)
+        self.assertFalse(self.tick()["researching"])
+
     def test_the_cli_prints_json(self):
         history(self.cfg, [("s1", "p", VAGUE)])
         coach.set_setting("panel_ai", False)                              # the subprocess must not spawn a real `claude`

@@ -14,6 +14,7 @@ export type PaneEntry = {
 export type PaneState = {
   ai: boolean
   research: boolean
+  researching: boolean
   auto_open: boolean
   session: string | null
   entries: PaneEntry[]

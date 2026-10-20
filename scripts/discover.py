@@ -251,6 +251,12 @@ def wanted(session, advice):
     return session not in (st.get("done") or {}) and time.time() - (st.get("pending") or {}).get(session, 0) > 2 * LOCK_STALE
 
 
+def researching(session):
+    """Web research for this session is waiting or under way: the Claude Code pane keeps checking until its finds come in."""
+    t = (_load("research-state.json").get("pending") or {}).get(session)
+    return isinstance(t, (int, float)) and time.time() - t < 2 * LOCK_STALE
+
+
 def _mark(session, done=False, pending=False):
     """Record a session as researched (done) or as waiting for research (pending); neither clears both."""
     st, now = _load("research-state.json"), time.time()

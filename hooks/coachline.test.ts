@@ -293,3 +293,26 @@ test('each section of the card is a rounded box in its colour, a web find named 
   expect((await ui.find({ type: 'Text', text: /^GreatKit$/ }))?.props).toMatchObject({ bold: true })
   expect(await ui.find({ type: 'Text', text: /^w$/ })).toBeDefined()
 })
+
+test('keeps checking while web research is under way, then stops', async ($, on) => {
+  base(on)
+  const clock = mock.clock(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  let researching = true
+  let runs = 0
+  on('process.run', ($, e) => {
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    runs += 1
+    return RESULT(STATE({ entries: [{ ...ENTRY, state: 'done' }], researching }))
+  })
+  await $.session.start(START)
+  await clock.settle()
+  const before = runs
+  await clock.advance(3000)
+  expect(runs).toBeGreaterThan(before)                // the analysis is in, the web finds are not: still checking
+  researching = false
+  await clock.advance(3000)
+  const after = runs
+  await clock.advance(9000)
+  expect(runs).toBe(after)                            // the finds are in: no more checks until the next prompt or turn
+})
