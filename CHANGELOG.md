@@ -2,6 +2,12 @@
 
 All notable changes to coachline. Versions follow [semantic versioning](https://semver.org); the version lives in `.claude-plugin/plugin.json`.
 
+## Unreleased
+
+- **The Claude desktop app** (macOS and Windows): the coachline pane opens beside a Code session with your first prompt, and updates as the analysis and the web finds come in. It is drawn in the app's own design: its rounded cards, its text and accent colours in light and dark, and its buttons, Copy first. The terminal's pane and the Windows Terminal panel look and work as before.
+- A desktop session's prompts are read from its transcript, since the app writes none to `history.jsonl`; coachline keeps them in `~/.claude/coach/prompts.jsonl` for the analysis and the history review.
+- On Windows the pane finds Python through `py -3` when `python3` and `python` are missing or are the Microsoft Store stand-ins. A desktop session never opens the Windows Terminal split.
+
 ## 0.15.0 (2026-10-21)
 
 - The Claude Code pane on macOS and Linux shows each part in its own rounded, coloured card, as the Windows panel does: your prompt white, Improve blue, the enhanced prompt cyan, web finds magenta. A web find shows its name in bold, then why, its link and its buttons beneath; bullets wrap under their text.

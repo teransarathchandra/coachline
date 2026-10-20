@@ -1,11 +1,12 @@
 """coachline - score your last Claude Code prompt against 5 rules, spot repeated requests.
 
-Stdlib only. Reads <config>/history.jsonl (read-only). Writes only under <config>/coach/.
+Stdlib only. Reads <config>/history.jsonl, and a desktop app session's transcript, which has its prompts instead (read-only).
+Writes only under <config>/coach/.
   python coach.py              replay report over your whole history
   python coach.py --coach      before/after for your last prompt (Haiku rewrite via `claude -p`)
   python coach.py --doctor     check that everything this tool depends on works
 """
-import argparse, collections, datetime as dt, json, os, platform, re, shutil, subprocess, sys, tempfile, time
+import argparse, collections, datetime as dt, glob, json, os, platform, re, shutil, subprocess, sys, tempfile, time
 
 CONFIG = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
 HIST = os.path.join(CONFIG, "history.jsonl")
@@ -75,37 +76,76 @@ def categories():
         extra = {}
     return {**CATS, **{k: v for k, v in extra.items() if isinstance(v, str)}}
 
+def prompts_path():
+    """Prompts of the sessions Claude Code keeps out of history.jsonl (the desktop app's), in its format: see sync_transcript."""
+    return os.path.join(STATE, "prompts.jsonl")
+
+def _history(path):
+    """history.jsonl's records, and with it prompts.jsonl's. Skips malformed lines; history.jsonl is not a public format."""
+    for p in (path, prompts_path()) if path == HIST else (path,):
+        try:
+            f = open(p, encoding="utf-8")
+        except OSError:
+            continue
+        with f:
+            for l in f:
+                try: yield json.loads(l)
+                except ValueError: continue
+
 def load(path):
-    """Rows of (unix_seconds, project, text). Skips malformed lines; history.jsonl is not a public format."""
+    """Rows of (unix_seconds, project, text). Skips malformed lines."""
     rows = []
-    try:
-        f = open(path, encoding="utf-8")
-    except OSError:
-        return rows
-    with f:
-        for l in f:
-            try:
-                r = json.loads(l)
-                rows.append((float(r["timestamp"]) / 1000, r.get("project") or "", str(r["display"]).strip()))
-            except (ValueError, KeyError, TypeError):
-                continue
+    for r in _history(path):
+        try: rows.append((float(r["timestamp"]) / 1000, r.get("project") or "", str(r["display"]).strip()))
+        except (ValueError, KeyError, TypeError, AttributeError): continue
     return sorted(rows)
 
 def load_full(path):
     """(unix_seconds, project, text, session_id) rows, oldest first. Malformed lines are skipped."""
     rows = []
-    try:
-        f = open(path, encoding="utf-8")
-    except OSError:
-        return rows
-    with f:
-        for l in f:
-            try:
-                r = json.loads(l)
-                rows.append((float(r["timestamp"]) / 1000, r.get("project") or "", str(r["display"]).strip(), str(r.get("sessionId") or "")))
-            except (ValueError, KeyError, TypeError):
-                continue
+    for r in _history(path):
+        try: rows.append((float(r["timestamp"]) / 1000, r.get("project") or "", str(r["display"]).strip(), str(r.get("sessionId") or "")))
+        except (ValueError, KeyError, TypeError, AttributeError): continue
     return sorted(rows)
+
+# the app's own blocks in a prompt's content (its context, a command's markup), not what you typed
+TAGGED = re.compile(r"^\s*<(system-reminder|command-[a-z-]+|local-command-[a-z-]+|ide_[a-z_]+)>")
+
+def transcript_prompts(session):
+    """[(ms, project, text)] of what you typed in a session, from its transcript (read-only): a person's rows only (origin
+    human), not tool results, meta rows or a subagent's."""
+    out = []
+    for p in glob.glob(os.path.join(CONFIG, "projects", "*", session + ".jsonl")):
+        try:
+            f = open(p, encoding="utf-8")
+        except OSError:
+            continue
+        with f:
+            for l in f:
+                if '"human"' not in l: continue                # most rows are tool calls: skip them unparsed
+                try:
+                    r = json.loads(l)
+                    if r.get("type") != "user" or (r.get("origin") or {}).get("kind") != "human" or r.get("isMeta") or r.get("isSidechain"): continue
+                    c = r["message"]["content"]
+                    parts = [c] if isinstance(c, str) else [b.get("text") or "" for b in c if isinstance(b, dict) and b.get("type") == "text"]
+                    text = "\n".join(t for t in parts if t.strip() and not TAGGED.match(t)).strip()
+                    ms = int(dt.datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00")).timestamp() * 1000)
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    continue
+                if text: out.append((ms, r.get("cwd") or "", text))
+    return out
+
+def sync_transcript(session):
+    """A session that history.jsonl has no line of (the desktop app writes none): its prompts from its transcript, added to
+    prompts.jsonl once each, so this thread's pane, the analysis and the review read them as any other. True when it added one."""
+    have = {(str(r.get("timestamp")), r.get("display")) for r in _history(HIST) if isinstance(r, dict) and r.get("sessionId") == session}
+    new = [(ms, proj, text) for ms, proj, text in transcript_prompts(session) if (str(ms), text) not in have]
+    if not new: return False
+    os.makedirs(STATE, exist_ok=True)
+    with open(prompts_path(), "a", encoding="utf-8") as f:
+        for ms, proj, text in new:
+            f.write(json.dumps({"display": text, "pastedContents": {}, "timestamp": ms, "project": proj, "sessionId": session}) + "\n")
+    return True
 
 def scorable(t):
     return not (BARE.match(t) or re.match(r"^/\S+$", t) or BUILTIN.match(t) or len(body(t).split()) < 3)
