@@ -279,8 +279,8 @@ def card_lines(st, ui, i, e, iw, acts=False):
     older = ui["sel"] is not None and i != len(st["entries"]) - 1
     out.append(("prompt", "head", "Your prompt", f"{stamp(e['ts'])} · {glyph} {words}" + (" · earlier prompt, G = newest" if older else ""), None))
     pl = wrap(e["text"], iw)
-    cut = len(pl) > 5
-    if cut: pl = pl[:5]; pl[-1] = clip(pl[-1] + " ", iw - 1) + "…"
+    cut = len(pl) > 5 or dw(pl[0]) > 5 * MAX_WIDTH         # the second: unwrapped for a pane that wraps it, about five lines' worth
+    if cut: pl = pl[:5]; pl[-1] = clip(pl[-1] + " ", min(iw, 5 * MAX_WIDTH) - 1) + "…"
     out += [("prompt", "prompt", w, "", None) for w in pl] + ([("prompt", "meta", "Enter shows the whole prompt", "", "enter")] if cut else [])
     adv = e["advice"]
     if adv:
