@@ -11,3 +11,9 @@ venv/
 # local agent tooling
 .superpowers/
 graphify-out/
+
+# written by Claude Code when it loads the plugin from this folder (claude --plugin-dir .)
+/tsconfig.json
+
+# raw recordings for the README GIFs (docs/demo/zoom.py)
+docs/demo/.rec/
