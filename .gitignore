@@ -1,2 +1,13 @@
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# editors and OS
+.DS_Store
+.idea/
+.vscode/
+
+# local agent tooling
+.superpowers/
+graphify-out/
