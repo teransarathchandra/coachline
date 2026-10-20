@@ -22,6 +22,7 @@
   <a href="#windows"><img src="https://img.shields.io/badge/Windows-Terminal_split-0078D4?style=for-the-badge" alt="Windows: Windows Terminal split"></a>
 </p>
 
+<img src="docs/assets/screenshot.png" alt="Claude Code with the coachline panel beside it: the prompt, what to improve, including a skill to use, and the enhanced prompt, each in its own coloured card" width="100%">
 
 ## How it works
 
@@ -35,7 +36,13 @@ Two commands in Claude Code, and coachline opens in a side panel right away. No 
 
 Work as usual. While Claude works on your prompt, the panel shows what to **improve** and an **enhanced prompt** to copy, with `[ASK: …]` where only you know the answer.
 
-<img src="docs/assets/prompt.gif" alt="A vague prompt is sent in Claude Code; while Claude works on it, the coachline panel shows tips and an enhanced prompt" width="100%">
+<img src="docs/assets/prompt.gif" alt="A vague prompt is sent in Claude Code; while Claude works on it, the coachline panel shows tips and an enhanced prompt, and the view zooms in on them" width="100%">
+
+### 3 · Starting something new? Get the skills, tools and references for it
+
+For a new task, coachline names the **skills and plugins** you have that fit, then searches the web for **tools, docs and reference sites**, and checks each link before you see it.
+
+<img src="docs/assets/website.gif" alt="A prompt to make a shoe store website: the panel suggests the frontend-design skill and an enhanced prompt, then web finds such as Playwright MCP, Motion for React and the WCAG 2.2 quick reference" width="100%">
 
 <details>
 <summary><b>More:</b> browse the whole thread, and patterns from your past chats</summary>
