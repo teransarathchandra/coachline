@@ -1,4 +1,4 @@
-# Sourced (hidden) by install.tape and prompt.tape, which record the real Claude Code. It uses a separate config that holds only a
+# Sourced (hidden) by install.tape, prompt.tape and website.tape, which record the real Claude Code. It uses a separate config that holds only a
 # demo login, so none of your own history, settings or plugins appear. Sign in to it once:
 #   CLAUDE_CONFIG_DIR=~/.claude-coachline-demo claude auth login
 # Each take starts like a new user: coachline is uninstalled and its state and history cleared, in that demo config only.
