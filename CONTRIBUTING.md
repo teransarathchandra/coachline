@@ -41,11 +41,20 @@ To try your copy in Claude Code: `/plugin marketplace add /path/to/coachline`, t
 
 ## Re-recording the GIFs
 
-The GIFs in `docs/assets/` are recorded with [VHS](https://github.com/charmbracelet/vhs) and tmux in a temporary Claude config with made-up chats (`docs/demo/seed.py`). The left pane is a bare stand-in for the Claude Code prompt (`docs/demo/claude_stand_in.py`) and `claude -p` is replaced by `docs/demo/fake_claude.py`; the panel on the right is the real one. No real data appears and nothing is sent:
+The GIFs in `docs/assets/` are recorded with [VHS](https://github.com/charmbracelet/vhs).
 
-```bash
-for t in install prompt browse patterns; do vhs docs/demo/$t.tape; done
-```
+- `install.tape` and `prompt.tape` record the **real Claude Code**: they install coachline from GitHub `main` and send one prompt in a throwaway project (`/tmp/shoe-shop`). They run in a separate Claude config that holds only a demo login, so none of your own history, settings or plugins appear (`docs/demo/real.sh`). Sign in to it once, and record after merging, as the install comes from GitHub:
+
+  ```bash
+  CLAUDE_CONFIG_DIR=~/.claude-coachline-demo claude auth login
+  vhs docs/demo/install.tape && vhs docs/demo/prompt.tape     # a few calls on that login's subscription
+  ```
+
+- `browse.tape` and `patterns.tape` record the standalone panel in a temporary config with made-up chats (`docs/demo/seed.py`) and a stand-in for `claude -p` (`docs/demo/fake_claude.py`), so nothing is sent:
+
+  ```bash
+  vhs docs/demo/browse.tape && vhs docs/demo/patterns.tape
+  ```
 
 ## Releasing (maintainer)
 
