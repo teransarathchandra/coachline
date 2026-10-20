@@ -1,0 +1,39 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: coachline version
+      description: "`claude plugin list` shows it, e.g. 0.14.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Linux, Windows]
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version and terminal
+      description: e.g. Claude Code 2.1.290 in Windows Terminal, or in the VS Code terminal
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Leave out your prompts and anything sensitive.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of /coach doctor
+      render: text

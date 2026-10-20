@@ -3,8 +3,18 @@
   "version": "0.14.0",
   "description": "A split-pane panel for Claude Code: this thread's prompts in colour-coded cards (your prompt, what can be improved, the enhanced prompt), analysed by Claude on your subscription (no API key) together with your past chats, so it can tell you what to turn into a skill.",
   "author": {
-    "name": "Teran Sarathchandra"
+    "name": "Teran Sarathchandra",
+    "url": "https://github.com/teransarathchandra"
   },
+  "homepage": "https://github.com/teransarathchandra/coachline#readme",
+  "repository": "https://github.com/teransarathchandra/coachline",
   "license": "MIT",
+  "keywords": [
+    "prompts",
+    "prompt-engineering",
+    "coach",
+    "productivity",
+    "skills"
+  ],
   "types": "./types/index.d.ts"
 }

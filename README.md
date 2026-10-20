@@ -1,151 +1,112 @@
-# coachline
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="coachline: a side panel for Claude Code that coaches every prompt" width="100%">
+</p>
 
-[![ci](https://github.com/teransarathchandra/coachline/actions/workflows/ci.yml/badge.svg)](https://github.com/teransarathchandra/coachline/actions/workflows/ci.yml)
-![license](https://img.shields.io/badge/license-MIT-blue)
+<p align="center">
+  <a href="https://github.com/teransarathchandra/coachline/releases"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fteransarathchandra%2Fcoachline%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=d97757" alt="Version"></a>
+  <a href="https://github.com/teransarathchandra/coachline/actions/workflows/ci.yml"><img src="https://github.com/teransarathchandra/coachline/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-%E2%89%A53.9-3776ab?logo=python&logoColor=white" alt="Python 3.9 or newer">
+  <img src="https://img.shields.io/badge/dependencies-none-2ea44f" alt="No dependencies">
+  <img src="https://img.shields.io/badge/API_key-not_needed-2ea44f" alt="No API key needed">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+</p>
 
-A side panel for [Claude Code](https://claude.com/claude-code) that coaches your prompts.
+<p align="center">
+  coachline sits next to <b>Claude Code</b>, shows the prompts of your conversation, says how each one could be better<br>
+  and hands you an enhanced version to copy. Claude does the analysis on <b>your own subscription</b>.
+</p>
 
-It sits in a split pane next to Claude, shows the prompts of your current conversation, and tells you how each one can be better. It also hands you an enhanced version you can copy and paste. Claude does the analysis through your own subscription: **no API key**.
+<p align="center">
+  <a href="#install"><img src="https://img.shields.io/badge/Claude_Code-Install_plugin-D97757?style=for-the-badge&logo=claude&logoColor=white" alt="Install in Claude Code"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/macOS_·_Linux-Opens_by_itself-555555?style=for-the-badge&logo=apple&logoColor=white" alt="macOS and Linux: opens by itself"></a>
+  <a href="#windows"><img src="https://img.shields.io/badge/Windows-Terminal_split-0078D4?style=for-the-badge" alt="Windows: Windows Terminal split"></a>
+</p>
 
-```
-  coachline · this thread · 12 prompts                         ● Claude on
- ───────────────────────────────────────────────────────────────────────
- ┃ Your prompt                                  15:28 · ✓ analysed
- ┃ make the shoe site look more premium
 
- ┃ Improve                                                 frontend
- ┃ • Name the pages you want: home, catalog, product, cart.
- ┃ • use /impeccable: design the interface
+## How it works
 
- ┃ Enhanced prompt                                          c Copy
- ┃ Create a modern luxury website for selling high-end shoes...
- ───────────────────────────────────────────────────────────────────────
- 2 patterns from your past chats · i to read
- ───────────────────────────────────────────────────────────────────────
- Prompts in this thread
- › ✓ 15:28  make the shoe site look more premium
- ↑↓ prompt  c copy  e analyse  Enter full  i patterns  q quit  m mouse
-```
+### 1 · Every prompt, coached
 
-## Features
+Send a prompt as usual. A moment later the panel shows what to **improve** and an **enhanced prompt**. Press `c` to copy it.
 
-- **Per-prompt coaching**: each part in its own rounded card and colour: your prompt in white, what to improve in blue, the enhanced prompt in cyan with a copy button, web finds in magenta.
-- **Skill suggestions**: Claude reads your past chats and spots requests you keep repeating, so you can turn them into a skill.
-- **Research for each new task**: Claude searches the web for tools, modern approaches, official docs and reference sites that would make the result better (not only what you already have), matched to your project's framework versions. Every link is checked on your machine before you see it.
-- **Remembers what it showed you**: a suggestion appears with two prompts at most, never again once you hide it or say you use it, and its checked links are added to the enhanced prompt as References, so Claude Code gets them with your task.
-- **Keyboard and mouse**: arrows or wheel to move, click to select, click `c Copy` to copy.
-- **Opens by itself**: on macOS and Linux the panel appears inside Claude Code as soon as you start; nothing to set up.
+<img src="docs/assets/coach.gif" alt="A new prompt arrives, Claude analyses it, and the card fills with tips and an enhanced prompt that is copied with c" width="100%">
 
-## Requirements
+### 2 · The whole thread, one key away
 
-- Claude Code, signed in with your Claude subscription (the `claude` command works in your terminal)
-- Python 3.9 or newer (`python3` on macOS and Linux, `python` or `py -3` on Windows)
-- Windows, macOS or Linux
-- Claude Code 2.1.287 or newer for the built-in pane (older versions: use `/coach watch`)
+`↑` `↓` move through the conversation. Each prompt keeps its card, with links Claude found on the web and **checked on your machine** first.
+
+<img src="docs/assets/browse.gif" alt="Moving back through the thread shows each prompt's card, its web finds and the full prompt" width="100%">
+
+### 3 · Learns from your past chats
+
+`i` shows the habits and repeated requests Claude spotted in your history. `s` turns a repeated request into a skill.
+
+<img src="docs/assets/patterns.gif" alt="Patterns from past chats, then the drafted skill is installed with s" width="100%">
 
 ## Install
 
-In Claude Code:
+You need [Claude Code](https://claude.com/claude-code) (signed in, `claude` works in your terminal) and **Python 3.9+**. In Claude Code:
 
 ```
 /plugin marketplace add teransarathchandra/coachline
 /plugin install coachline@coachline
 ```
 
-Restart Claude Code.
+Then restart Claude Code.
 
-On macOS and Linux that is all: the panel opens inside Claude Code (from 144 columns at start, otherwise with your first prompt), and Claude analysis and web research are on. Turn either off with `/coach auto-open off` or `/coach panel-ai off`.
+<details open>
+<summary><img src="https://cdn.simpleicons.org/apple/000000/ffffff" height="16" alt=""> <b>macOS</b> · <img src="https://cdn.simpleicons.org/linux/000000/ffffff" height="16" alt=""> <b>Linux</b>: nothing else to do</summary>
 
-On Windows, Claude analysis is on as well; run `/coach auto-open on` to open the panel in a Windows Terminal split on every session (or use the command from `/coach watch`). Each Windows Terminal tab gets its own panel, showing that tab's conversation.
+<br>The panel opens inside Claude Code at the start of a session (from 144 columns wide, otherwise with your first prompt). Needs Claude Code 2.1.287 or newer; with an older one, use `/coach watch` as described under *any terminal* below.
 
-## Usage
+</details>
 
-Keep the panel open next to Claude Code and send prompts as usual. The panel follows the conversation you are in: a new session (or `/clear`) starts empty, and a resumed one shows its prompts at once. A spinner in the header turns while Claude works. `NO_COLOR` turns colour off; on Windows set it in your user environment, since the panel ignores the `NO_COLOR` that Claude Code sets for its own commands.
+<details id="windows">
+<summary><img src="docs/assets/icons/windows.svg" height="16" alt=""> <b>Windows</b>: one command</summary>
 
-### Keys
-
-| Key | Action |
-| --- | --- |
-| `↑` `↓` (or `j` `k`) | Choose a prompt |
-| `g` / `G` | Oldest / newest prompt |
-| `PgUp` `PgDn` | Scroll a long card |
-| `Enter` | Open the prompt full width (`Esc` to close) |
-| `c` | Copy the enhanced prompt |
-| `e` | Ask Claude to analyse the selected prompt now |
-| `i` | Show or hide patterns from your past chats |
-| `s` | Install the skill Claude drafted for a repeated request |
-| `x` | Hide a web suggestion for good (asks which one when there are several) |
-| `a` | Mark a web suggestion as one you already use, so it is not suggested again |
-| `r` | Look on the web again for the selected prompt (ignores the cache and a usage-limit pause) |
-| `m` | Mouse on or off (off lets you select text with the mouse) |
-| `q` | Quit |
-
-With the mouse, the wheel scrolls and a click selects a prompt or presses a button.
-
-### Status marks
-
-| Mark | Meaning |
-| --- | --- |
-| ✓ | Analysed by Claude |
-| … | Being analysed or queued |
-| ! | Can be improved (local hint) |
-| × | Analysis failed, press `e` to retry |
-| – | Project opted out of Claude |
-| · | Nothing to add |
-
-### Commands
-
-| Command | What it does |
-| --- | --- |
-| `/coach` | Enhance your last prompt and copy it to the clipboard |
-| `/coach watch` | Print the command that opens the panel |
-| `/coach panel-ai on\|off` | Turn Claude analysis on or off (on by default) |
-| `/coach review` | Analyse your whole history for repeated requests and mistakes (shows a plan first, sends nothing until you agree) |
-| `/coach discover` | Research the web now for your last prompt (ignores the cache and any pause) |
-| `/coach research on\|off` | Web research once per new task (on by default; `/coach discover on\|off` is the old name) |
-| `/coach model fast\|research haiku\|sonnet\|opus` | The model of each pass (defaults: fast haiku, research sonnet) |
-| `/coach auto-open on\|off` | Open the panel by itself at session start (on by default on macOS and Linux) |
-| `/coach setup` | Show the current settings |
-| `/coach doctor` | Check that history, Python and the `claude` CLI work |
-
-## Privacy
-
-- Analysis and web research are **on by default**. Turn them off with `/coach panel-ai off` (or only research with `/coach research off`); then only built-in local hints run, on your machine. The panel says so in your first three sessions.
-- With it on, the panel sends Claude your prompts with emails, keys, tokens and secrets removed, plus up to five earlier prompts of the same conversation. Once on the first run, then every ~2 days, it also sends up to 90 days of history for the pattern analysis, with project names replaced by `P1`, `P2`.
-- Pasted content is never sent, only the `[Pasted text #1 +28 lines]` marker.
-- List folder names in `~/.claude/coach/llm-off.txt` (one per line) and those projects are never sent.
-- Web research sends a short generic task topic, your project's framework names and major versions (read from package.json, pyproject.toml, requirements.txt, go.mod or Cargo.toml; only well-known public frameworks and libraries, never your own packages) and the names of your installed skills. Never your prompt, code, paths or project name. It runs once per new task; a usage limit pauses it until the reset time.
-- What you hid or use is kept in `~/.claude/coach/suggestions.json`, on your machine only.
-- State is kept in `~/.claude/coach/`. There is no telemetry.
-
-## How it stays accurate
-
-Claude can invent patterns, so its answers are checked on your machine before you see them:
-
-- Keywords must appear in the prompts Claude cites.
-- Counts are recomputed locally; Claude's own counts are ignored.
-- Skill and plugin names must exist. Every web suggestion needs a live page that names it, GitHub repos must exist and be maintained, and anything made for an older major version than your project uses is dropped.
-- A repeated request needs 3 or more matching prompts, a repeated mistake 2 or more.
-
-This shows that a pattern exists. It does not prove the suggested fix is good, so read it critically.
-
-## Limits
-
-- Claude Code's `history.jsonl` is not a documented format and may change. `/coach doctor` tells you if parsing breaks.
-- Only Claude Code prompts are analysed, not claude.ai chats or Claude's replies.
-- Suggestions are only as good as the model.
-- The local hints are five keyword rules, English only.
-- The built-in pane needs Claude Code 2.1.287+. On macOS and Linux the panel no longer splits tmux by itself (the pane replaces it); with an older Claude Code, use `/coach watch`. The Windows split was tested on Windows Terminal; `/coach watch` works in any terminal.
-
-## Development
+<br>Run this once in Claude Code. From then on every session opens the panel in a Windows Terminal split, one panel per tab:
 
 ```
-python -W error::ResourceWarning -m unittest discover -s tests
-python scripts/eval_suggest.py --yes   # live: measures suggestions on 10 fixed prompts (not in CI)
+/coach auto-open on
 ```
 
-CI runs the tests on Ubuntu, macOS and Windows with Python 3.9 and 3.13.
+</details>
 
-## License
+<details>
+<summary><img src="docs/assets/icons/vscode.svg" height="16" alt=""> <b>VS Code</b> · <img src="https://cdn.simpleicons.org/jetbrains/000000/ffffff" height="16" alt=""> <b>JetBrains</b> · any terminal</summary>
 
-[MIT](LICENSE)
+<br>Run `/coach watch` in Claude Code. It prints a one-line command: paste it into a split terminal (VS Code: *Terminal → Split Terminal*) next to Claude Code.
+
+</details>
+
+**Check your setup:** `/coach doctor` checks Python, the `claude` CLI and your history; `/coach setup` shows your settings.
+
+## Keys
+
+| | | | |
+|---|---|---|---|
+| `↑` `↓` | choose a prompt | `c` | copy the enhanced prompt |
+| `Enter` | read it full width | `e` | analyse it now |
+| `i` | patterns from past chats | `s` | install a drafted skill |
+| `m` | mouse on or off | `q` | quit |
+
+Every key, mark and `/coach` command: [usage guide](docs/usage.md).
+
+## Private by design
+
+- 🔑 **No API key.** Claude runs through your own Claude Code login, and there's no telemetry.
+- 🧹 **Redacted first.** Emails, keys and tokens are removed and pasted text is never sent. List a project in `~/.claude/coach/llm-off.txt` to keep it out entirely.
+- ✅ **Checked on your machine.** Counts are recomputed, skill names must exist, and every link must load before you see it.
+- 🔌 **Off in one command.** `/coach panel-ai off` keeps only the built-in local hints.
+
+What is sent and when: [privacy](docs/privacy.md).
+
+## Documentation
+
+[Usage](docs/usage.md) · [Privacy and accuracy](docs/privacy.md) · [Troubleshooting](docs/troubleshooting.md) · [Changelog](CHANGELOG.md)
+
+## Contributing
+
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through [SECURITY.md](SECURITY.md).
+
+[MIT](LICENSE) © Teran Sarathchandra
