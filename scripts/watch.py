@@ -198,6 +198,8 @@ def build(path, session=None, notice=True):
     """State for render(): THIS thread's prompts (the session you are in, see current_session, or `session` when the caller knows it,
     as the Claude Code pane does) plus what Claude knows from the rest."""
     rows = load_full(path); aft = rewrites(); L = coach.learned()
+    # a session the desktop app runs writes no history.jsonl line: its prompts come from its transcript
+    if session and path == coach.HIST and not any(r[3] == session for r in rows) and coach.sync_transcript(session): rows = load_full(path)
     st = {"entries": [], "insights": [], "learned": L, "ai": coach.ai_on(), "review_running": review_running(), "total": 0, "session": None, "notice": None,
           "research_paused": None}
     if not rows: st["session"] = session; return st

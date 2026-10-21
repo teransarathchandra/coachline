@@ -73,6 +73,13 @@ class Main(unittest.TestCase):
         launch.main(["--auto"], system="Windows", env={"WT_SESSION": "abc"}, opener=self.opened.append, which=lambda x: "wt.exe")
         self.assertEqual(self.opened[0][:4], ["wt.exe", "-w", "0", "split-pane"])
 
+    def test_auto_never_splits_for_a_desktop_app_session_which_has_its_own_pane(self):
+        coach.set_setting("auto_open_watch", True)
+        for entry in ("claude-desktop", "claude-desktop-3p"):
+            launch.main(["--auto"], system="Windows", env={"WT_SESSION": "abc", "CLAUDE_CODE_ENTRYPOINT": entry},
+                        opener=self.opened.append, which=lambda x: "wt.exe")
+        self.assertEqual(self.opened, [])
+
     def test_auto_does_nothing_until_you_opt_in(self):
         self.assertEqual(self.run_main("--auto"), 0)
         self.assertEqual(self.opened, [])

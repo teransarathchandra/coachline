@@ -46,6 +46,37 @@ class Tick(unittest.TestCase):
         self.assertTrue(all(len(l) == 5 for l in lines))
         json.dumps(st)                                                     # it must be JSON-safe
 
+    def transcript(self, sid, rows):
+        d = os.path.join(self.cfg, "projects", "-w"); os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, sid + ".jsonl"), "w", encoding="utf-8") as f:
+            for r in rows: f.write(json.dumps(r) + "\n")
+
+    @staticmethod
+    def desktop_row(text, at="2026-10-21T01:31:05.250Z", **over):
+        """A prompt as the Claude desktop app records it: only in the transcript, its own context block first."""
+        return {"type": "user", "entrypoint": "claude-desktop", "origin": {"kind": "human"}, "cwd": "/w", "sessionId": "d1", "timestamp": at,
+                "message": {"role": "user", "content": [{"type": "text", "text": "<system-reminder>\nThe user started this session without choosing a "
+                                                                                  "project folder.\n</system-reminder>"}, {"type": "text", "text": text}]},
+                **over}
+
+    def test_a_desktop_app_session_reads_its_prompts_from_its_transcript(self):
+        history(self.cfg, [("s2", "p", SOLID)])                            # the app writes nothing to history.jsonl
+        tool = {"type": "user", "origin": None, "timestamp": "2026-10-21T01:31:09Z", "message": {"content": [{"type": "tool_result", "content": "x"}]}}
+        self.transcript("d1", [self.desktop_row(VAGUE), tool, self.desktop_row("ok", at="2026-10-21T01:32:00Z", isMeta=True)])
+        st = self.tick("d1")
+        self.assertEqual([e["text"] for e in st["entries"]], [VAGUE])     # yours, not the app's reminder, a tool result or a meta row
+        self.tick("d1")
+        rows = [r for r in coach.load_full(coach.HIST) if r[3] == "d1"]
+        self.assertEqual([r[2] for r in rows], [VAGUE])                    # once, however often the pane asks
+        self.assertEqual(rows[0][1], "/w")
+        self.assertEqual(coach.prompt_key(rows[0][:3]), st["entries"][0]["key"])   # what the analysis looks the prompt up by
+
+    def test_a_session_in_history_never_reads_its_transcript(self):
+        history(self.cfg, [("d1", "p", VAGUE)])
+        self.transcript("d1", [self.desktop_row(VAGUE)])
+        self.assertEqual(len(self.tick("d1")["entries"]), 1)
+        self.assertFalse(os.path.exists(os.path.join(coach.STATE, "prompts.jsonl")))
+
     def test_width_0_leaves_wrapping_to_the_pane(self):
         from test_watch import key_for, ADVICE
         tip = "Paste the exact error text, the HTTP status and the browser or server logs so Claude can reproduce the failure first."
