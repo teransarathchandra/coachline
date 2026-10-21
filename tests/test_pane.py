@@ -71,6 +71,12 @@ class Tick(unittest.TestCase):
         self.assertEqual(rows[0][1], "/w")
         self.assertEqual(coach.prompt_key(rows[0][:3]), st["entries"][0]["key"])   # what the analysis looks the prompt up by
 
+    def test_a_desktop_app_sessions_later_prompts_show_too(self):
+        self.transcript("d1", [self.desktop_row(VAGUE)])
+        self.assertEqual(len(self.tick("d1")["entries"]), 1)
+        self.transcript("d1", [self.desktop_row(VAGUE), self.desktop_row(SOLID, at="2026-10-21T01:35:00Z")])
+        self.assertEqual([e["text"] for e in self.tick("d1")["entries"]], [VAGUE, SOLID])
+
     def test_a_session_in_history_never_reads_its_transcript(self):
         history(self.cfg, [("d1", "p", VAGUE)])
         self.transcript("d1", [self.desktop_row(VAGUE)])

@@ -21,6 +21,7 @@
   <a href="#install"><img src="https://img.shields.io/badge/macOS_·_Linux-Opens_by_itself-555555?style=for-the-badge&logo=apple&logoColor=white" alt="macOS and Linux: opens by itself"></a>
   <a href="#windows"><img src="https://img.shields.io/badge/Windows-Terminal_split-0078D4?style=for-the-badge" alt="Windows: Windows Terminal split"></a>
   <a href="#desktop"><img src="https://img.shields.io/badge/Claude_desktop_app-Opens_by_itself-555555?style=for-the-badge&logo=claude&logoColor=white" alt="Claude desktop app: opens by itself"></a>
+  <a href="#editors"><img src="https://img.shields.io/badge/VS_Code_·_Cursor_·_Windsurf-Opens_by_itself-007ACC?style=for-the-badge" alt="VS Code, Cursor, Windsurf and Antigravity: opens by itself"></a>
 </p>
 
 <img src="docs/assets/screenshot.png" alt="Claude Code with the coachline panel beside it: the prompt, what to improve, including a skill to use, and the enhanced prompt, each in its own coloured card" width="100%">
@@ -96,10 +97,19 @@ coachline is active straight away.
 
 </details>
 
-<details>
-<summary><img src="docs/assets/icons/vscode.svg" height="16" alt=""> <b>VS Code</b> · <img src="https://cdn.simpleicons.org/jetbrains/000000/ffffff" height="16" alt=""> <b>JetBrains</b> · any terminal</summary>
+<details open id="editors">
+<summary><img src="docs/assets/icons/vscode.svg" height="16" alt=""> <b>VS Code</b> · <b>Cursor</b> · <b>Windsurf</b> · <b>Antigravity</b>: nothing else to do</summary>
 
-<br>Run `/coach watch` in Claude Code. It prints a one-line command: paste it into a split terminal (VS Code: *Terminal → Split Terminal*) next to Claude Code.
+<br>With the Claude Code extension, the pane opens beside the Claude Code tab, in your editor's theme, light or dark. The extension uses the plugins you installed in Claude Code.
+
+<img src="docs/assets/editor.png" alt="The coachline pane beside Claude Code in VS Code, light and dark themes: your prompt, Improve with its tips, and the enhanced prompt with a Copy button, in the editor's own cards and colours" width="70%">
+
+</details>
+
+<details>
+<summary><img src="https://cdn.simpleicons.org/jetbrains/000000/ffffff" height="16" alt=""> <b>JetBrains</b> · any terminal</summary>
+
+<br>Run `/coach watch` in Claude Code. It prints a one-line command: paste it into a split terminal next to Claude Code.
 
 </details>
 
@@ -114,7 +124,7 @@ coachline is active straight away.
 | `i` | patterns from past chats | `s` | install a drafted skill |
 | `m` | mouse on or off | `q` | quit |
 
-In the Claude Code pane and the desktop app, click its buttons (`[ Copy ]`, `[ Analyse ]`); the keys are for the standalone panel (Windows and `/coach watch`). Every key, mark and `/coach` command: [usage guide](docs/usage.md).
+In the Claude Code pane, the desktop app and the editors, click its buttons (`[ Copy ]`, `[ Analyse ]`); the keys are for the standalone panel (Windows and `/coach watch`). Every key, mark and `/coach` command: [usage guide](docs/usage.md).
 
 ## Private by design
 

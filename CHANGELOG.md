@@ -2,6 +2,12 @@
 
 All notable changes to coachline. Versions follow [semantic versioning](https://semver.org); the version lives in `.claude-plugin/plugin.json`.
 
+## Unreleased
+
+- **VS Code, Cursor, Windsurf and Antigravity**: with the Claude Code extension, the coachline pane opens beside the Claude Code tab and updates as the analysis and the web finds come in. It is drawn in the editor's own theme, light or dark: its cards and border colour, its accent and text colours, its buttons, Copy first.
+- A prompt sent in the desktop app or an editor shows in the pane within seconds, not when the turn ends, and every later prompt of the session shows too (before, only the first one did).
+- An editor session never opens the Windows Terminal split.
+
 ## 0.16.0 (2026-10-21)
 
 - **The Claude desktop app** (macOS and Windows): the coachline pane opens beside a Code session with your first prompt, and updates as the analysis and the web finds come in. It is drawn in the app's own design: its rounded cards, its text and accent colours in light and dark, and its buttons, Copy first. The terminal's pane and the Windows Terminal panel look and work as before.

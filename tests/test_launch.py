@@ -73,9 +73,9 @@ class Main(unittest.TestCase):
         launch.main(["--auto"], system="Windows", env={"WT_SESSION": "abc"}, opener=self.opened.append, which=lambda x: "wt.exe")
         self.assertEqual(self.opened[0][:4], ["wt.exe", "-w", "0", "split-pane"])
 
-    def test_auto_never_splits_for_a_desktop_app_session_which_has_its_own_pane(self):
+    def test_auto_never_splits_for_a_desktop_app_or_editor_session_which_has_its_own_pane(self):
         coach.set_setting("auto_open_watch", True)
-        for entry in ("claude-desktop", "claude-desktop-3p"):
+        for entry in ("claude-desktop", "claude-desktop-3p", "claude-vscode"):    # the editors' extension: VS Code, Cursor, Windsurf, ...
             launch.main(["--auto"], system="Windows", env={"WT_SESSION": "abc", "CLAUDE_CODE_ENTRYPOINT": entry},
                         opener=self.opened.append, which=lambda x: "wt.exe")
         self.assertEqual(self.opened, [])
