@@ -80,17 +80,22 @@ def prompts_path():
     """Prompts of the sessions Claude Code keeps out of history.jsonl (the desktop app's), in its format: see sync_transcript."""
     return os.path.join(STATE, "prompts.jsonl")
 
+def _records(path):
+    """A JSON-lines file's records. Skips malformed lines; history.jsonl is not a public format."""
+    try:
+        f = open(path, encoding="utf-8")
+    except OSError:
+        return
+    with f:
+        for l in f:
+            try: r = json.loads(l)
+            except ValueError: continue
+            if isinstance(r, dict): yield r
+
 def _history(path):
-    """history.jsonl's records, and with it prompts.jsonl's. Skips malformed lines; history.jsonl is not a public format."""
-    for p in (path, prompts_path()) if path == HIST else (path,):
-        try:
-            f = open(p, encoding="utf-8")
-        except OSError:
-            continue
-        with f:
-            for l in f:
-                try: yield json.loads(l)
-                except ValueError: continue
+    """history.jsonl's records, and with it prompts.jsonl's."""
+    yield from _records(path)
+    if path == HIST: yield from _records(prompts_path())
 
 def load(path):
     """Rows of (unix_seconds, project, text). Skips malformed lines."""
@@ -135,11 +140,13 @@ def transcript_prompts(session):
                 if text: out.append((ms, r.get("cwd") or "", text))
     return out
 
-def sync_transcript(session):
-    """A session that history.jsonl has no line of (the desktop app writes none): its prompts from its transcript, added to
-    prompts.jsonl once each, so this thread's pane, the analysis and the review read them as any other. True when it added one."""
-    have = {(str(r.get("timestamp")), r.get("display")) for r in _history(HIST) if isinstance(r, dict) and r.get("sessionId") == session}
-    new = [(ms, proj, text) for ms, proj, text in transcript_prompts(session) if (str(ms), text) not in have]
+def sync_transcript(session, rows):
+    """A session that history.jsonl has no line of (the desktop app and the editors write none): its prompts from its transcript,
+    added to prompts.jsonl once each, so this thread's pane, the analysis and the review read them as any other. `rows` are
+    load_full(HIST)'s. True when it added one."""
+    have = {(r.get("timestamp"), r.get("display")) for r in _records(prompts_path()) if r.get("sessionId") == session}
+    if any(r[3] == session and (round(r[0] * 1000), r[2]) not in have for r in rows): return False   # history.jsonl has it
+    new = [(ms, proj, text) for ms, proj, text in transcript_prompts(session) if (ms, text) not in have]
     if not new: return False
     os.makedirs(STATE, exist_ok=True)
     with open(prompts_path(), "a", encoding="utf-8") as f:

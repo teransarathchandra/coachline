@@ -6,6 +6,7 @@ Start with `/coach doctor`. It checks that your history can be read, that Python
 |---|---|
 | The panel doesn't open on macOS or Linux | It needs Claude Code 2.1.287 or newer. With an older one, run `/coach watch` and paste the command into a split terminal. It opens at session start from 144 columns, otherwise with your first prompt. |
 | The pane doesn't open in the Claude desktop app | It opens in a Code session with your first prompt. Check that coachline is installed and enabled under the app's Plugins, then send a prompt; `/reload-plugins` reloads it. |
+| The pane doesn't open in VS Code, Cursor, Windsurf or Antigravity | It needs Anthropic's Claude Code extension; it opens beside the Claude Code tab. Check that coachline is installed (`/plugin`), then send a prompt; `/reload-plugins` reloads it. |
 | The panel doesn't open on Windows | Run `/coach auto-open on`. The split needs Windows Terminal; in any other terminal, use `/coach watch`. |
 | `python3` prints nothing on Windows | That is the Microsoft Store stub. Install Python from python.org, or use `python` or `py -3`. |
 | Every prompt shows `!` and nothing is analysed | Claude analysis is off: `/coach panel-ai on`. Check that `claude` works in your terminal. |
@@ -16,7 +17,7 @@ Start with `/coach doctor`. It checks that your history can be read, that Python
 ## Known limits
 
 - Claude Code's `history.jsonl` is not a documented format and may change. `/coach doctor` tells you if parsing breaks.
-- The desktop app writes no `history.jsonl` line, so for its sessions coachline reads your prompts from the session's transcript, which is not a documented format either.
+- The desktop app and the editors write no `history.jsonl` line, so for their sessions coachline reads your prompts from the session's transcript, which is not a documented format either.
 - Only Claude Code prompts are analysed, not claude.ai chats or Claude's replies.
 - Suggestions are only as good as the model.
 - The local hints are five keyword rules, English only.
