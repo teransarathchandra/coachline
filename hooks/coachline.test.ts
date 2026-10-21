@@ -1,4 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
+import type { TestBody } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 // the test runner has timers; the hooks environment's typings do not declare them
@@ -12,6 +13,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number } = {}) 
   const ran: string[][] = []
   mock.env(on, opts.os ? { OS: opts.os } : {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.attach', ($, e) => ({ clientId: e.clientId }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('turn.complete', () => ({ text: '' }))
   on('session.id', () => ({ value: 's1' }))
@@ -179,7 +181,22 @@ test('asks for Python once, not on every prompt', async ($, on) => {
   await $.prompt.submit(SUBMIT)
   await settle()
   await $.prompt.submit(SUBMIT)
-  expect(asked).toBe(2)          // python3, then python; never again this session
+  expect(asked).toBe(3)          // python3, python, then py -3; never again this session
+})
+
+test('falls back to py -3 where python3 and python are missing or the Store stand-ins', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  const ran: string[][] = []
+  on('process.run', ($, e) => {
+    ran.push([...e.argv])
+    if (e.argv[0] === 'python3') throw new Error('not found')
+    if (e.argv[0] === 'python') return RESULT('', 9009)           // the Microsoft Store alias: no Python, a failing exit
+    return RESULT(e.argv.includes('--version') ? 'Python 3.13.0' : STATE())
+  })
+  await $.session.start(START)
+  await settle()
+  expect(ran.find(a => a.some(x => x.endsWith('/scripts/pane.py')))?.slice(0, 2)).toEqual(['py', '-3'])
 })
 
 test('session start does not wait for pane.py', async ($, on) => {
@@ -315,4 +332,117 @@ test('keeps checking while web research is under way, then stops', async ($, on)
   const after = runs
   await clock.advance(9000)
   expect(runs).toBe(after)                            // the finds are in: no more checks until the next prompt or turn
+})
+
+// What a session the Claude desktop app runs gets, as checked in the app (2.42304): an SDK host's start, no surface and not
+// interactive, then the app attaching. Its first prompt comes before the attach.
+const DESKTOP_START = { cwd: '/w', surface: null, isInteractive: false } as const
+const ATTACH = { surface: 'desktop', clientId: 'desktop-1', viewport: { columns: 106, rows: 47, isFullscreen: true } } as const
+
+const CARD = {
+  ...WITH_WEB,
+  lines: [
+    ['prompt', 'head', 'Your prompt', '15:28 · ✓ analysed', null], ['prompt', 'prompt', 'make the shoe site premium', '', null],
+    ['', 'blank', '', '', null], ['improve', 'head', 'Improve', 'frontend', null], ['improve', 'blue', '• Name the look you want', '', null],
+    ['', 'blank', '', '', null], ['enh', 'head', 'Enhanced prompt', 'c Copy', 'copy'], ['enh', 'enh', 'Do it.', '', null],
+    ['enh', 'enh', '', '', null], ['enh', 'bluedim', 'Includes references from web research.', '', null],
+    ['', 'blank', '', '', null], ['web', 'head', 'Worth a look', 'found on the web, not installed', null],
+    ['web', 'better', '1. better: GreatKit (tool) - w', '', null], ['web', 'src', '   https://x.example.com/g', '', null],
+    ['web', 'itemacts', '', '', 'item:x.example.com/g'],
+  ],
+}
+
+async function desktopSession($: Parameters<TestBody>[0], on: On, os?: string) {
+  const w = world(on, { os, out: STATE({ entries: [CARD] }) })
+  await $.session.start(DESKTOP_START)
+  await $.prompt.submit(SUBMIT)
+  await settle()
+  const before = [...w.opened]
+  await $.session.attach(ATTACH)
+  await settle()
+  return { ...w, before }
+}
+
+test('the desktop app on macOS: the pane opens when the app attaches', async ($, on) => {
+  const w = await desktopSession($, on)
+  expect(w.before).toEqual([])
+  expect(w.opened).toEqual(['coachline'])
+  expect(w.ran.some(a => a.includes('--json') && a.includes('s1'))).toBe(true)
+})
+
+test('the desktop app on Windows: the pane opens too (only the Windows terminal has the separate panel)', async ($, on) => {
+  const w = await desktopSession($, on, 'Windows_NT')
+  expect(w.opened).toEqual(['coachline'])
+})
+
+test('a reload in a desktop session finds the app attached and keeps the pane going', async ($, on) => {
+  const w = world(on, { os: 'Windows_NT' })
+  on('session.surfaces', () => ({ value: ['desktop'] }))
+  await $.session.start(DESKTOP_START)
+  await settle()
+  expect(w.opened).toEqual(['coachline'])
+})
+
+test('a phone attaching to a -p run does not start the pane', async ($, on) => {
+  const w = world(on)
+  await $.session.start(DESKTOP_START)
+  await $.session.attach({ surface: 'mobile', clientId: 'mobile-1' })
+  await settle()
+  expect(w.opened).toEqual([])
+  expect(w.ran).toEqual([])
+})
+
+// the desktop's colours: theme keys, which follow its light and dark themes. ANSI names are fixed colours there (white on white)
+const THEME = ['text', 'suggestion', 'claude', 'skill', 'success', 'inactive', 'error', undefined]
+const ANSI = /^(black|red|green|yellow|blue|magenta|cyan|white|gray|grey)(Bright)?$/
+
+test('on the desktop the card follows the app: its own cards, theme colours, native buttons', async ($, on) => {
+  await desktopSession($, on, 'Windows_NT')
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'desktop', component: 'Pane', requestId: 'coachline', props: {} as never })
+  // the app's own card: a neutral rounded border (no colour of ours); your prompt on the surface of your own messages
+  expect((await ui.find({ key: 's0' }))?.props).toMatchObject({ borderStyle: 'round', backgroundColor: 'userMessageBackground' })
+  for (const key of ['s1', 's2', 's3']) {
+    const p = (await ui.find({ key }))?.props
+    expect(p).toMatchObject({ borderStyle: 'round' })
+    expect(p?.borderColor).toBeUndefined()
+  }
+  // one accent per section, on its small title
+  const title = async (t: string) => (await ui.find({ type: 'Text', text: new RegExp(`^${t}$`) }))?.props
+  expect(await title('Your prompt')).toMatchObject({ size: 'footnote', weight: 'semibold', color: 'text' })
+  expect(await title('Improve')).toMatchObject({ color: 'suggestion' })
+  expect(await title('Enhanced prompt')).toMatchObject({ color: 'claude' })
+  expect(await title('Worth a look')).toMatchObject({ color: 'skill' })
+  for (const t of await ui.findAll({ type: 'Text' })) {
+    expect(THEME).toContain(t.props.color)
+    expect(String(t.props.color ?? '')).not.toMatch(ANSI)
+  }
+  expect((await ui.find({ type: 'Button', key: 'copy' }))?.props).toMatchObject({ variant: 'primary' })
+  // a blank line of the enhanced prompt keeps its height, where an empty Text has none
+  expect(await ui.find({ type: 'Text', text: /^ $/ })).toBeDefined()
+})
+
+test('the terminal keeps its colours and boxes', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('process.run', ($, e) => (e.argv.includes('--version') ? RESULT('Python 3.13.0') : RESULT(STATE({ entries: [CARD] }))))
+  await $.session.start(START)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  expect((await ui.find({ key: 's0' }))?.props).toMatchObject({ borderStyle: 'round', borderColor: 'whiteBright', paddingX: 1 })
+  expect((await ui.find({ key: 's1' }))?.props).toMatchObject({ borderColor: 'blueBright' })
+  expect((await ui.find({ key: 's2' }))?.props).toMatchObject({ borderColor: 'cyanBright' })
+  expect((await ui.find({ type: 'Text', text: /^Enhanced prompt$/ }))?.props).toMatchObject({ bold: true, color: 'cyanBright' })
+  expect((await ui.find({ type: 'Button', key: 'copy' }))?.props.variant).toBeUndefined()
+})
+
+test('Copy on the desktop copies there', async ($, on) => {
+  const copies: unknown[] = []
+  on('ui.copy', ($, e) => {
+    copies.push({ ...e })
+    return { value: { isCopied: true } }
+  })
+  await desktopSession($, on)
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'desktop', component: 'Pane', requestId: 'coachline', props: {} as never })
+  await ui.press({ key: 'copy' })
+  expect(copies).toEqual([{ text: CARD.after, surface: 'desktop' }])
 })

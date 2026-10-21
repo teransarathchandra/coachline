@@ -20,6 +20,7 @@
   <a href="#install"><img src="https://img.shields.io/badge/Claude_Code-Install_plugin-D97757?style=for-the-badge&logo=claude&logoColor=white" alt="Install in Claude Code"></a>
   <a href="#install"><img src="https://img.shields.io/badge/macOS_·_Linux-Opens_by_itself-555555?style=for-the-badge&logo=apple&logoColor=white" alt="macOS and Linux: opens by itself"></a>
   <a href="#windows"><img src="https://img.shields.io/badge/Windows-Terminal_split-0078D4?style=for-the-badge" alt="Windows: Windows Terminal split"></a>
+  <a href="#desktop"><img src="https://img.shields.io/badge/Claude_desktop_app-Opens_by_itself-555555?style=for-the-badge&logo=claude&logoColor=white" alt="Claude desktop app: opens by itself"></a>
 </p>
 
 <img src="docs/assets/screenshot.png" alt="Claude Code with the coachline panel beside it: the prompt, what to improve, including a skill to use, and the enhanced prompt, each in its own coloured card" width="100%">
@@ -75,10 +76,19 @@ coachline is active straight away.
 
 </details>
 
+<details open id="desktop">
+<summary><img src="https://cdn.simpleicons.org/claude/D97757" height="16" alt=""> <b>Claude desktop app</b> (macOS · Windows): nothing else to do</summary>
+
+<br>In a Code session, the pane opens on the right with your first prompt, in the app's own look, light or dark. The app's Code sessions use the plugins you installed in Claude Code.
+
+<img src="docs/assets/desktop.png" alt="The coachline pane in the Claude desktop app, light and dark: your prompt, Improve with its tips, and the enhanced prompt with a Copy button, each in the app's own rounded card" width="70%">
+
+</details>
+
 <details id="windows">
 <summary><img src="docs/assets/icons/windows.svg" height="16" alt=""> <b>Windows</b>: one command</summary>
 
-<br>Run this once in Claude Code. From then on every session opens the panel in a Windows Terminal split, one panel per tab:
+<br>In the terminal, run this once in Claude Code. From then on every session opens the panel in a Windows Terminal split, one panel per tab (the desktop app has its own pane):
 
 ```
 /coach auto-open on
@@ -104,7 +114,7 @@ coachline is active straight away.
 | `i` | patterns from past chats | `s` | install a drafted skill |
 | `m` | mouse on or off | `q` | quit |
 
-In the Claude Code pane, click its buttons (`[ Copy ]`, `[ Analyse ]`); the keys are for the standalone panel (Windows and `/coach watch`). Every key, mark and `/coach` command: [usage guide](docs/usage.md).
+In the Claude Code pane and the desktop app, click its buttons (`[ Copy ]`, `[ Analyse ]`); the keys are for the standalone panel (Windows and `/coach watch`). Every key, mark and `/coach` command: [usage guide](docs/usage.md).
 
 ## Private by design
 
