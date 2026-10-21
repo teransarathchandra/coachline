@@ -14,6 +14,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number } = {}) 
   mock.env(on, opts.os ? { OS: opts.os } : {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.attach', ($, e) => ({ clientId: e.clientId }))
+  on('clock.now', () => ({ value: 0 }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('turn.complete', () => ({ text: '' }))
   on('session.id', () => ({ value: 's1' }))
@@ -97,6 +98,7 @@ test('keeps the last good state when pane.py fails', async ($, on) => {
   let exit = 0
   mock.env(on, {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: 0 }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('session.id', () => ({ value: 's1' }))
   on('ui.panes', () => ({ value: [{ id: 'coachline', title: 'coachline', isShown: true, isFocused: false, isPlaced: true }] }))
@@ -125,8 +127,9 @@ const RESULT = (stdout: string, exitCode = 0) => ({
   value: { exitCode, stdout, stderr: exitCode ? 'boom' : '', isStdoutTruncated: false, isStderrTruncated: false },
 })
 
-function base(on: On) {
+function base(on: On, clock = true) {
   mock.env(on, {})
+  if (clock) on('clock.now', () => ({ value: 0 }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('prompt.submit', ($, e) => ({ text: e.text }))
   on('turn.complete', () => ({ text: '' }))
@@ -312,7 +315,7 @@ test('each section of the card is a rounded box in its colour, a web find named 
 })
 
 test('keeps checking while web research is under way, then stops', async ($, on) => {
-  base(on)
+  base(on, false)
   const clock = mock.clock(on)
   on('ui.open', () => ({ value: { isPlaced: true } }))
   let researching = true
@@ -334,10 +337,59 @@ test('keeps checking while web research is under way, then stops', async ($, on)
   expect(runs).toBe(after)                            // the finds are in: no more checks until the next prompt or turn
 })
 
+// An editor's session (the VS Code extension's) runs the prompt.submit hooks before the prompt is in its transcript, where
+// coachline reads it: the pane checks again until it is, for a minute at most
+test('after a prompt it keeps checking until the prompt shows, then stops', async ($, on) => {
+  base(on, false)
+  const clock = mock.clock(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  let written = false
+  let runs = 0
+  on('process.run', ($, e) => {
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    runs += 1
+    return RESULT(STATE({ entries: written ? [{ ...ENTRY, state: 'done' }] : [] }))
+  })
+  await $.session.start(START)
+  await clock.settle()
+  await $.prompt.submit(SUBMIT)
+  await clock.settle()
+  const before = runs
+  await clock.advance(3000)
+  expect(runs).toBeGreaterThan(before)                // not in yet: still checking
+  written = true
+  await clock.advance(3000)
+  const after = runs
+  await clock.advance(9000)
+  expect(runs).toBe(after)                            // in: no more checks
+})
+
+test('a prompt that never shows is waited for a minute, no longer', async ($, on) => {
+  base(on, false)
+  const clock = mock.clock(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  let runs = 0
+  on('process.run', ($, e) => {
+    if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    runs += 1
+    return RESULT(STATE())
+  })
+  await $.session.start(START)
+  await clock.settle()
+  await $.prompt.submit(SUBMIT)
+  await clock.settle()
+  await clock.advance(63000)
+  const after = runs
+  await clock.advance(9000)
+  expect(runs).toBe(after)
+})
+
 // What a session the Claude desktop app runs gets, as checked in the app (2.42304): an SDK host's start, no surface and not
 // interactive, then the app attaching. Its first prompt comes before the attach.
 const DESKTOP_START = { cwd: '/w', surface: null, isInteractive: false } as const
 const ATTACH = { surface: 'desktop', clientId: 'desktop-1', viewport: { columns: 106, rows: 47, isFullscreen: true } } as const
+// the editors' Claude Code extension (VS Code, and the same extension in Cursor, Windsurf, Antigravity) attaches as `vscode`
+const EDITOR = { surface: 'vscode', clientId: 'vscode-1', viewport: { columns: 60, rows: 40, isFullscreen: true } } as const
 
 const CARD = {
   ...WITH_WEB,
@@ -352,13 +404,13 @@ const CARD = {
   ],
 }
 
-async function desktopSession($: Parameters<TestBody>[0], on: On, os?: string) {
+async function desktopSession($: Parameters<TestBody>[0], on: On, os?: string, attach: typeof ATTACH | typeof EDITOR = ATTACH) {
   const w = world(on, { os, out: STATE({ entries: [CARD] }) })
   await $.session.start(DESKTOP_START)
   await $.prompt.submit(SUBMIT)
   await settle()
   const before = [...w.opened]
-  await $.session.attach(ATTACH)
+  await $.session.attach(attach)
   await settle()
   return { ...w, before }
 }
@@ -445,4 +497,59 @@ test('Copy on the desktop copies there', async ($, on) => {
   const ui = await $.ui.mount({ plugin: 'coachline', surface: 'desktop', component: 'Pane', requestId: 'coachline', props: {} as never })
   await ui.press({ key: 'copy' })
   expect(copies).toEqual([{ text: CARD.after, surface: 'desktop' }])
+})
+
+test('an editor (VS Code, Cursor, Windsurf, Antigravity) opens the pane when its Claude Code extension attaches', async ($, on) => {
+  const w = await desktopSession($, on, 'Windows_NT', EDITOR)
+  expect(w.before).toEqual([])
+  expect(w.opened).toEqual(['coachline'])
+})
+
+test('a reload in an editor session finds the extension attached and keeps the pane going', async ($, on) => {
+  const w = world(on)
+  on('session.surfaces', () => ({ value: ['vscode'] }))
+  await $.session.start(DESKTOP_START)
+  await settle()
+  expect(w.opened).toEqual(['coachline'])
+})
+
+// what the editor's webview paints: its theme's variables for these keys, its terminal palette for an ANSI name
+const EDITOR_THEME = ['text', 'suggestion', 'claude', 'magenta', 'success', 'inactive', 'error', undefined]
+
+test('in an editor the card follows its theme: its own cards padded in cells, theme colours, spacing in cells', async ($, on) => {
+  await desktopSession($, on, undefined, EDITOR)
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'vscode', component: 'Pane', requestId: 'coachline', props: {} as never })
+  expect((await ui.find({ key: 's0' }))?.props).toMatchObject({ borderStyle: 'round', backgroundColor: 'userMessageBackground', paddingX: 1 })
+  for (const key of ['s1', 's2', 's3']) {
+    const p = (await ui.find({ key }))?.props
+    expect(p).toMatchObject({ borderStyle: 'round', paddingX: 1 })
+    expect(p?.borderColor).toBeUndefined()
+  }
+  const title = async (t: string) => (await ui.find({ type: 'Text', text: new RegExp(`^${t}$`) }))?.props
+  expect(await title('Your prompt')).toMatchObject({ bold: true, color: 'text' })   // an editor draws no weight, only bold
+  expect(await title('Improve')).toMatchObject({ color: 'suggestion' })
+  expect(await title('Enhanced prompt')).toMatchObject({ color: 'claude' })
+  expect(await title('Worth a look')).toMatchObject({ color: 'magenta' })            // it has no `skill` key
+  for (const t of await ui.findAll({ type: 'Text' })) expect(EDITOR_THEME).toContain(t.props.color)
+  // an editor reads spacing in cells; a step name ('sm') is dropped there
+  for (const b of await ui.findAll({ type: 'Box' })) {
+    for (const k of ['gap', 'marginTop', 'paddingX', 'paddingY']) expect(['number', 'undefined']).toContain(typeof b.props[k])
+  }
+  expect((await ui.find({ type: 'Button', key: 'copy' }))?.props).toMatchObject({ variant: 'primary' })
+  // an editor wraps a row Box unless told not to: a bullet's dot would sit on a line of its own
+  for (const b of await ui.findAll({ type: 'Box' })) {
+    if ((b.props.flexDirection ?? 'row') === 'row') expect(b.props.flexWrap).toBe('nowrap')
+  }
+})
+
+test('Copy in an editor copies there', async ($, on) => {
+  const copies: unknown[] = []
+  on('ui.copy', ($, e) => {
+    copies.push({ ...e })
+    return { value: { isCopied: true } }
+  })
+  await desktopSession($, on, undefined, EDITOR)
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'vscode', component: 'Pane', requestId: 'coachline', props: {} as never })
+  await ui.press({ key: 'copy' })
+  expect(copies).toEqual([{ text: CARD.after, surface: 'vscode' }])
 })

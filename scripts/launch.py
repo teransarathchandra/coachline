@@ -90,8 +90,9 @@ def main(argv, system=None, env=None, opener=spawn, which=shutil.which):
     if auto and (system or platform.system()) != "Windows": return 0     # macOS / Linux: hooks/coachline.tsx opens a Claude Code pane instead
     if auto and not coach.setting("auto_open_watch", False): return 0
     env = env if env is not None else os.environ
-    # a session the Claude desktop app runs (it sets this) has hooks/coachline.tsx's pane; a WT_SESSION it inherited is no split of it
-    if auto and env.get("CLAUDE_CODE_ENTRYPOINT", "").startswith("claude-desktop"): return 0
+    # a session the Claude desktop app or an editor's Claude Code extension runs (they set this) has hooks/coachline.tsx's pane; a
+    # WT_SESSION it inherited is no split of it
+    if auto and env.get("CLAUDE_CODE_ENTRYPOINT", "").startswith(("claude-desktop", "claude-vscode")): return 0
     tab = coach.tab_key(env) if (system or platform.system()) == "Windows" else ""
     lock = coach.per_tab(LOCK, tab)
     if tab: extra += ("--tab", tab)
