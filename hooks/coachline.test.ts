@@ -553,3 +553,84 @@ test('Copy in an editor copies there', async ($, on) => {
   await ui.press({ key: 'copy' })
   expect(copies).toEqual([{ text: CARD.after, surface: 'vscode' }])
 })
+
+// Parity: each surface draws the card in its own design, but a person reads the same words and has the same buttons, in the
+// same order, and each button does the same. A thread with every kind of card: analysed with web finds, failed, a long prompt
+const LONG = {
+  ...ENTRY, key: 'k3', stamp: '15:30', text: 'premium '.repeat(200).trim(),
+  lines: [['prompt', 'head', 'Your prompt', '15:30 · ! can be improved', null], ['prompt', 'prompt', 'premium premium…', '', null],
+          ['prompt', 'meta', 'Enter shows the whole prompt', '', 'enter'], ['', 'blank', '', '', null],
+          ['improve', 'head', 'Improve', '', null], ['improve', 'blue', '• Say what premium means here', '', null]],
+}
+const THREAD = STATE({ entries: [CARD, NO_ANSWER, LONG], patterns: ['You ask for premium without saying what it means.'], skill: 'tidy-hero' })
+const SURFACES = ['terminal', 'desktop', 'vscode'] as const
+
+// the words a person reads and the buttons' labels, in order; the terminal's header names the pane, an app's title bar does
+async function shown(ui: { findAll: (q: { type?: string }) => Promise<{ type: string; props: Record<string, unknown>; text: string }[]> }) {
+  const out: string[] = []
+  for (const el of await ui.findAll({})) {
+    if (el.type === 'Button') out.push(`[${String(el.props.label).slice(0, 40)}]`)
+    else if (el.type === 'Text' && el.text.trim()) out.push(el.text.trim().replace(/^coachline · this thread/, 'This thread'))
+  }
+  return out
+}
+
+// each prompt picked from the list, the patterns opened, the whole long prompt shown; and back
+const VIEWS: [string, string[], string[]][] = [
+  ['first prompt', ['e0'], []], ['second prompt', ['e1'], []], ['third prompt', ['e2'], []],
+  ['patterns', ['patterns'], ['patterns']], ['whole prompt', ['e2', 'whole'], ['less']],
+]
+
+test('every surface shows the same words and buttons', async ($, on) => {
+  world(on, { out: THREAD })
+  await $.session.start(START)
+  await settle()
+  for (const [view, go, back] of VIEWS) {
+    const seen: Record<string, string[]> = {}
+    for (const surface of SURFACES) {
+      const ui = await $.ui.mount({ plugin: 'coachline', surface, component: 'Pane', requestId: 'coachline', props: {} as never })
+      for (const key of go) await ui.press({ key })
+      seen[surface] = [view, ...(await shown(ui)), ...(await ui.findAll({ type: 'Button' })).map(b => `key ${b.key}`)]
+      for (const key of back) await ui.press({ key })
+      await ui.unmount()
+    }
+    expect(seen.desktop).toEqual(seen.terminal)
+    expect(seen.vscode).toEqual(seen.terminal)
+  }
+})
+
+test('every button does the same on every surface', async ($, on) => {
+  const w = world(on, { out: THREAD })
+  const copies: { text: string; surface?: string }[] = []
+  on('ui.copy', ($, e) => {
+    copies.push({ text: e.text, surface: e.surface })
+    return { value: { isCopied: true } }
+  })
+  await $.session.start(START)
+  await settle()
+  const did: Record<string, string[]> = {}
+  for (const surface of SURFACES) {
+    did[surface] = []
+    for (const [view, go, back] of VIEWS) {
+      const ui = await $.ui.mount({ plugin: 'coachline', surface, component: 'Pane', requestId: 'coachline', props: {} as never })
+      for (const key of go) await ui.press({ key })
+      for (const b of await ui.findAll({ type: 'Button' })) {
+        if (!b.key || /^e\d+$|^(patterns|whole|less)$/.test(b.key)) continue    // they change the view, which the test above follows
+        w.ran.length = 0
+        copies.length = 0
+        await ui.press({ key: b.key })
+        await settle()
+        const runs = w.ran.filter(a => !a.includes('--json') && !a.includes('--version')).map(a => a.slice(2).join(' '))
+        const copied = copies.map(c => `copied ${c.text.length} characters ${c.surface === surface ? 'here' : `on ${c.surface}`}`)
+        did[surface].push(`${view} ${b.key}: ${[...runs, ...copied].join(', ')}`)
+      }
+      for (const key of back) await ui.press({ key })
+      await ui.unmount()
+    }
+  }
+  expect(did.terminal).toContain(`first prompt copy: copied ${CARD.after.length} characters here`)
+  expect(did.terminal).toContain('second prompt analyse: --enhance k1 --session s1')
+  expect(did.terminal).toContain('patterns skill: --install tidy-hero')
+  expect(did.desktop).toEqual(did.terminal)
+  expect(did.vscode).toEqual(did.terminal)
+})
