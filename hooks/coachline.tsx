@@ -23,12 +23,16 @@ const COLOR: Record<string, string> = {
 const SECTION_COLOR: Record<string, string> = {
   prompt: 'whiteBright', improve: 'blueBright', enh: 'cyanBright', web: 'magentaBright', info: 'gray', bad: 'redBright',
 }
-// The desktop app draws in its own design system, where an ANSI name is one fixed colour (whiteBright is white on its light theme)
-// and a theme key follows its light and dark themes. There each section is the app's own card (a neutral rounded border), its
-// small title in one accent, the text in the app's text colour, the quiet rows in its secondary text.
-const DESK_SECTION: Record<string, string> = {
-  prompt: 'text', improve: 'suggestion', enh: 'claude', web: 'skill', info: 'inactive', bad: 'error',
+// The desktop app and the editors (VS Code and its forks: Cursor, Windsurf, Antigravity, ...) draw in their own design systems,
+// where a theme key follows their light and dark themes and an ANSI name is a fixed colour on the desktop (whiteBright is white
+// on its light theme). There each section is the app's own card (a neutral rounded border), its small title in one accent, the
+// text in the app's text colour, the quiet rows in its secondary text. The editors know no `skill` key: their terminal magenta.
+const APP_SECTION: Record<string, Record<string, string>> = {
+  desktop: { prompt: 'text', improve: 'suggestion', enh: 'claude', web: 'skill', info: 'inactive', bad: 'error' },
+  vscode: { prompt: 'text', improve: 'suggestion', enh: 'claude', web: 'magenta', info: 'inactive', bad: 'error' },
 }
+// the surfaces that draw panes in a session they attach to after it started
+const APPS = ['desktop', 'vscode']
 const QUIET = new Set(['bluedim', 'meta', 'src'])
 
 // discover.item_lines: "1. better: Name (kind) · you use this - why"
@@ -59,7 +63,7 @@ const ignore = () => undefined
 
 type Run = { ok: true; out: string } | { ok: false; err: string }
 
-let active = false          // an interactive terminal session on macOS / Linux, or one the Claude desktop app attached to; false
+let active = false          // an interactive terminal session on macOS / Linux, or one the desktop app or an editor attached to; false
                             // under `claude -p`, the SDK and in the Windows terminal, which has watch.py's panel instead
 let py: string[] | null = null
 let pyChecked = false         // asked once: on a Mac without developer tools, each `python3` call can raise the install dialog
@@ -67,6 +71,10 @@ let inflight: Promise<PaneState | null> | null = null
 let again = false
 let width = 80
 let poll: { cancel: () => void } | null = null
+// after a prompt: the count of prompts that shows it, and until when to wait for it. An editor's session runs prompt.submit
+// before the prompt is in its transcript, where pane.py reads it
+let want = 0
+let wantUntil = 0
 
 // Windows often has neither python3 nor python, or has them as the Microsoft Store's stand-ins, which fail `--version`; the
 // launcher python.org installs there is `py -3`
@@ -138,7 +146,8 @@ async function refreshOnce($: EngineInterface): Promise<PaneState | null> {
   await update($, error, () => '')
   await update($, state, () => s)
   // an analysis or this session's web research still to come: keep checking, since the turn may go on long after either lands
-  const busy = s.entries.some(e => e.state === 'pending') || !!s.researching
+  const waiting = s.entries.length < want && (await $.clock.now()) < wantUntil
+  const busy = s.entries.some(e => e.state === 'pending') || !!s.researching || waiting
   if (busy && !poll) poll = $.clock.every(3000, () => void refresh($).catch(ignore))
   if (!busy && poll) {
     poll.cancel()
@@ -171,18 +180,18 @@ async function open($: EngineInterface): Promise<void> {
 }
 
 export const register: Register = on => {
-  // The terminal's pane, but not the Windows terminal's, which has watch.py's panel. The desktop app runs its session as an SDK
-  // host does (no surface, not interactive) and attaches afterwards, after its first prompt: session.attach; at a reload it is
-  // already attached
+  // The terminal's pane, but not the Windows terminal's, which has watch.py's panel. The desktop app and the editors' Claude Code
+  // extension run their session as an SDK host does (no surface, not interactive) and attach afterwards, after its first
+  // prompt: session.attach; at a reload they are already attached
   on('session.start', async ($, e, next) => {
     const r = await next(e)
-    if ((e.isInteractive && (await $.env.get('OS')) !== 'Windows_NT') || (await $.session.surfaces()).includes('desktop')) wake($)
+    if ((e.isInteractive && (await $.env.get('OS')) !== 'Windows_NT') || (await $.session.surfaces()).some(x => APPS.includes(x))) wake($)
     return r
   })
 
-  on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
+  on('session.attach', async ($, e, next) => {
     const r = await next(e)
-    wake($)
+    if (APPS.includes(e.surface)) wake($)
     return r
   })
 
@@ -192,6 +201,8 @@ export const register: Register = on => {
     await update($, sel, () => -1)             // follow the newest prompt
     let s = await read($, state)
     if (!s && inflight) s = await inflight     // the session start's first answer, if it is still coming
+    want = (s?.entries.length ?? 0) + 1
+    wantUntil = (await $.clock.now()) + 60000
     await openIfWanted($, s)                   // from a prompt the person entered: placed at any width
     void refresh($).catch(ignore)
     return r
@@ -210,18 +221,25 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
-    const desk = e.surface === 'desktop'
-    // the desktop's body is narrower than its viewport, which counts the conversation beside it
-    width = (desk ? e.props.bodyColumns : e.viewport?.columns) ?? width
+    // the desktop app or an editor: their own design system. An editor spaces in cells, not the desktop's step names, and pads no
+    // bordered Box by itself
+    const app = APPS.includes(e.surface)
+    const ed = e.surface === 'vscode'
+    const sp = (step: 'xs' | 'sm', cells: number) => (ed ? cells : step)
+    // an editor wraps a row Box by default: a bullet's dot would land on a line of its own
+    const nw = ed ? 'nowrap' : undefined
+    const accentOf = APP_SECTION[e.surface] ?? APP_SECTION.desktop!
+    // an app's body is narrower than its viewport, which counts the conversation beside it
+    width = (app ? e.props.bodyColumns : e.viewport?.columns) ?? width
     const s = await read($, state)
     const err = await read($, error)
     const note = await read($, msg)
     if (!s) return <Text dimColor>{err || 'coachline: loading…'}</Text>
 
     const count = `${s.entries.length} prompt${s.entries.length === 1 ? '' : 's'}`
-    // the desktop names the pane in its own title bar: the row only says what it shows
-    const header = desk ? (
-      <Box key="header" justifyContent="space-between">
+    // an app names the pane in its own title bar: the row only says what it shows
+    const header = app ? (
+      <Box key="header" justifyContent="space-between" flexWrap={nw}>
         <Text size="footnote" dimColor>This thread · {count}</Text>
         <Text size="footnote" color={s.ai ? 'success' : 'inactive'}>{s.ai ? '● Claude on' : '○ Claude off'}</Text>
       </Box>
@@ -233,13 +251,13 @@ export const register: Register = on => {
       </Box>
     )
     const footer = [
-      err ? <Text key="err" color={desk ? 'error' : 'red'}>{err}</Text> : null,
+      err ? <Text key="err" color={app ? 'error' : 'red'}>{err}</Text> : null,
       note ? <Text key="msg" dimColor>{note}</Text> : null,
       s.notice && !s.entries.length ? <Text key="notice" dimColor>{s.notice}</Text> : null,
     ]
     if (!s.entries.length) {
       return (
-        <Box flexDirection="column" gap={desk ? 'sm' : 0}>
+        <Box flexDirection="column" gap={app ? sp('sm', 0.5) : 0}>
           {header}
           <Text dimColor>Send a prompt: coachline coaches it here.</Text>
           {footer}
@@ -280,13 +298,13 @@ export const register: Register = on => {
 
     const line = (l: PaneLine, n: number) => {
       const [section, kind, text, , action] = l
-      const accent = DESK_SECTION[section]
+      const accent = accentOf[section]
       if (kind === 'itemacts' && action?.startsWith('item:')) {
         const id = action.slice('item:'.length)
         return (
-          <Box key={`l${n}`} paddingLeft={3} marginTop={desk ? 'xs' : 0}>
+          <Box key={`l${n}`} paddingLeft={3} marginTop={app ? sp('xs', 0.25) : 0} flexWrap={nw}>
             <Button key={`hide:${id}`} label="Hide" onPress={() => mark('dismissed', id)} />
-            {!desk && <Text>{'  '}</Text>}
+            {!app && <Text>{'  '}</Text>}
             <Button key={`use:${id}`} label="I use this" onPress={() => mark('adopted', id)} />
           </Box>
         )
@@ -297,12 +315,12 @@ export const register: Register = on => {
         const [, num, name, type, used, why] = find
         return (
           // a web find: its name and kind, then why, the source and the buttons beneath, each item apart from the one before
-          <Box key={`l${n}`} marginTop={n % 1000 ? 1 : 0} alignItems={desk ? 'flex-start' : undefined}>
-            <Text color={desk ? accent : COLOR.better}>{num}</Text>
+          <Box key={`l${n}`} marginTop={n % 1000 ? 1 : 0} alignItems={app ? 'flex-start' : undefined} flexWrap={nw}>
+            <Text color={app ? accent : COLOR.better}>{num}</Text>
             <Box flexDirection="column">
-              <Box>
-                {desk ? <Text weight="semibold">{name}</Text> : <Text bold color={COLOR.better}>{name}</Text>}
-                <Text dimColor size={desk ? 'footnote' : undefined}>{`  ${type}${used ?? ''}`}</Text>
+              <Box flexWrap={nw}>
+                {app ? <Text weight="semibold" bold>{name}</Text> : <Text bold color={COLOR.better}>{name}</Text>}
+                <Text dimColor size={app ? 'footnote' : undefined}>{`  ${type}${used ?? ''}`}</Text>
               </Box>
               <Text>{why}</Text>
             </Box>
@@ -311,23 +329,23 @@ export const register: Register = on => {
       }
       if (kind === 'src') {
         return (
-          <Box key={`l${n}`} paddingLeft={3}>
-            <Text dimColor size={desk ? 'footnote' : undefined}>{text.trim()}</Text>
+          <Box key={`l${n}`} paddingLeft={3} flexWrap={nw}>
+            <Text dimColor size={app ? 'footnote' : undefined}>{text.trim()}</Text>
           </Box>
         )
       }
       const dot = /^[•-] /.exec(text)?.[0]
-      if (desk) {
+      if (app) {
         // the app's text; a bullet's dot in the section's accent, on its first line, its wrapped lines under its text
         if (dot) {
           return (
-            <Box key={`l${n}`} alignItems="flex-start">
+            <Box key={`l${n}`} alignItems="flex-start" flexWrap={nw}>
               <Text color={accent}>{dot}</Text>
               <Text dimColor={QUIET.has(kind)}>{text.slice(dot.length)}</Text>
             </Box>
           )
         }
-        // an empty Text has no height on the desktop: a blank line of the enhanced prompt keeps its row
+        // an empty Text has no height in an app: a blank line of the enhanced prompt keeps its row
         return <Text key={`l${n}`} dimColor={QUIET.has(kind)} weight={kind === 'task' ? 'medium' : undefined}>{text || ' '}</Text>
       }
       if (dot) {
@@ -344,21 +362,22 @@ export const register: Register = on => {
 
     // as on watch.py's panel: each section a rounded box in its colour. The title opens it (an element set on the border is not
     // drawn), its label or Copy button right after, never against the pane's right edge, where the pane's own close mark is.
-    // The desktop: the app's own card, which pads itself; your prompt on the surface of your own messages, its title row spread
-    // across the card, the close mark being in the app's title bar
+    // In an app: its own card, which the desktop pads itself and an editor in cells; your prompt on the surface of your own
+    // messages, its title row spread across the card, the close mark being in the app's title bar
     const box = (sec: Section, n: number, body: RenderChildren[]) => {
       const [, , title, right, action] = sec.head ?? []
-      // on the desktop a note with no title (the first-run notice) is plain text, not a card
-      if (!sec.section || (desk && sec.section === 'info' && !title)) return <Box key={`s${n}`} flexDirection="column">{body}</Box>
-      const copyButton = <Button key="copy" label="Copy" variant={desk ? 'primary' : undefined} onPress={copy} />
-      if (desk) {
-        const color = DESK_SECTION[sec.section] ?? 'inactive'
+      // in an app a note with no title (the first-run notice) is plain text, not a card
+      if (!sec.section || (app && sec.section === 'info' && !title)) return <Box key={`s${n}`} flexDirection="column">{body}</Box>
+      const copyButton = <Button key="copy" label="Copy" variant={app ? 'primary' : undefined} onPress={copy} />
+      if (app) {
+        const color = accentOf[sec.section] ?? 'inactive'
         return (
-          <Box key={`s${n}`} flexDirection="column" borderStyle="round" gap="xs"
+          <Box key={`s${n}`} flexDirection="column" borderStyle="round" gap={sp('xs', 0.25)}
+            paddingX={ed ? 1 : undefined} paddingY={ed ? 0.5 : undefined}
             backgroundColor={sec.section === 'prompt' ? 'userMessageBackground' : undefined}>
             {title && (
-              <Box justifyContent="space-between" alignItems="center" gap="sm">
-                <Text size="footnote" weight="semibold" color={color}>{title}</Text>
+              <Box justifyContent="space-between" alignItems="center" gap={sp('sm', 1)} flexWrap={nw}>
+                <Text size="footnote" weight="semibold" bold color={color}>{title}</Text>
                 {action === 'copy' ? copyButton : right ? <Text size="footnote" dimColor>{right}</Text> : null}
               </Box>
             )}
@@ -383,7 +402,7 @@ export const register: Register = on => {
 
     const card = isFull
       ? [box({ section: 'prompt', head: ['prompt', 'head', 'Your prompt', '', null], rows: [] }, 0, [
-          <Text key="fulltext" color={desk ? undefined : 'whiteBright'}>{cur.text}</Text>,
+          <Text key="fulltext" color={app ? undefined : 'whiteBright'}>{cur.text}</Text>,
           <Button key="less" label="Show less" onPress={() => update($, full, () => false)} />,
         ])]
       : sections(cur.lines).map((sec, n) => box(sec, n, sec.rows.map((l, k) => line(l, n * 1000 + k))))
@@ -391,25 +410,25 @@ export const register: Register = on => {
     const canAnalyse = !cur.after && cur.state !== 'off'
 
     return (
-      <Box flexDirection="column" gap={desk ? 'sm' : 0}>
+      <Box flexDirection="column" gap={app ? sp('sm', 0.5) : 0}>
         {header}
-        <Box flexDirection="column" marginY={desk ? 0 : 1} gap={desk ? 'sm' : 1}>{card}</Box>
+        <Box flexDirection="column" marginY={app ? 0 : 1} gap={app ? sp('sm', 0.5) : 1}>{card}</Box>
         {canAnalyse && <Button key="analyse" label={cur.state === 'pending' ? 'Analyse again' : 'Analyse'}
-          variant={desk ? 'primary' : undefined} onPress={analyse} />}
+          variant={app ? 'primary' : undefined} onPress={analyse} />}
         {s.research && !!cur.after && cur.state !== 'off' && <Button key="research" label="Look again on the web" onPress={research} />}
         {s.patterns.length > 0 && (
-          <Box flexDirection="column" gap={desk ? 'xs' : 0}>
+          <Box flexDirection="column" gap={app ? sp('xs', 0.25) : 0}>
             <Button key="patterns" label={pats ? 'Hide patterns' : `${s.patterns.length} pattern${s.patterns.length === 1 ? '' : 's'} from your past chats`}
               onPress={() => update($, showPatterns, v => !v)} />
-            {pats && s.patterns.map((p, n) => <Text key={`p${n}`} color={desk ? undefined : 'blueBright'}>{p}</Text>)}
+            {pats && s.patterns.map((p, n) => <Text key={`p${n}`} color={app ? undefined : 'blueBright'}>{p}</Text>)}
             {s.skill && <Button key="skill" label={`Install the drafted skill /${s.skill}`} onPress={install} />}
           </Box>
         )}
-        <Box flexDirection="column" gap={desk ? 'xs' : 0}>
-          {desk ? <Text size="footnote" weight="semibold" dimColor>Prompts in this thread</Text> : <Text dimColor>Prompts in this thread</Text>}
+        <Box flexDirection="column" gap={app ? sp('xs', 0.25) : 0}>
+          {app ? <Text size="footnote" weight="semibold" dimColor>Prompts in this thread</Text> : <Text dimColor>Prompts in this thread</Text>}
           {s.entries.map((x, n) => (
-            <Button key={`e${n}`} label={`${n === i ? '›' : ' '} ${x.glyph} ${x.stamp}  ${x.text.replace(/\s+/g, ' ').slice(0, Math.max(10, width - (desk ? 6 : 16)))}`}
-              dimColor={desk && n !== i ? true : undefined} onPress={() => update($, sel, () => n)} />
+            <Button key={`e${n}`} label={`${n === i ? '›' : ' '} ${x.glyph} ${x.stamp}  ${x.text.replace(/\s+/g, ' ').slice(0, Math.max(10, width - (app ? 0 : 16)))}`}
+              dimColor={app && n !== i ? true : undefined} onPress={() => update($, sel, () => n)} />
           ))}
         </Box>
         {footer}
