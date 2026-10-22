@@ -1,6 +1,7 @@
 """Renders real frames of the standalone panel (scripts/watch.py, with seed.py's made-up chats) into site/index.html, between
 <!-- frame:NAME --> and <!-- /frame --> markers, as HTML with the panel's colours as classes. Run from the repo root after a UI change:
   python3 docs/demo/site_frames.py
+With --sequences it writes nothing and prints the README's frame sequences as JSON instead (scene_gifs.py makes GIFs of them).
 No real data: a throwaway config, the demo chats, a stand-in for `claude -p`.
 """
 import html, os, re, subprocess, sys, tempfile
@@ -15,7 +16,7 @@ if os.environ.get("SITE_FRAMES_CHILD") != "1":                    # coach.py fix
     env = {**os.environ, "CLAUDE_CONFIG_DIR": cfg, "SITE_FRAMES_CHILD": "1", "PYTHONIOENCODING": "utf-8",
            "COACHLINE_CLAUDE": f'"{sys.executable}" "{os.path.join(ROOT, "docs", "demo", "fake_claude.py")}"'}
     subprocess.run([sys.executable, os.path.join(ROOT, "docs", "demo", "seed.py")], env=env, check=True)
-    sys.exit(subprocess.run([sys.executable, os.path.abspath(__file__)], env=env).returncode)
+    sys.exit(subprocess.run([sys.executable, os.path.abspath(__file__), *sys.argv[1:]], env=env).returncode)
 
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import coach, watch  # noqa: E402
@@ -34,7 +35,8 @@ def to_html(line):
             if tok:
                 attrs = ((f' class="{" ".join(dict.fromkeys(cls))}"' if cls else "")
                          + (f' style="{";".join(f"{k}:{v}" for k, v in style.items())}"' if style else ""))
-                out.append(f"<span{attrs}>{html.escape(tok)}</span>" if attrs else html.escape(tok))
+                text = re.sub("[▰▱]", r'<i class="cell">\g<0></i>', html.escape(tok))   # the font has no meter glyphs: hold each to one cell
+                out.append(f"<span{attrs}>{text}</span>" if attrs else text)
             continue
         c = [x for x in m.group(1).split(";") if x] or ["0"]; i = 0
         while i < len(c):
@@ -51,6 +53,7 @@ class IO:
     def enhance(self, key): pass
     def used_saved(self, i): return True
     def forget_saved(self, i): return True
+    def install(self, slug): return True, f"installed the {slug} skill: use it as /{slug}"
 
 
 def frame(keys=(), sel=None, w=W):
@@ -59,6 +62,14 @@ def frame(keys=(), sel=None, w=W):
     for k in keys: watch.handle(ui, st, k, IO())
     return "\n".join(to_html(r) for r in watch.render(st, ui, w, H, color=True))
 
+
+if "--sequences" in sys.argv:                                     # each step: the keys pressed so far, from the newest prompt's card
+    import json
+    steps = {"browse": [[], ["up"], ["up", "up"], ["up", "up", "enter"]],
+             "patterns": [[], ["patterns"], ["patterns", "skill"]],
+             "library": [[], ["l"], ["l", "down"], ["l", "down", "copy"]]}
+    print(json.dumps({name: [frame(k) for k in keys] for name, keys in steps.items()}))
+    sys.exit()
 
 frames = {
     "analyse": frame(sel=1),                                       # Claude's analysis of a vague prompt: Improve and the enhanced prompt

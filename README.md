@@ -45,18 +45,18 @@ Work as usual. While Claude works on your prompt, the panel shows what to **impr
 
 For a new task, coachline names the **skills and plugins** you have that fit, then searches the web for **tools, docs and reference sites**, and checks each link before you see it.
 
-<img src="docs/assets/website.gif" alt="A prompt to make a shoe store website: the panel suggests the frontend-design skill and an enhanced prompt, then web finds such as Playwright MCP, Motion for React and the WCAG 2.2 quick reference" width="100%">
+<img src="docs/assets/newtask.gif" alt="Illustration: the prompt &quot;make the shoe site look more premium&quot; gets tips and the frontend-design skill, then two finds from the web, Radix Colors and Refactoring UI, each shown once its link is checked" width="100%">
 
 <details>
 <summary><b>More:</b> browse the whole thread, and patterns from your past chats</summary>
 
 <br>`↑` `↓` move through the conversation. Each prompt keeps its card, with links Claude found on the web and **checked on your machine** first.
 
-<img src="docs/assets/browse.gif" alt="Moving back through the thread shows each prompt's card, its web finds and the full prompt" width="100%">
+<img src="docs/assets/browse.gif" alt="The panel's own frames: moving back through the thread shows each earlier prompt's card, then Enter opens the whole of it" width="100%">
 
 `i` shows the habits and repeated requests Claude spotted in your history. `s` turns a repeated request into a skill.
 
-<img src="docs/assets/patterns.gif" alt="Patterns from past chats, then the drafted skill is installed with s" width="100%">
+<img src="docs/assets/patterns.gif" alt="The panel's own frames: i shows patterns from past chats, a request asked 6 times and a habit, then s installs the drafted skill" width="100%">
 
 </details>
 
@@ -64,20 +64,24 @@ For a new task, coachline names the **skills and plugins** you have that fit, th
 
 - **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold. You fill them and send; nothing is sent for you.
 
-  <img src="docs/assets/use.gif" alt="Pressing Use in the coachline panel puts the enhanced prompt in Claude Code's prompt box, its [ASK] gap in bold, without sending it" width="100%">
+  <img src="docs/assets/use.gif" alt="Illustration: with a draft in the box, Use first asks before replacing it, then puts the enhanced prompt in the box with its [ASK] gap in bold, and the gap is filled in; nothing is sent" width="100%">
 
 - **A hint as you type**: pause, and the line under the box shows how concrete your draft is (`▰▰▱▱▱`) and the one thing it lacks most.
 
-  <img src="docs/assets/hint.gif" alt="Typing &quot;fix it now please&quot; shows an empty meter and what the draft lacks under the prompt box; naming the file and when it is done fills the meter" width="100%">
+  <img src="docs/assets/hint.gif" alt="Illustration: typing &quot;fix it now please&quot; shows an empty meter and &quot;say what 'it' or 'this' is&quot; under the box; naming the file and when it is done fills the meter" width="100%">
 
 - **Evidence**: coachline notes when you stop a turn or say "no, I meant…", and shows how often vague prompts led to rework compared with concrete ones.
 - **Library**: a prompt that worked first time is kept. Type something like it later and you are told so; the Library puts it back in the box.
 
-  <img src="docs/assets/library.gif" alt="In the standalone panel, l opens the Library of three saved prompts, one is chosen and copied, and l goes back to the card" width="100%">
+  <img src="docs/assets/library.gif" alt="The panel's own frames: l opens the Library of three saved prompts, the second is chosen and c copies it" width="100%">
 
 - **Hold**, if you turn it on: a clearly vague prompt stops at Enter with what it lacks. Enter again sends it as is.
 
+  <img src="docs/assets/hold.gif" alt="Illustration: with hold on, Enter on &quot;clean this up properly&quot; is held with what it lacks and the text stays in the box; Enter again sends it" width="100%">
+
 All of it is worked out on your machine. More on the [website](https://teransarathchandra.github.io/coachline/).
+
+<sub>Install and the vague prompt are recorded in Claude Code. The GIFs marked as illustrations above show coachline's real messages; the panel's GIFs are its own frames, rendered from its code.</sub>
 
 ## Install
 

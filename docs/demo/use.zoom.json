@@ -1,9 +1,0 @@
-{
-  "input": "docs/demo/.rec/use.mp4",
-  "output": "docs/assets/use.gif",
-  "size": [1120, 688],
-  "fps": 10,
-  "colors": 40,
-  "timeline": [[33, 45], [45, 45, 2]],
-  "camera": [[4.2, 1.7, 0.765, 0.48], [6.2, 1.7, 0.765, 0.48], [6.9, 1.6, 0.34, 0.8]]
-}

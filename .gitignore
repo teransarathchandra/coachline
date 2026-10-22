@@ -17,3 +17,6 @@ graphify-out/
 
 # raw recordings for the README GIFs (docs/demo/zoom.py)
 docs/demo/.rec/
+
+# a by-product of record-all.sh website, which is taken for the hero still (screenshot.png); not shown anywhere
+docs/assets/website.gif

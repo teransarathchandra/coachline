@@ -4,6 +4,7 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **README and website**: recordings now cover only install and the vague prompt. A new task, Use, the hint and hold are animated illustrations with coachline's real messages, the same on the site and in the README (`docs/demo/scene_gifs.py` makes the GIFs from the site); browse, patterns and the Library are GIFs of the panel's own rendered frames. The meter in rendered frames no longer pushes the card's border out of line.
 - **Website**: the hint and Use sections show animated illustrations instead of the macOS recordings, which were too small to read; hold gets one too. Each plays the true sequence with coachline's real messages (the hint and meter for each draft, Use asking before it replaces a draft, hold and the second Enter), the same at every width, and replays on its key.
 
 - Hold: a held prompt now goes back in the box once, so the second Enter sends it (Claude Code 2.1.308 also puts a dropped prompt back, which doubled it).
