@@ -36,6 +36,14 @@ class Vagueness(unittest.TestCase):
         self.assertFalse(coach.vague("請求モジュールの税計算を地域ごとに見直して、現在の実装は拡張しにくいので読みやすく保守しやすい形に直してください"))
         self.assertTrue(coach.vague("直して"))
 
+    def test_hint_names_what_is_missing(self):
+        self.assertEqual(coach.hint_for("fix it"), "say what 'it' or 'this' is: a file, a function, an error")
+        self.assertEqual(coach.hint_for("clean this up properly"), "replace 'best/properly/clean' with a rule you can check")
+        self.assertEqual(coach.hint_for("write some tests"), "name a file, function, error or number")
+        self.assertIsNone(coach.hint_for(SOLID)); self.assertIsNone(coach.hint_for(""))
+        for c in CASES:
+            if c["vague"]: self.assertIsNotNone(coach.hint_for(c["text"]), c["text"])
+
     def test_score_is_bounded(self):
         for c in CASES + [{"text": ""}, {"text": "x" * 5000}]:
             self.assertTrue(0.0 <= coach.vagueness(c["text"]) <= 1.0, c["text"][:40])

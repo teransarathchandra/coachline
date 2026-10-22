@@ -74,5 +74,17 @@ class SetupSwitches(unittest.TestCase):
                 self.assertIn(want, shown)
 
 
+    def test_hints_switch_and_the_pane_state_carries_it(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            def pane_hints():
+                return json.loads(run(cfg, "pane.py", "--json", "--session", "s1").stdout)["hints"]
+            self.assertIs(pane_hints(), True)                                                      # on by default
+            self.assertEqual(run(cfg, "setup.py", "--hints", "off").returncode, 0)
+            self.assertIs(self.conf(cfg)["hints"], False); self.assertIs(pane_hints(), False)
+            self.assertEqual(run(cfg, "setup.py", "--hints", "on").returncode, 0)
+            self.assertIs(pane_hints(), True)
+            self.assertIn("--hints", run(cfg, "setup.py").stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

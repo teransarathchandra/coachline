@@ -4,6 +4,10 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold, for you to fill and send; it never sends anything. A draft in the box is replaced only on a second press. Where there is no prompt box (the desktop app, an editor), it copies instead.
+- **A hint as you type**: after a short pause, the line under the prompt box shows how concrete your draft is and the one thing it lacks most. Worked out on your machine, the draft is never sent; terminal only for now. `/coach hints off` turns it off.
+- The Claude Code pane shows the quality meter on each prompt too.
+
 - **A quality meter** on each prompt in the panel: five cells, filled by how concrete the prompt is (a file, an identifier, an error, a number, a link; what done looks like). It is worked out on your machine; nothing is sent.
 - **Motion** in the panel: the header shimmers while Claude works, a new analysis unfolds top-down, Copied lights up for a moment. `/coach motion off` keeps every frame still, and it is off by itself with `NO_COLOR`, over SSH or in a terminal too slow to draw it. With motion off the panel no longer redraws ten times a second while Claude works.
 - coachline's coral accent: the panel's name chip, the meter and the Copied flash in terminals with 24-bit colour (Windows Terminal, and any that sets `COLORTERM`); the Claude Code pane's name too. The desktop app and the editors keep their own theme.

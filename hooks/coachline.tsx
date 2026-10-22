@@ -14,6 +14,13 @@ const full = atom({ plugin: 'coachline', key: 'full' } as const, false)
 const showPatterns = atom({ plugin: 'coachline', key: 'showPatterns' } as const, false)
 const closed = atom({ plugin: 'coachline', key: 'closed' } as const, false)
 const msg = atom({ plugin: 'coachline', key: 'msg' } as const, '')
+// the hint under the prompt box: the draft it was worked out for, and the tail to draw while the box still holds that draft
+const hint = atom({ plugin: 'coachline', key: 'hint' } as const, null as { draft: string; tail: string | null } | null)
+
+const DEBOUNCE_MS = 600   // a pause in typing, not every key: one pane.py --score per pause
+const ARM_MS = 5000       // Use over a draft: the second press within this replaces it
+const ASK = /\[ASK:[^\]]*\]/g
+let armedAt = -Infinity
 
 // the brand accent (watch.py's TRUECOLOR): the terminal pane's name only; the desktop app and the editors keep their own theme
 const ACCENT = '#E8735A'
@@ -94,11 +101,12 @@ async function python($: EngineInterface): Promise<string[] | null> {
   return null
 }
 
-async function run($: EngineInterface, args: string[]): Promise<Run> {
+async function run($: EngineInterface, args: string[], stdin?: string): Promise<Run> {
   const p = await python($)
   if (!p) return { ok: false, err: NO_PYTHON }
   try {
-    const r = await $.process.run([...p, `${$.plugin.root}/scripts/pane.py`, ...args], { timeoutMs: 20000 })
+    // a draft to score waits 3 s at most: a hung Python must not hold the hint for long
+    const r = await $.process.run([...p, `${$.plugin.root}/scripts/pane.py`, ...args], stdin === undefined ? { timeoutMs: 20000 } : { timeoutMs: 3000, stdin })
     if (r.exitCode !== 0) {
       const last = r.stderr.trim().split('\n').pop() || `pane.py exited ${r.exitCode}`
       return { ok: false, err: `coachline: ${last} · run /coach doctor` }
@@ -181,6 +189,42 @@ async function open($: EngineInterface): Promise<void> {
   await $.ui.open({ id: PANE, title: 'coachline' })
 }
 
+// The draft goes to pane.py on stdin only (never argv, never a file, never Claude), after DEBOUNCE_MS without a change. One score
+// runs at a time; an answer for a draft the box no longer holds is dropped.
+let waiting: { cancel: () => void } | null = null
+let planned = ''
+let scoring = false
+
+function schedule($: EngineInterface, draft: string) {
+  if (draft === planned) return
+  planned = draft
+  waiting?.cancel(); waiting = null
+  // the drawn line is reused until the hint changes: a tail for another draft must go now, not when the next score lands
+  void update($, hint, h => (h && h.draft === draft ? h : null)).catch(ignore)
+  if (!draft.trim()) return
+  waiting = $.clock.after(DEBOUNCE_MS, () => {
+    waiting = null
+    void score($, draft).catch(ignore)
+  })
+}
+
+async function score($: EngineInterface, draft: string) {
+  if (scoring) return                     // the running score picks up the newest draft when it ends
+  scoring = true
+  try {
+    if ((await read($, state))?.hints === false) return
+    const r = await run($, ['--score'], draft)
+    if (!r.ok) return
+    const d = JSON.parse(r.out) as { meter: string | null; hint: string | null; words: number }
+    if ((await $.prompt.read()).text !== draft) return
+    const tail = d.meter && d.words >= 3 ? `· ${d.meter}${d.hint ? `  ${d.hint}` : ''}` : null
+    await update($, hint, () => ({ draft, tail }))
+  } finally {
+    scoring = false
+    if (planned !== draft && planned.trim() && !waiting) void score($, planned).catch(ignore)   // typed while this one ran
+  }
+}
+
 export const register: Register = on => {
   // The terminal's pane, but not the Windows terminal's, which has watch.py's panel. The desktop app and the editors' Claude Code
   // extension run their session as an SDK host does (no surface, not interactive) and attach afterwards, after its first
@@ -219,6 +263,25 @@ export const register: Register = on => {
   on('ui.close', async ($, e, next) => {
     if (e.id === PANE && e.origin.kind === 'person') await update($, closed, () => true)
     return next(e)
+  })
+
+  on('prompt.edit', async ($, e, next) => {
+    const box = await next(e)
+    schedule($, box.text)
+    return box
+  })
+
+  on('prompt.change', async ($, e, next) => {
+    schedule($, e.text)
+    return next(e)
+  })
+
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    if (!e.props.isDraft || e.props.isWorking) return next(e)
+    const { text } = await $.prompt.read()
+    schedule($, text)
+    const h = await read($, hint)
+    return h && h.draft === text && h.tail ? next({ ...e, props: { ...e.props, tail: h.tail } }) : next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -278,6 +341,24 @@ export const register: Register = on => {
     const copy = async () => {
       const r = await $.ui.copy({ text: cur.after, surface: e.surface })
       await update($, msg, () => (r.isCopied ? `copied the enhanced prompt (${cur.after.length} characters)` : NO_CLIPBOARD))
+    }
+    // the enhanced prompt into the prompt box, its [ASK] gaps in bold; never sent: you fill the gaps and press Enter (Q7)
+    const use = async () => {
+      const now = await $.clock.now()
+      if ((await $.prompt.read()).text.trim() && now - armedAt > ARM_MS) {
+        armedAt = now
+        await update($, msg, () => 'your prompt box has a draft: press Use again to replace it')
+        return
+      }
+      armedAt = -Infinity
+      const decorations = [...cur.after.matchAll(ASK)].map(m => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, bold: true }))
+      const r = await $.prompt.fill({ text: cur.after, mode: 'replace', decorations })
+      if (r.isFilled) return update($, msg, () => 'in your prompt box: fill the [ASK] parts, then send')
+      if (r.refusal === 'dialog') return update($, msg, () => 'close the dialog first, then press Use')
+      // no box here (the desktop app, an editor), or a cause unknown: the clipboard never touches the box, so copy
+      const c = await $.ui.copy({ text: cur.after, surface: e.surface })
+      const why = r.refusal === 'no_composer' ? 'no prompt box here' : 'the prompt box did not take it'
+      await update($, msg, () => (c.isCopied ? `copied instead: ${why}` : NO_CLIPBOARD))
     }
     const analyse = async () => {
       const r = await run($, s.session ? ['--enhance', cur.key, '--session', s.session] : ['--enhance', cur.key])
@@ -371,7 +452,12 @@ export const register: Register = on => {
       const [, , title, right, action] = sec.head ?? []
       // in an app a note with no title (the first-run notice) is plain text, not a card
       if (!sec.section || (app && sec.section === 'info' && !title)) return <Box key={`s${n}`} flexDirection="column">{body}</Box>
-      const copyButton = <Button key="copy" label="Copy" variant={app ? 'primary' : undefined} onPress={copy} />
+      const copyButton = (
+        <Box key="acts" gap={1} flexWrap={nw}>
+          <Button key="use" label="Use" onPress={use} />
+          <Button key="copy" label="Copy" variant={app ? 'primary' : undefined} onPress={copy} />
+        </Box>
+      )
       if (app) {
         const color = accentOf[sec.section] ?? 'inactive'
         return (

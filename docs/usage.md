@@ -11,6 +11,10 @@ Each prompt gets a card: each part in a rounded box of its own colour, in the Cl
 | Enhanced prompt | cyan | A rewrite you can copy, with checked links from web research added as References |
 | Worth a look | magenta | Tools, docs and reference sites found on the web for a new task |
 
+**Use** puts the enhanced prompt in your prompt box, its `[ASK: …]` gaps in bold: fill them and press Enter yourself; nothing is sent for you. A draft already in the box is replaced only when you press Use a second time. Where there is no prompt box to fill (the desktop app, an editor), Use copies it instead. The standalone panel (Windows Terminal, `/coach watch`) runs apart from Claude Code and only copies.
+
+While you type, the line under the prompt box ends with how concrete your draft is (`▰▰▱▱▱`) and the one thing it lacks most, such as `name a file, function, error or number`. It appears after a short pause, only in the terminal, and is worked out on your machine: the draft is never sent.
+
 Below the card: one line of patterns from your past chats (`i` opens it) and the list of prompts in this thread.
 
 ## Keys
@@ -57,6 +61,7 @@ With the mouse on, the wheel scrolls and a click selects a prompt or presses a b
 | `/coach model fast\|research haiku\|sonnet\|opus` | The model for each pass (defaults: fast haiku, research sonnet) |
 | `/coach auto-open on\|off` | Open the panel by itself at session start (on by default on macOS and Linux) |
 | `/coach setup` | Show the current settings |
+| `/coach hints on\|off` | The hint under the prompt box as you type (on by default; worked out locally, nothing is sent) |
 | `/coach motion on\|off` | The panel's animations (on by default; off by itself with `NO_COLOR`, over SSH or in a slow terminal) |
 | `/coach doctor` | Check that your history, Python and the `claude` CLI work, and how much data coachline keeps |
 | `/coach forget all` | Delete everything coachline keeps, except your settings and `llm-off.txt` (asks first) |

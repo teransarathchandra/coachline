@@ -4,18 +4,27 @@ import type { On } from 'claude-code'
 
 // the test runner has timers; the hooks environment's typings do not declare them
 declare const setTimeout: (fn: (value?: unknown) => void, ms: number) => unknown
+declare const h: (type: unknown, props: unknown, ...children: unknown[]) => never
 
 const STATE = (over = {}) =>
   JSON.stringify({ ai: true, research: true, auto_open: true, session: 's1', entries: [], patterns: [], skill: null, notice: null, ...over })
 
-function world(on: On, opts: { os?: string; out?: string; exit?: number } = {}) {
+function world(on: On, opts: { os?: string; out?: string; exit?: number; box?: string; refused?: boolean } = {}) {
   const opened: string[] = []
   const ran: string[][] = []
+  const fills: { text: string; mode?: string; decorations?: unknown[] }[] = []
+  const submits: string[] = []
   mock.env(on, opts.os ? { OS: opts.os } : {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.attach', ($, e) => ({ clientId: e.clientId }))
   on('clock.now', () => ({ value: 0 }))
-  on('prompt.submit', ($, e) => ({ text: e.text }))
+  on('prompt.submit', ($, e) => (submits.push(e.text), { text: e.text }))
+  on('prompt.read', () => ({ value: { text: opts.box ?? '', cursor: 0 } }))
+  on('prompt.fill', ($, e) => {
+    if (opts.refused) return { isFilled: false }
+    fills.push({ text: e.text, mode: e.mode, decorations: (e as { decorations?: unknown[] }).decorations })
+    return { isFilled: true }
+  })
   on('turn.complete', () => ({ text: '' }))
   on('session.id', () => ({ value: 's1' }))
   on('ui.panes', () => ({ value: [] }))
@@ -36,7 +45,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number } = {}) 
       },
     }
   })
-  return { opened, ran }
+  return { opened, ran, fills, submits }
 }
 
 const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const
@@ -631,19 +640,177 @@ test('every button does the same on every surface', async ($, on) => {
         if (!b.key || /^e\d+$|^(patterns|whole|less)$/.test(b.key)) continue    // they change the view, which the test above follows
         w.ran.length = 0
         copies.length = 0
+        w.fills.length = 0
         await ui.press({ key: b.key })
         await settle()
         const runs = w.ran.filter(a => !a.includes('--json') && !a.includes('--version')).map(a => a.slice(2).join(' '))
         const copied = copies.map(c => `copied ${c.text.length} characters ${c.surface === surface ? 'here' : `on ${c.surface}`}`)
-        did[surface].push(`${view} ${b.key}: ${[...runs, ...copied].join(', ')}`)
+        const filled = w.fills.map(f => `filled ${f.text.length} characters`)
+        did[surface].push(`${view} ${b.key}: ${[...runs, ...copied, ...filled].join(', ')}`)
       }
       for (const key of back) await ui.press({ key })
       await ui.unmount()
     }
   }
   expect(did.terminal).toContain(`first prompt copy: copied ${CARD.after.length} characters here`)
+  expect(did.terminal).toContain(`first prompt use: filled ${CARD.after.length} characters`)
   expect(did.terminal).toContain('second prompt analyse: --enhance k1 --session s1')
   expect(did.terminal).toContain('patterns skill: --install tidy-hero')
   expect(did.desktop).toEqual(did.terminal)
   expect(did.vscode).toEqual(did.terminal)
+})
+
+// the hint under the prompt box: the draft scored by pane.py --score, drawn as PromptHint's tail
+function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (draft: string) => object; fail?: boolean; hints?: boolean; hold?: Promise<void>[] } = {}) {
+  mock.env(on, opts.os ? { OS: opts.os } : {})
+  const clock = mock.clock(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.id', () => ({ value: 's1' }))
+  on('ui.panes', () => ({ value: [] }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('prompt.read', () => ({ value: { text: (opts.draft ?? (() => 'fix it now please'))(), cursor: 0 } }))
+  const scored: string[] = []
+  on('process.run', async ($, e) => {
+    const score = e.argv.includes('--score')
+    if (score) scored.push(e.init?.stdin ?? '')
+    if (score && opts.hold?.length) await opts.hold.shift()                     // a slow Python: this answer waits for the test
+    const out = e.argv.includes('--version') ? 'Python 3.13.0'
+      : score ? JSON.stringify((opts.score ?? (() => ({ meter: '▰▱▱▱▱', hint: 'name a file, function, error or number', words: 4 })))(e.init?.stdin ?? ''))
+      : STATE({ hints: opts.hints ?? true })
+    return { value: { exitCode: score && opts.fail ? 1 : 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  const tails: (string | undefined)[] = []
+  // the engine's own line, beneath the plugin: it records the tail it is handed
+  on('ui.render', ($, e) => {
+    if ((e as { component?: string }).component === 'PromptHint') tails.push((e.props as { tail?: string }).tail)
+    const { Text } = $.ui.resolve(e)
+    return h(Text, null, 'line')
+  })
+  return { clock, scored, tails }
+}
+const HINT = { isDraft: true, isWorking: false, hint: '? for shortcuts' }
+const draw = async ($: Parameters<TestBody>[0], props = HINT) => {
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'PromptHint', props } as never)
+  await ui.unmount()
+}
+
+for (const os of ['', 'Windows_NT']) {
+  test(`a pause in typing shows the meter and what the draft lacks under the prompt${os ? ' (Windows)' : ''}`, async ($, on) => {
+    const w = hinting(on, { os })
+    await $.session.start(START)
+    await draw($)
+    expect(w.scored).toEqual([])
+    await w.clock.advance(600)
+    await draw($)
+    expect(w.scored).toEqual(['fix it now please'])
+    expect(w.tails.at(-1)).toBe('· ▰▱▱▱▱  name a file, function, error or number')
+  })
+}
+
+test('typing on within the pause scores once, after the last edit', async ($, on) => {
+  let draft = 'fix'
+  const w = hinting(on, { draft: () => draft })
+  await $.session.start(START)
+  await draw($)
+  await w.clock.advance(100)
+  draft = 'fix it now please'
+  await draw($)
+  await w.clock.advance(600)
+  expect(w.scored).toEqual(['fix it now please'])
+})
+
+test('a score for an older draft is never drawn over a newer one', async ($, on) => {
+  let draft = 'fix it now please'
+  const w = hinting(on, { draft: () => draft })
+  await $.session.start(START)
+  await draw($)
+  await w.clock.advance(600)
+  draft = 'fix it now please, the login page'
+  await draw($)
+  expect(w.tails.at(-1)).toBeUndefined()
+})
+
+test('no hint while Claude works or when pane.py fails', async ($, on) => {
+  const w = hinting(on, { fail: true })
+  await $.session.start(START)
+  await draw($)
+  await w.clock.advance(600)
+  await draw($)
+  expect(w.tails.at(-1)).toBeUndefined()
+  await draw($, { ...HINT, isWorking: true })
+  expect(w.tails.at(-1)).toBeUndefined()
+})
+
+test('hints off: the draft is never scored', async ($, on) => {
+  const w = hinting(on, { hints: false })
+  await $.session.start(START)
+  await draw($)
+  await w.clock.advance(600)
+  await draw($)
+  expect(w.scored).toEqual([])
+  expect(w.tails.at(-1)).toBeUndefined()
+})
+
+// Use: the enhanced prompt into the prompt box, never sent (Q7)
+const ASKING = { ...CARD, after: 'Make the [ASK: which page?] faster. Done when p95 < 300ms.' }
+async function pressUse($: Parameters<TestBody>[0], surface: 'terminal' | 'desktop' | 'vscode' = 'terminal') {
+  const ui = await $.ui.mount({ plugin: 'coachline', surface, component: 'Pane', requestId: 'coachline', props: {} as never })
+  await ui.press({ key: 'use' })
+  return ui
+}
+
+test('Use puts the enhanced prompt in an empty prompt box, its [ASK] gaps in bold, and sends nothing', async ($, on) => {
+  const w = world(on, { out: STATE({ entries: [ASKING] }) })
+  await $.session.start(START)
+  await settle()
+  const ui = await pressUse($)
+  const at = ASKING.after.indexOf('[ASK')
+  expect(w.fills).toEqual([{ text: ASKING.after, mode: 'replace', decorations: [{ start: at, end: at + '[ASK: which page?]'.length, bold: true }] }])
+  expect(w.submits).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /in your prompt box: fill the \[ASK\] parts, then send/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Use asks before it replaces a draft in the box', async ($, on) => {
+  const w = world(on, { out: STATE({ entries: [ASKING] }), box: 'half typed' })
+  await $.session.start(START)
+  await settle()
+  const ui = await pressUse($)
+  expect(w.fills).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /your prompt box has a draft: press Use again to replace it/ })).toBeDefined()
+  await ui.press({ key: 'use' })
+  expect(w.fills.length).toBe(1)
+  await ui.unmount()
+})
+
+test('Use copies when the box does not take it, whatever the cause', async ($, on) => {
+  const copies: string[] = []
+  const w = world(on, { out: STATE({ entries: [ASKING] }), refused: true })
+  on('ui.copy', ($, e) => (copies.push(e.text), { value: { isCopied: true } }))
+  await $.session.start(START)
+  await settle()
+  const ui = await pressUse($)
+  expect(copies).toEqual([ASKING.after])
+  expect(await ui.find({ type: 'Text', text: /copied instead: the prompt box did not take it/ })).toBeDefined()
+  expect(w.submits).toEqual([])
+  await ui.unmount()
+})
+
+test('a draft typed while an older one is being scored is scored next', async ($, on) => {
+  let draft = 'fix it now please'
+  let release = () => undefined as void
+  const hold = [new Promise<void>(r => { release = r })]
+  const w = hinting(on, { draft: () => draft, hold })
+  await $.session.start(START)
+  await draw($)
+  await w.clock.advance(600)                                  // A's score starts and hangs
+  draft = 'fix it now please, the login page'
+  await draw($)
+  await w.clock.advance(600)                                  // B is due while A still runs
+  release()
+  await settle()
+  await w.clock.advance(600)
+  expect(w.scored).toEqual(['fix it now please', 'fix it now please, the login page'])
+  await draw($)
+  expect(w.tails.at(-1)).toBe('· ▰▱▱▱▱  name a file, function, error or number')
 })

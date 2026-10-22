@@ -6,6 +6,7 @@
   python setup.py --auto-open on|off    split a pane with the panel at session start (tmux or Windows Terminal only)
   python setup.py --research on|off     web research once per new task: tools, modern approaches, docs, reference sites (verified here)
   python setup.py --model fast|research haiku|sonnet|opus   the model of each pass (defaults: fast haiku, research sonnet)
+  python setup.py --hints on|off       the hint under the prompt box as you type: its meter and what it lacks (on by default; local)
   python setup.py --motion on|off      the panel's animations (on by default; off by itself with NO_COLOR, over SSH, in a slow terminal)
   python setup.py --uninstall           remove the old coachline statusline entry from settings.json
   python setup.py --refresh             silent: used by the SessionStart hook (refreshes the launcher, records which session started, migrates the old statusline)
@@ -18,7 +19,7 @@ import coach
 import launch
 
 SETTINGS = os.path.join(coach.CONFIG, "settings.json")
-KNOWN = {"--panel-ai", "--advisor", "--auto-rewrite", "--auto-open", "--research", "--discover", "--model", "--motion", "--uninstall", "--refresh"}
+KNOWN = {"--panel-ai", "--advisor", "--auto-rewrite", "--auto-open", "--research", "--discover", "--model", "--motion", "--hints", "--uninstall", "--refresh"}
 
 
 def ours(sl):
@@ -102,6 +103,12 @@ def main(argv):
         coach.set_setting("model_" + which, name)
         print(f"The {which} pass now uses {name}.")
         return
+    if "--hints" in argv:
+        on = onoff(argv, "--hints")
+        coach.set_setting("hints", on)
+        print("Hints ON: while you type, the line under the prompt box shows how concrete the draft is and what it lacks. "
+              "Worked out on this machine; the draft is never sent. Turn off: setup.py --hints off" if on else "Hints OFF.")
+        return
     if "--motion" in argv:
         on = onoff(argv, "--motion")
         coach.set_setting("motion", on)
@@ -119,6 +126,7 @@ def main(argv):
     print(f"  Claude analysis (--panel-ai):  {'ON' if coach.ai_on() else 'off'}")
     print(f"  auto-open a split pane (--auto-open):  {'ON' if coach.auto_open_on() else 'off'}")
     print(f"  web research per new task (--research):  {'ON' if coach.research_on() else 'off'}")
+    print(f"  hints under the prompt box (--hints):  {'ON' if coach.hints_on() else 'off'}")
     print(f"  motion (--motion):  {'ON' if coach.motion_on() else 'off'}")
     print(f"  fast model:  {coach.model_for('fast')}   research model:  {coach.model_for('research')}   (--model fast|research <name>)")
     print(f"open the panel by hand, in a second tab or pane:\n  {launch.panel_command()}")

@@ -89,6 +89,16 @@ def vagueness(text):
 def vague(text):
     return vagueness(text) >= 0.6
 
+def hint_for(text):
+    """The one thing a vague prompt lacks most, as the hint under the prompt box says it; None when the prompt is concrete enough."""
+    b = body(text)[:2000]
+    if not b.strip() or not vague(text): return None
+    anchored = bool(ANCHOR.search(b))
+    if not r4_qualifiers(text): return "replace 'best/properly/clean' with a rule you can check"
+    if DEICTIC.search(b) and not anchored: return "say what 'it' or 'this' is: a file, a function, an error"
+    if not anchored: return "name a file, function, error or number"
+    return "say what done looks like"
+
 CATS = {
     "commit/PR/ticket text": r"commit message|pr title|pr description|ticket.*comment|comment.*ticket|\bpr\b$",
     "install/setup": r"\b(install|set ?up)\b",
@@ -492,6 +502,11 @@ def auto_open_on():
     """The panel opens by itself at session start: the Claude Code pane on macOS / Linux, a Windows Terminal split on Windows."""
     v = setting("auto_open_watch")
     return bool(defaults_on() if v is None else v)
+
+def hints_on():
+    """The hint under the prompt box as you type (the Claude Code pane): on unless switched off. Local; nothing is sent."""
+    v = setting("hints")
+    return True if v is None else bool(v)
 
 def motion_on(env=None):
     """The panel's motion (shimmer, reveal, Copied flash, meter fill). On unless switched off, NO_COLOR is set, or over SSH, where
