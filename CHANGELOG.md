@@ -4,6 +4,8 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- The standalone panel (Windows Terminal, `/coach watch`) has the **Library** too: `l` opens it, `↑` `↓` choose a saved prompt, `c` copies it (the panel runs apart from Claude Code, so it copies rather than filling the prompt box) and `x` forgets it. The footer names `l`.
+
 - **Library**: a prompt of 12 words or more that worked first time (its turn ended normally and your next two prompts didn't correct it) is saved on your machine, redacted. A draft close to a saved prompt gets `↻ similar prompt worked before` under the box, and **Library** in the Claude Code pane lists them with **Use** and **Forget**. Another project's prompts are offered when it shares a framework with this one, never from a project in `llm-off.txt`. Up to 200 per project and 500 in all, the least used dropped first. `/coach forget library` deletes them.
 
 - **What your prompts cost you**: when you stop Claude mid-turn, or your next prompt starts with "no", "actually", "I meant" or "revert", coachline notes it on your machine (up to four words from the start of the prompt, known secret patterns redacted; kept 90 days). With enough of them, the patterns open with how often vague prompts led to rework compared with concrete ones.

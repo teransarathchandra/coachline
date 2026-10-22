@@ -34,6 +34,7 @@ Below the card: one line of patterns from your past chats (`i` opens it) and the
 | `c` | Copy the enhanced prompt |
 | `e` | Ask Claude to analyse the selected prompt now |
 | `i` | Show or hide patterns from your past chats |
+| `l` | Open or close the Library of saved prompts: `↑` `↓` choose, `c` copies one, `x` forgets it (the standalone panel copies; it cannot reach the prompt box) |
 | `s` | Install the skill Claude drafted for a repeated request (never overwrites) |
 | `x` | Hide a web suggestion for good (asks which one when there are several) |
 | `a` | Mark a web suggestion as one you already use, so it is not suggested again |

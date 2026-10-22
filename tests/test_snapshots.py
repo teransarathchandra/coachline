@@ -63,6 +63,18 @@ class Snapshots(Base):
     def test_full_view(self):
         self.thread(); self.analyse(5, "P06 " + VAGUE); self.screen("full-view", 80, 30, detail=True)
 
+    def test_library(self):
+        self.thread()
+        texts = ["add pagination to the orders table with 25 rows per page and keep the current sort order",
+                 "write a migration that adds an index on the created_at column of the events table in postgres"]
+        self.write_json("library.json", {"items": [{"id": f"id{n}", "text": t, "project": "p", "stack": [], "ts": 100 - n, "uses": 0, "off": False}
+                                                   for n, t in enumerate(texts)]})
+        self.screen("library", 100, 30, library=True, lsel=1)
+
+    def test_library_empty(self):
+        self.thread()
+        self.screen("library-empty", 60, 20, library=True)
+
     def test_patterns_expanded(self):
         self.thread()
         self.write_json("learned.json", {"generated": "2026-09-30", "prompts": 99, "requests": [{"name": "carefully-things", "keywords": ["carefully"], "count": 4}], "mistakes": []})

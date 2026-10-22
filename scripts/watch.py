@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import advisor
 import coach
 import discover
+import library
 import memory
 import review
 
@@ -38,10 +39,11 @@ POSIX_KEYS = {"[A": "up", "[B": "down", "[5~": "pgup", "[6~": "pgdn", "[H": "hom
 WIN_KEYS = {"H": "up", "P": "down", "I": "pgup", "Q": "pgdn", "G": "home", "O": "end"}     # msvcrt fallback when VT input is unavailable
 ALIASES = {"k": "up", "j": "down", "p": "up", "n": "down", "b": "pgup", " ": "pgdn", "g": "home", "G": "end", "\x03": "q", "Q": "q",
            "c": "copy", "e": "enhance", "s": "skill", "i": "patterns", "m": "mouse", "\r": "enter", "\n": "enter", "\x1b": "esc",
-           "x": "dismiss", "a": "adopt", "r": "research"}
+           "x": "dismiss", "a": "adopt", "r": "research", "l": "library"}
 IO = type("IO", (), {"copy": staticmethod(coach.copy_text), "enhance": staticmethod(coach.spawn_key),
                      "review": staticmethod(coach.spawn_review), "install": staticmethod(review.install_skill),
-                     "mark": staticmethod(memory.mark), "research": staticmethod(coach.spawn_research)})  # swapped for fakes in tests
+                     "mark": staticmethod(memory.mark), "research": staticmethod(coach.spawn_research),
+                     "used_saved": staticmethod(library.used), "forget_saved": staticmethod(library.forget)})  # swapped for fakes in tests
 # a colour per section, so you find each at a glance: your words white, what can be improved blue, the enhanced prompt cyan,
 # web finds magenta, everything secondary grey. Green / yellow / red only for state: Claude on, working, failed. No faint (2;): the Windows console draws it as plain or not at all.
 CODE = {"title": "1", "meta": "90", "prompt": "1;97", "label": "1;94", "blue": "94", "bluedim": "90", "enh": "96", "rule": "90", "blank": "0",
@@ -224,9 +226,10 @@ def build(path, session=None, notice=True):
           "research_paused": None}
     if not rows: st["session"] = session; return st
     cur = st["session"] = session or current_session(rows); prev = None
-    mem = memory.statuses()
+    mem = memory.statuses(); here = None
     for ts, proj, text, sid in rows:
         gap = None if prev is None else ts - prev; prev = ts
+        if sid == cur: here = proj                                         # this thread's folder: whose Library to show
         if sid != cur or not coach.scorable(text) or text.startswith("/coach"): continue
         fails = [n for n, fn in coach.RULES if not fn(text, gap)]
         key = coach.prompt_key((ts, proj, text)); rec = aft.get(key) or {}; adv = rec.get("advice") or {}
@@ -241,6 +244,7 @@ def build(path, session=None, notice=True):
     st["research_paused"] = discover.paused_until() if st["ai"] else None
     st["insights"] = insights(st["entries"], rows, L)
     st["evidence"] = coach.evidence_line(rows)
+    st["library"] = library.entries(here)[:50] if here else []
     st["notice"] = coach.notice(cur) if notice and cur else None
     return st
 
@@ -249,7 +253,7 @@ def signature(st):
     return (st.get("session"), len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
             st["learned"].get("generated"), st["review_running"], st["ai"],
             tuple((memory.item_id(x), x.get("status")) for e in st["entries"] for x in e.get("items", [])), st.get("research_paused"),
-            st.get("evidence"))
+            st.get("evidence"), tuple(x["id"] for x in st.get("library") or []))
 
 
 # ---------------------------------------------------------------- presentation helpers
@@ -367,19 +371,23 @@ def notice_lines(st, iw):
 def new_ui():
     return {"sel": None, "lo": 0, "cs": 0, "detail": False, "dscroll": 0, "pending": {}, "tried": set(), "review_after": 0.0, "msg": "",
             "msg_kind": "", "tick": 0, "spinning": False, "patterns": False, "copied": {}, "mouse": True, "hits": [], "list_rows": None,
-            "motion": False, "now": None, "seen": None, "reveal": None, "animating": False, "slow": 0}
+            "motion": False, "now": None, "seen": None, "reveal": None, "animating": False, "slow": 0, "library": False, "lsel": 0, "lsel_id": None, "lsel_line": None}
 
 
 FOOT = [("↑↓", "prompt", None), ("c", "copy", "copy"), ("e", "analyse", "enhance"), ("Enter", "full", "enter"),
-        ("i", "patterns", "patterns"), ("s", "skill", "skill"), ("q", "quit", "q"), ("m", "mouse", "mouse")]
+        ("i", "patterns", "patterns"), ("l", "library", "library"), ("s", "skill", "skill"), ("q", "quit", "q"), ("m", "mouse", "mouse")]
+# the Library (l): saved prompts of this project. This panel runs apart from Claude Code and cannot reach the prompt box: c copies
+FOOT_LIBRARY = [("↑↓", "choose", None), ("c", "copy", "copy"), ("x", "forget", "dismiss"), ("l", "back", "library"), ("q", "quit", "q")]
+LIBRARY_EMPTY = "Prompts that worked first time land here: none yet in this project."
 FOOT_DETAIL = [("Esc", "back", "esc"), ("c", "copy", "copy"), ("e", "analyse", "enhance"), ("↑↓", "scroll", None), ("q", "quit", "q"), ("m", "mouse", "mouse")]
-PRIORITY = ["↑↓", "c", "q", "Esc", "e", "Enter", "i", "s", "m"]       # what a narrow footer keeps, most important first
+PRIORITY = ["↑↓", "c", "q", "Esc", "e", "Enter", "i", "s", "l", "m"]
+PRIORITY_LIBRARY = ["↑↓", "c", "q", "l", "x"]                         # in the Library, the way back matters more       # what a narrow footer keeps, most important first
 
 
-def footer_row(W, items, P, hits, row):
+def footer_row(W, items, P, hits, row, priority=PRIORITY):
     """The key hints as buttons that fit the width, least important dropped first, still in reading order. Records their click areas."""
     chosen, used = set(), 1
-    for key in sorted((it[0] for it in items), key=lambda k: PRIORITY.index(k) if k in PRIORITY else 99):
+    for key in sorted((it[0] for it in items), key=lambda k: priority.index(k) if k in priority else 99):
         it = next(x for x in items if x[0] == key)
         need = dw(it[0]) + 1 + dw(it[1]) + (2 if chosen else 0)
         if used + need > W - 1: continue
@@ -391,6 +399,28 @@ def footer_row(W, items, P, hits, row):
         w = dw(key) + 1 + dw(label)
         if act: hits.append((row, col, col + w, act))
         out += P("key", key) + " " + P("barmeta", label); col += w
+    return out
+
+
+def _chosen(ui, libs):
+    """The chosen saved prompt's place in the list: found again by its id, as a reload may sort the list anew."""
+    i = next((n for n, x in enumerate(libs) if x["id"] == ui.get("lsel_id")), ui["lsel"])
+    i = min(max(i, 0), len(libs) - 1)
+    ui["lsel_id"] = libs[i]["id"] if libs else None
+    return i
+
+
+def library_lines(st, ui, iw):
+    """The Library as a card: each saved prompt wrapped, the chosen one marked; a click on one chooses it."""
+    libs = st.get("library") or []
+    out = [("enh", "head", "Library", f"{len(libs)} saved in this project · c copies · x forgets", None)]
+    if not libs: return out + [("enh", "bluedim", w, "", None) for w in wrap(LIBRARY_EMPTY, iw)]
+    ui["lsel"] = _chosen(ui, libs)
+    for n, x in enumerate(libs):
+        mine = n == ui["lsel"]
+        if mine: ui["lsel_line"] = len(out)                                # the render keeps this line on screen
+        for k, w in enumerate(wrap(x["text"], iw - 2)):
+            out.append(("enh", "enh" if mine else "bluedim", ("› " if mine and not k else "  ") + w, "", f"lib:{n}"))
     return out
 
 
@@ -464,7 +494,9 @@ def render(st, ui, W, H, color=True):
     fixed = 1 + 1 + 1 + (1 + len(pat_rows) if pat_rows else 0) + 1            # header, rule, rule under the card, patterns + rule, footer
     min_list, pref_list = min(n, 2), (min(n, max(2, (H - 12) // 4)) if n else 0)
     room = max(H - 1 - fixed - ((1 + min_list) if n else 0), 3)               # the most rows the card can ever have
-    if e is None:
+    if ui["library"]:
+        card = library_lines(st, ui, iw)
+    elif e is None:
         card = [("info", "bluedim", "No prompts in this thread yet.", "", None),
                 ("info", "bluedim", "Send a prompt in Claude Code and it appears here.", "", None),
                 *[("info", "bluedim", w, "", None) for w in (wrap("Analysis is off. Turn it on: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ") if not st["ai"] else [])]]
@@ -482,6 +514,8 @@ def render(st, ui, W, H, color=True):
     ui["animating"] = bool(ui.get("reveal")) or flash
     card_h = max(min(len(card), room), 3)
     list_n = min(pref_list, max(H - 1 - fixed - card_h - 1, min_list)) if n else 0   # leftover rows go to the list, up to its preferred size
+    if ui["library"] and ui.get("lsel_line") is not None:                  # scroll the card to the chosen saved prompt
+        line = ui["lsel_line"]; ui["cs"] = min(max(ui["cs"], line - card_h + 2), max(line - 1, 0))
     ui["cs"] = min(max(ui["cs"], 0), max(len(card) - card_h, 0))
     shown = list(card[ui["cs"]:ui["cs"] + card_h])
     # more above / below: said in the box's own edge, so a box cut by the pane still looks closed
@@ -538,7 +572,7 @@ def render(st, ui, W, H, color=True):
             if idx == i: rows.append(P("sel", pad(f" › {glyph} {stamp(x['ts']):<{sw}}  {text}", W - 1)))
             else: rows.append("   " + P(gk, glyph) + " " + P("meta", f"{stamp(x['ts']):<{sw}}  ") + text)
     # footer: a message, or the keys that fit (as clickable buttons)
-    rows.append(bar(message_row(ui, W, P) if ui["msg"] else footer_row(W, FOOT, P, hits, len(rows)), W, color))
+    rows.append(bar(message_row(ui, W, P) if ui["msg"] else (footer_row(W, FOOT_LIBRARY, P, hits, len(rows), PRIORITY_LIBRARY) if ui["library"] else footer_row(W, FOOT, P, hits, len(rows))), W, color))
     return rows[:H - 1]
 
 
@@ -616,7 +650,7 @@ def _click(ui, st, key, io):
         if not press: return False                                            # only the press of a wheel notch counts
         d = -1 if b == 64 else 1; lr = ui.get("list_rows")
         if ui["detail"]: ui["dscroll"] = max(0, ui["dscroll"] + 3 * d)
-        elif lr and lr[0] <= r < lr[1]: return handle(ui, st, "up" if d < 0 else "down", io)
+        elif lr and lr[0] <= r < lr[1] and not ui["library"]: return handle(ui, st, "up" if d < 0 else "down", io)
         else: ui["cs"] = max(0, ui["cs"] + 3 * d)
         return False
     if b == 0 and press:
@@ -626,6 +660,31 @@ def _click(ui, st, key, io):
                     n = len(st["entries"]); ui["sel"] = None if act >= n - 1 else act; ui["cs"] = 0; ui["detail"] = False
                     return False
                 return handle(ui, st, act, io)
+    return False
+
+
+def _library_key(ui, st, key, io):
+    """A key while the Library is open: it acts on the chosen saved prompt; Esc or l goes back to the card."""
+    libs = st.get("library") or []
+    if isinstance(key, str) and key.startswith("lib:"):
+        ui["lsel"] = int(key[4:]); ui["lsel_id"] = None; ui["lsel"] = _chosen(ui, libs); return False
+    if libs: ui["lsel"] = _chosen(ui, libs)
+    if key == "esc": ui["library"] = False; return False
+    if key in ("up", "down", "home", "end") and libs:
+        ui["lsel"] = min(max({"up": ui["lsel"] - 1, "down": ui["lsel"] + 1, "home": 0, "end": len(libs) - 1}[key], 0), len(libs) - 1)
+        ui["lsel_id"] = libs[ui["lsel"]]["id"]
+    elif key in ("pgup", "pgdn"): ui["cs"] = max(0, ui["cs"] + (-6 if key == "pgup" else 6))
+    elif key in ("copy", "dismiss") and not libs: ui["msg"] = "the Library is empty"
+    elif key == "copy":
+        x = libs[ui["lsel"]]; m = io.copy(x["text"])
+        if m: io.used_saved(x["id"])
+        ui["msg_kind"] = "ok" if m else "bad"
+        ui["msg"] = f"copied the saved prompt ({len(x['text'])} characters) via {m}: paste it in Claude Code" if m else "no clipboard available here"
+    elif key == "dismiss":
+        x = libs[ui["lsel"]]
+        if io.forget_saved(x["id"]):
+            libs.remove(x); ui["msg_kind"] = "ok"; ui["msg"] = "forgotten: it will not be offered again"
+        else: ui["msg_kind"] = "bad"; ui["msg"] = "could not forget it: try again"
     return False
 
 
@@ -655,6 +714,10 @@ def handle(ui, st, key, io=None):
         ui["msg"] = "cancelled"
         return False
     if key == "q": return True
+    if key == "library":
+        ui["library"] = not ui["library"]; ui["detail"] = False; ui["cs"] = 0
+        return False
+    if ui["library"] and key != "mouse": return _library_key(ui, st, key, io)
     if key in ("dismiss", "adopt"):
         its = e["items"] if e else []
         if not its: ui["msg"] = "no web suggestions on this prompt"

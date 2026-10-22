@@ -1,0 +1,25 @@
+library-empty 60x20
+--- plain ---
+  coachline · this thread · 6 prompts         ○ Claude off 
+
+ ╭─ Library ── 0 saved in this project · c copies · x f… ─╮
+ │ Prompts that worked first time land here: none yet in  │
+ │ this project.                                          │
+ ╰────────────────────────────────────────────────────────╯
+ ─────────────────────────────────────────────────────────
+ Prompts in this thread  ▴ 
+   ! Jun 15 09:30  P05 handle this carefully and make it g…
+ › ! Jun 15 09:30  P06 handle this carefully and make it g…
+ ↑↓ choose  c copy  x forget  l back  q quit
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m         ␛[37m○ Claude off ␛[0;100m␛[0m
+
+ ␛[96m╭─ ␛[0m␛[1;96mLibrary␛[0m ␛[96m──␛[0m ␛[90m0 saved in this project · c copies · x f…␛[0m ␛[96m─╮␛[0m
+ ␛[96m│␛[0m ␛[90mPrompts that worked first time land here: none yet in␛[0m  ␛[96m│␛[0m
+ ␛[96m│␛[0m ␛[90mthis project.␛[0m                                          ␛[96m│␛[0m
+ ␛[96m╰────────────────────────────────────────────────────────╯␛[0m
+␛[90m ─────────────────────────────────────────────────────────␛[0m
+␛[90m Prompts in this thread  ▴ ␛[0m
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP05 handle this carefully and make it g…
+␛[7m › ! Jun 15 09:30  P06 handle this carefully and make it g…␛[0m
+␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mchoose␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97mx␛[0;100m ␛[37mforget␛[0;100m  ␛[1;97ml␛[0;100m ␛[37mback␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m               ␛[0m
