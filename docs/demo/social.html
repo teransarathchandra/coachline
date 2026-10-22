@@ -1,0 +1,27 @@
+<!doctype html>
+<!-- The 1280x640 social preview (docs/assets/social.png): open in a browser at that size and screenshot, or
+     python docs/demo/social.py, which does it with Playwright. Upload it in GitHub: Settings > General > Social preview. -->
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; width: 1280px; height: 640px; background: #0b0b0f; color: #ededf0; font-family: Inter, sans-serif; overflow: hidden; position: relative; }
+  body::before { content: ""; position: absolute; right: -120px; top: 60px; width: 760px; height: 520px; filter: blur(90px); opacity: .32;
+                 background: radial-gradient(closest-side, #e8735a, transparent); }
+  .in { position: absolute; left: 88px; top: 120px; }
+  .brand { display: flex; align-items: center; gap: 18px; font: 600 40px JetBrains Mono, monospace; }
+  .brand svg { width: 56px; height: 56px; }
+  h1 { font-weight: 800; font-size: 84px; line-height: 1; letter-spacing: -3px; margin: 44px 0 22px; }
+  h1 em { font-style: normal; color: #e8735a; }
+  p { font-size: 28px; color: #9a9aa6; margin: 0; max-width: 760px; }
+  .card { position: absolute; right: 88px; bottom: 96px; width: 420px; background: #14141a; border: 1px solid #26262f; border-radius: 18px;
+          padding: 26px 28px; font: 600 20px/1.9 JetBrains Mono, monospace; }
+  .m { color: #9a9aa6; } .a { color: #e8735a; } .g { color: #6fd3a8; }
+</style></head>
+<body>
+  <div class="in">
+    <div class="brand"><svg viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#E8735A"/><path d="M10 10l7 6-7 6" fill="none" stroke="#0B0B0F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22h5" stroke="#0B0B0F" stroke-width="3" stroke-linecap="round"/></svg>coachline</div>
+    <h1>Every prompt, <em>coached</em>.</h1>
+    <p>A side panel for Claude Code. On your own subscription, no API key.</p>
+  </div>
+  <div class="card"><div class="m">› fix it now please</div><div><span class="a">▰▱▱▱▱</span> name a file</div><div><span class="g">↻</span> <span class="m">worked before</span></div></div>
+</body></html>

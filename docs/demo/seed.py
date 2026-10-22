@@ -88,6 +88,12 @@ def world():
     for name in ("frontend-design", "systematic-debugging"):
         put(os.path.join(coach.CONFIG, "skills", name, "SKILL.md"), f"---\nname: {name}\ndescription: demo skill\n---\n")
     put(os.path.join(coach.CONFIG, "demo-advice.json"), json.dumps(LIVE_ADVICE))
+    saved = ["add pagination to the orders table with 25 rows per page, keep the current sort, done when the orders e2e test passes",
+             "write a migration that adds an index on events.created_at in postgres and show the query plan before and after",
+             "fix the flaky checkout test in tests/checkout.spec.ts: find why it times out on CI, no retries, done when it passes 10 runs"]
+    put(os.path.join(coach.STATE, "library.json"), json.dumps({"items": [
+        {"id": f"demo{n}", "text": t, "project": PROJECT, "stack": [], "ts": NOW - 3600 * n, "uses": 3 - n, "off": False}
+        for n, t in enumerate(saved)]}))
 
 
 if __name__ == "__main__":

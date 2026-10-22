@@ -4,6 +4,10 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **A website**: https://teransarathchandra.github.io/coachline/, published from `site/` by a GitHub Pages workflow, with the README's images. A new coral mark and banner, and a social preview image (`docs/demo/social.py`).
+- The README gains a short "Keep what works" section for Use, the hint, the evidence line, the Library and hold.
+- `docs/demo/` gains tapes for the hint, Use and the panel's Library, `record-all.sh` to record every GIF on a Mac, and `HANDOFF.md`, the steps for that.
+
 - The standalone panel (Windows Terminal, `/coach watch`) has the **Library** too: `l` opens it, `↑` `↓` choose a saved prompt, `c` copies it (the panel runs apart from Claude Code, so it copies rather than filling the prompt box) and `x` forgets it. The footer names `l`.
 
 - **Library**: a prompt of 12 words or more that worked first time (its turn ended normally and your next two prompts didn't correct it) is saved on your machine, redacted. A draft close to a saved prompt gets `↻ similar prompt worked before` under the box, and **Library** in the Claude Code pane lists them with **Use** and **Forget**. Another project's prompts are offered when it shares a framework with this one, never from a project in `llm-off.txt`. Up to 200 per project and 500 in all, the least used dropped first. `/coach forget library` deletes them.
