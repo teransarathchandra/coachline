@@ -12,7 +12,8 @@ Sleep 3s
 # a plugin a new user may well have, so coachline can point at it
 Type "claude plugin install frontend-design@claude-plugins-official >/dev/null 2>&1; clear" Enter
 Sleep 12s
-Type "claude" Enter
+# no edits or shell: a file Claude changes opens Claude Code's own diff pane in coachline's place
+Type "claude --disallowed-tools 'Edit,Write,NotebookEdit,Bash'" Enter
 Sleep 9s
 Show
 

@@ -17,7 +17,12 @@ Sleep 1.5s
 Type@45ms "/plugin marketplace add teransarathchandra/coachline"
 Sleep 600ms
 Enter
-Sleep 8s
+Sleep 3s
+# the clone takes ~20s on a slow line; cut the wait from the GIF, not the check
+Hide
+Wait+Screen@120s /Successfully added marketplace/
+Show
+Sleep 2s
 Type@45ms "/plugin install coachline@coachline"
 Sleep 600ms
 Enter
