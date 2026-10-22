@@ -36,11 +36,42 @@ class Tick(unittest.TestCase):
     def tick(self, session="s1", now=None):
         return pane.tick(session, width=80, io=self.io, now=now)
 
-    def test_the_claude_code_pane_has_no_meter_until_0_19(self):
+    def test_the_claude_code_pane_shows_the_meter(self):
         history(self.cfg, [("s1", "p", SOLID)])
         head = self.tick()["entries"][0]["lines"][0]
         self.assertEqual(head[:3], ["prompt", "head", "Your prompt"])
-        self.assertFalse(set("▰▱") & set(head[3]), head[3])
+        self.assertRegex(head[3], "[▰▱]{5}$")
+
+    def score(self, draft):
+        """pane.py --score, the draft on stdin as the pane module sends it."""
+        env = {k: v for k, v in os.environ.items() if k not in ("PYTHONIOENCODING", "PYTHONUTF8")}     # as the pane module runs it
+        env["CLAUDE_CONFIG_DIR"] = self.cfg
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "pane.py"), "--score"], input=draft.encode("utf-8"),
+                           capture_output=True, env=env)
+        r.stdout, r.stderr = r.stdout.decode("ascii"), r.stderr.decode("utf-8", "replace")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout)
+
+    def test_score_reads_the_draft_from_stdin(self):
+        vague = self.score("fix it now please")
+        self.assertIsNotNone(vague["hint"]); self.assertEqual(len(vague["meter"]), 5); self.assertEqual(vague["words"], 4)
+        self.assertIsNone(self.score(SOLID)["hint"])
+        self.assertEqual(self.score("x")["words"], 1)
+        self.assertEqual(self.score(""), {"meter": None, "hint": None, "words": 0})
+        self.assertEqual(self.score("請求モジュールの税計算を地域ごとに見直して、拡張しにくいので読みやすく直してください")["words"], 1)   # UTF-8 in, whatever the code page
+
+    def test_score_keeps_the_draft_off_disk(self):
+        self.score("deploy with sk-test1234567890abcdef1234 now")
+        for root, _dirs, files in os.walk(self.cfg):
+            for name in files:
+                with open(os.path.join(root, name), "rb") as f: self.assertNotIn(b"sk-test1234567890", f.read(), name)
+
+    def test_score_is_quiet_for_commands_and_with_hints_off(self):
+        nothing = {"meter": None, "hint": None, "words": 0}
+        for draft in ("!git status --short now", "# always use pnpm here", "/model sonnet please now"):
+            self.assertEqual(self.score(draft), nothing, draft)
+        coach.set_setting("hints", False)
+        self.assertEqual(self.score("fix it now please"), nothing)
 
     def test_it_returns_only_this_sessions_prompts_with_card_lines(self):
         history(self.cfg, [("s1", "p", VAGUE), ("s2", "p", SOLID)])

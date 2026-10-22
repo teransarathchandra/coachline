@@ -17,6 +17,7 @@ Pick an interpreter: `python3`, else `python`, else `py -3`. On Windows, `python
 - `/coach research on` / `off` (old name: `/coach discover on` / `off`): run `<py> <scripts>/setup.py --research on` (or `off`). On by default while analysis is on: each new task gets one background web research call. Ask me before turning it on.
 - `/coach model fast|research haiku|sonnet|opus`: run `<py> <scripts>/setup.py --model <fast|research> <model>`. Just do it; it changes which model my subscription uses for that pass.
 - `/coach auto-open on` / `off`: run `<py> <scripts>/setup.py --auto-open on` (or `off`). While on, the panel opens by itself at session start: inside Claude Code on macOS and Linux (on by default), a Windows Terminal split on Windows. On Windows, ask me before turning it on; elsewhere just do it (it only shows the panel, it sends nothing).
+- `/coach hints on` / `off`: run `<py> <scripts>/setup.py --hints on` (or `off`). Just do it; the hint is worked out locally and sends nothing.
 - `/coach motion on` / `off`: run `<py> <scripts>/setup.py --motion on` (or `off`). Just do it; it only changes how the panel draws.
 - `/coach setup`: run `<py> <scripts>/setup.py` with no options. It only shows the settings and the command that opens the panel.
 - `/coach doctor`: run `<py> <scripts>/coach.py --doctor`.

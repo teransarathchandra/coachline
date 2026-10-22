@@ -21,6 +21,7 @@ export type PaneState = {
   patterns: string[]
   skill: string | null
   notice: string | null
+  hints?: boolean
 }
 
 declare module 'claude-code' {
@@ -33,6 +34,7 @@ declare module 'claude-code' {
       showPatterns: boolean
       closed: boolean
       msg: string
+      hint: { draft: string; tail: string | null } | null
     }
   }
 }

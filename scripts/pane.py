@@ -93,10 +93,18 @@ def tick(session, width=80, io=None, now=None):
     for i, e in enumerate(st["entries"]):
         state, glyph, _kind, words = watch.status(e, st, ui)
         entries.append({"key": e["key"], "stamp": watch.stamp(e["ts"]), "glyph": glyph, "state": state, "words": words,
-                        "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True, meter_cells=False)]})
+                        "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True)]})
     skill = next((x["slug"] for x in st["insights"] if x.get("slug")), None)
-    return {"ai": st["ai"], "research": coach.research_on(), "researching": discover.researching(session), "auto_open": coach.auto_open_on(), "session": st["session"], "entries": entries,
+    return {"ai": st["ai"], "research": coach.research_on(), "researching": discover.researching(session), "auto_open": coach.auto_open_on(), "hints": coach.hints_on(), "session": st["session"], "entries": entries,
             "patterns": watch.pattern_texts(st), "skill": skill, "notice": st["notice"]}
+
+
+def score(draft):
+    """The hint under the prompt box for a draft being typed: local only, no lock, no state."""
+    words = len(coach.body(draft).split())
+    command = draft.lstrip()[:1] in ("!", "#") or coach.BUILTIN.match(draft.strip())   # a shell line, a memory note, a setting
+    if not words or command or not coach.hints_on(): return {"meter": None, "hint": None, "words": 0}
+    return {"meter": watch.meter(draft), "hint": coach.hint_for(draft), "words": words}
 
 
 def main(argv):
@@ -104,7 +112,11 @@ def main(argv):
     ap.add_argument("--json", action="store_true"); ap.add_argument("--session"); ap.add_argument("--width", type=int, default=80)
     ap.add_argument("--enhance", metavar="KEY"); ap.add_argument("--install", metavar="SLUG")
     ap.add_argument("--mark", nargs=2, metavar=("STATUS", "ID")); ap.add_argument("--research", metavar="KEY")
+    ap.add_argument("--score", action="store_true", help="the draft on stdin -> its meter and hint as JSON (nothing is saved or sent)")
     a = ap.parse_args(argv)
+    if a.score:
+        # bytes in, ASCII out: right whatever the console code page (cp1252 on Windows), and JSON.parse reads the escapes
+        sys.stdout.write(json.dumps(score(sys.stdin.buffer.read().decode("utf-8", "replace")))); return 0
     if a.enhance:
         coach.spawn_key(a.enhance)
         if a.session:                                   # so the pane shows it as being analysed, and the autopilot does not send it again
