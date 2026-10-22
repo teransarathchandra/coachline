@@ -2,7 +2,7 @@ patterns 80x30
 --- plain ---
   coachline · this thread · 6 prompts                             ○ Claude off 
 
- ╭─ Your prompt ─────────────────────────── Jun 15 09:30 · ! can be improved ─╮
+ ╭─ Your prompt ─────────────────── Jun 15 09:30 · ! can be improved · ▰▱▱▱▱ ─╮
  │ P06 handle this carefully and make it good for all the customers we have   │
  ╰────────────────────────────────────────────────────────────────────────────╯
  ╭─ Improve ──────────────────────────────────────────────────────────────────╮
@@ -26,7 +26,7 @@ patterns 80x30
 --- ansi (␛ = ESC) ---
 ␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                             ␛[37m○ Claude off ␛[0;100m␛[0m
 
- ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m───────────────────────────␛[0m ␛[90mJun 15 09:30 · ! can be improved␛[0m ␛[97m─╮␛[0m
+ ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m───────────────────␛[0m ␛[90mJun 15 09:30 · ! can be improved · ␛[0m␛[94m▰▱▱▱▱␛[0m ␛[97m─╮␛[0m
  ␛[97m│␛[0m ␛[1;97mP06 handle this carefully and make it good for all the customers we have␛[0m   ␛[97m│␛[0m
  ␛[97m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
  ␛[94m╭─ ␛[0m␛[1;94mImprove␛[0m ␛[94m─────────────────────────────────────────────────────────────────␛[0m␛[94m─╮␛[0m

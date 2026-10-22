@@ -36,9 +36,7 @@ def load_ui(session):
 
 def save_ui(session, ui):
     try:
-        os.makedirs(coach.STATE, exist_ok=True)
-        with open(ui_path(session), "w", encoding="utf-8") as f:
-            json.dump({"pending": ui["pending"], "tried": sorted(ui["tried"]), "review_after": ui["review_after"]}, f)
+        coach.write_json(ui_path(session), {"pending": ui["pending"], "tried": sorted(ui["tried"]), "review_after": ui["review_after"]})
     except OSError:
         pass
 
@@ -95,7 +93,7 @@ def tick(session, width=80, io=None, now=None):
     for i, e in enumerate(st["entries"]):
         state, glyph, _kind, words = watch.status(e, st, ui)
         entries.append({"key": e["key"], "stamp": watch.stamp(e["ts"]), "glyph": glyph, "state": state, "words": words,
-                        "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True)]})
+                        "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True, meter_cells=False)]})
     skill = next((x["slug"] for x in st["insights"] if x.get("slug")), None)
     return {"ai": st["ai"], "research": coach.research_on(), "researching": discover.researching(session), "auto_open": coach.auto_open_on(), "session": st["session"], "entries": entries,
             "patterns": watch.pattern_texts(st), "skill": skill, "notice": st["notice"]}

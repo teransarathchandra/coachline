@@ -1,8 +1,8 @@
 working 80x24
 --- plain ---
-  coachline · this thread · 6 prompts                         ⠋ Claude working 
+  coachline · this thread · 6 prompts                         … Claude working 
 
- ╭─ Your prompt ─────────────────────── Jun 15 09:30 · … queued for analysis ─╮
+ ╭─ Your prompt ─────────────── Jun 15 09:30 · … queued for analysis · ▰▱▱▱▱ ─╮
  │ P06 handle this carefully and make it good for all the customers we have   │
  ╰────────────────────────────────────────────────────────────────────────────╯
  ╭─ Analysing ────────────────────────────────────────────────────────────────╮
@@ -21,9 +21,9 @@ working 80x24
  › … Jun 15 09:30  P06 handle this carefully and make it good for all the cust…
  ↑↓ prompt  c copy  e analyse  Enter full  i patterns  s skill  q quit  m mouse
 --- ansi (␛ = ESC) ---
-␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                         ␛[93m⠋ Claude working ␛[0;100m␛[0m
+␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                         ␛[93m… Claude working ␛[0;100m␛[0m
 
- ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m───────────────────────␛[0m ␛[90mJun 15 09:30 · … queued for analysis␛[0m ␛[97m─╮␛[0m
+ ␛[97m╭─ ␛[0m␛[1;97mYour prompt␛[0m ␛[97m───────────────␛[0m ␛[90mJun 15 09:30 · … queued for analysis · ␛[0m␛[94m▰▱▱▱▱␛[0m ␛[97m─╮␛[0m
  ␛[97m│␛[0m ␛[1;97mP06 handle this carefully and make it good for all the customers we have␛[0m   ␛[97m│␛[0m
  ␛[97m╰────────────────────────────────────────────────────────────────────────────╯␛[0m
  ␛[90m╭─ ␛[0m␛[1;90mAnalysing␛[0m ␛[90m───────────────────────────────────────────────────────────────␛[0m␛[90m─╮␛[0m

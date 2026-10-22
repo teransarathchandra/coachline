@@ -15,6 +15,8 @@ const showPatterns = atom({ plugin: 'coachline', key: 'showPatterns' } as const,
 const closed = atom({ plugin: 'coachline', key: 'closed' } as const, false)
 const msg = atom({ plugin: 'coachline', key: 'msg' } as const, '')
 
+// the brand accent (watch.py's TRUECOLOR): the terminal pane's name only; the desktop app and the editors keep their own theme
+const ACCENT = '#E8735A'
 // watch.py's colours (see CODE in scripts/watch.py): text by line kind, and each section's box and title by section
 const COLOR: Record<string, string> = {
   prompt: 'whiteBright', blue: 'blueBright', bluedim: 'blueBright', enh: 'cyanBright', task: 'blueBright', meta: 'gray',
@@ -245,7 +247,8 @@ export const register: Register = on => {
       </Box>
     ) : (
       <Box key="header">
-        <Text bold>coachline · this thread · {count}</Text>
+        <Text bold color={ACCENT}>coachline</Text>
+        <Text bold> · this thread · {count}</Text>
         <Text>{'  '}</Text>
         <Text color={s.ai ? 'green' : 'gray'}>{s.ai ? '● Claude on' : '○ Claude off'}</Text>
       </Box>

@@ -49,18 +49,38 @@ CODE = {"title": "1", "meta": "90", "prompt": "1;97", "label": "1;94", "blue": "
         "get": "94", "tip": "94", "flow": "90", "head": "1;94", "after": "94", "sel": "7", "chip": "1;97;44", "brand": "1;97;44",
         "g_prompt": "97", "g_improve": "94", "g_enh": "96", "g_web": "95", "g_info": "90", "g_bad": "91",
         "h_prompt": "1;97", "h_improve": "1;94", "h_enh": "1;96", "h_web": "1;95", "h_info": "1;90", "h_bad": "1;91",
-        "barmeta": "37"}                     # grey text on the header and footer bars (90 would vanish on their grey)
+        "barmeta": "37", "accent": "94", "flash": "1;97;104"}   # barmeta: grey text on the header and footer bars (90 would vanish on their grey)
+# Direction A: coral #E8735A, the one accent (brand chip, shimmer, meter, Copied flash); dark #0B0B0F text on it (6.4:1). Applied by main()
+# where the terminal draws 24-bit colour; elsewhere, and in tests and snapshots, the 16-colour fallbacks above.
+TRUECOLOR = {"brand": "1;38;2;11;11;15;48;2;232;115;90", "accent": "38;2;232;115;90", "flash": "1;38;2;11;11;15;48;2;232;115;90"}
+REVEAL_S, FLASH_S, SLOW_FRAME_S = 0.15, 0.2, 0.030   # a new analysis unfolds, Copied lights up; 3 frames slower than SLOW_FRAME_S end motion
 BAR = "100"                                  # the header and footer bars: a solid grey band, in 16 colours so every console has it
 PENDING_SECONDS = 150
 MAX_WIDTH = 100                      # lines longer than this are hard to read, however wide the pane is
 GLYPHS = {"done": ("✓", "ok"), "pending": ("…", "warn"), "error": ("×", "bad"), "off": ("–", "meta"),
           "local": ("!", "blue"), "quiet": ("·", "meta")}
-# the header's spinner while Claude works. Legacy console fonts (conhost: Consolas, Lucida) have no braille, Windows Terminal's do
-SPIN = "-\\|/" if os.name == "nt" and not os.environ.get("WT_SESSION") else "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 MOUSE_ON, MOUSE_OFF = "\033[?1000h\033[?1006h", "\033[?1000l\033[?1006l"      # button presses + wheel, SGR coordinates (any column)
 
 
 # ---------------------------------------------------------------- text width: wide characters (CJK, emoji) take two columns
+def truecolor(env):
+    """The terminal draws 24-bit colour: it says so (COLORTERM), or it is Windows Terminal."""
+    return env.get("COLORTERM", "").lower() in ("truecolor", "24bit") or bool(env.get("WT_SESSION"))
+
+
+def meter(text, frac=1.0):
+    """Five cells, filled by how concrete the prompt is (1 - coach.vagueness); frac < 1 while a reveal fills it."""
+    n = round(5 * (1 - coach.vagueness(text)) * min(max(frac, 0.0), 1.0))
+    return "▰" * n + "▱" * (5 - n)
+
+
+def shimmer(right, word, kind, ui, P):
+    """The header's 'Claude working' with a three-letter accent window sliding along it, one letter a frame."""
+    lead, found, tail = right.partition(word)
+    if not found: return P(kind, right)
+    return P(kind, lead) + "".join(P("accent" if (j - ui["tick"]) % (len(word) + 4) < 3 else kind, ch) for j, ch in enumerate(word)) + P(kind, tail)
+
+
 def cw(ch):
     o = ord(ch)
     if o == 0xFE0F: return 1        # emoji presentation: Windows Terminal draws ☀️ ❤️ two columns wide; one too many after an emoji is harmless
@@ -272,14 +292,16 @@ def cur_entry(ui, st):
     return i, es[i]
 
 
-def card_lines(st, ui, i, e, iw, acts=False):
+def card_lines(st, ui, i, e, iw, acts=False, meter_cells=True):
     """[(section, kind, text, right, action)]: the prompt you are looking at, what to improve, the enhanced prompt.
     section picks the gutter colour; kind 'head' is a section title with an optional right-hand label (a button when it has an action).
     Nothing in Improve is ever dropped or cut. When the card is taller than the pane the enhanced prompt, which is last, scrolls (PgDn, wheel)."""
     out = []
     _s, glyph, kind, words = status(e, st, ui)
     older = ui["sel"] is not None and i != len(st["entries"]) - 1
-    out.append(("prompt", "head", "Your prompt", f"{stamp(e['ts'])} · {glyph} {words}" + (" · earlier prompt, G = newest" if older else ""), None))
+    unfolding = ui.get("reveal"); frac = (ui["now"] - unfolding[1]) / REVEAL_S if unfolding and unfolding[0] == e["key"] else 1.0
+    out.append(("prompt", "head", "Your prompt", f"{stamp(e['ts'])} · {glyph} {words}" + (" · earlier prompt, G = newest" if older else "")
+                + (" · " + meter(e["text"], frac) if meter_cells else ""), None))
     pl = wrap(e["text"], iw)
     cut = len(pl) > 5 or dw(pl[0]) > 5 * MAX_WIDTH         # the second: unwrapped for a pane that wraps it, about five lines' worth
     if cut: pl = pl[:5]; pl[-1] = clip(pl[-1] + " ", min(iw, 5 * MAX_WIDTH) - 1) + "…"
@@ -342,7 +364,8 @@ def notice_lines(st, iw):
 # ---------------------------------------------------------------- rendering
 def new_ui():
     return {"sel": None, "lo": 0, "cs": 0, "detail": False, "dscroll": 0, "pending": {}, "tried": set(), "review_after": 0.0, "msg": "",
-            "msg_kind": "", "tick": 0, "spinning": False, "patterns": False, "copied": {}, "mouse": True, "hits": [], "list_rows": None}
+            "msg_kind": "", "tick": 0, "spinning": False, "patterns": False, "copied": {}, "mouse": True, "hits": [], "list_rows": None,
+            "motion": False, "now": None, "seen": None, "reveal": None, "animating": False, "slow": 0}
 
 
 FOOT = [("↑↓", "prompt", None), ("c", "copy", "copy"), ("e", "analyse", "enhance"), ("Enter", "full", "enter"),
@@ -413,13 +436,14 @@ def render(st, ui, W, H, color=True):
     # header: where you are, and whether Claude is on
     working = st["review_running"] or any(status(x, st, ui)[0] == "pending" for x in es)
     ui["spinning"] = working
-    word, kind, dot = (("Claude off", "barmeta", "○") if not st["ai"] else ("Claude working", "warn", SPIN[ui["tick"] % len(SPIN)]) if working
+    word, kind, dot = (("Claude off", "barmeta", "○") if not st["ai"] else ("Claude working", "warn", "…") if working
                        else ("Claude on", "ok", "●"))
     left = f" · this thread · {n} prompt{'s' if n != 1 else ''}"
     right = f"{dot} {word} "
+    now = ui["now"] = ui["now"] if ui.get("now") is not None else time.time()
     if 11 + dw(left) + dw(right) + 1 > W - 1: left = ""
     if 11 + dw(left) + dw(right) + 1 > W - 1: right = f"{dot} "
-    head = bar(" " + P("brand", " coachline") + P("barmeta", left) + " " * max(W - 1 - 11 - dw(left) - dw(right), 1) + P(kind, right), W, color)
+    head = bar(" " + P("brand", " coachline") + P("barmeta", left) + " " * max(W - 1 - 11 - dw(left) - dw(right), 1) + (shimmer(right, word, kind, ui, P) if working and ui["motion"] and color else P(kind, right)), W, color)
     rule = P("rule", " " + "─" * (W - 3))
     # patterns: one line, or the list when expanded
     pats = pattern_texts(st); pat_rows = []
@@ -443,8 +467,17 @@ def render(st, ui, W, H, color=True):
                 ("info", "bluedim", "Send a prompt in Claude Code and it appears here.", "", None),
                 *[("info", "bluedim", w, "", None) for w in (wrap("Analysis is off. Turn it on: " + coach.py_cmd("setup.py", "--panel-ai", "on"), iw, "  ") if not st["ai"] else [])]]
     else:
+        if ui["seen"] is None: ui["seen"] = {x["key"] for x in es if x["advice"]}     # what was there when the panel opened never unfolds
+        for x in es:
+            if x["advice"] and x["key"] not in ui["seen"]:
+                ui["seen"].add(x["key"])
+                if x is e and ui["motion"]: ui["reveal"] = (x["key"], now)
+        if ui["reveal"] and (ui["reveal"][0] != e["key"] or now - ui["reveal"][1] >= REVEAL_S): ui["reveal"] = None
         card = card_lines(st, ui, i, e, iw)
     card = boxed(card)
+    if ui.get("reveal"): card = card[:max(1, int(len(card) * (now - ui["reveal"][1]) / REVEAL_S))]   # top-down, over REVEAL_S
+    flash = bool(e and ui["motion"] and now - ui["copied"].get(e["key"], 0) < FLASH_S)
+    ui["animating"] = bool(ui.get("reveal")) or flash
     card_h = max(min(len(card), room), 3)
     list_n = min(pref_list, max(H - 1 - fixed - card_h - 1, min_list)) if n else 0   # leftover rows go to the list, up to its preferred size
     ui["cs"] = min(max(ui["cs"], 0), max(len(card) - card_h, 0))
@@ -472,7 +505,9 @@ def render(st, ui, W, H, color=True):
             seg, sw = "", 0
             if rt:
                 rt = clip(rt, max(W - 12 - dw(text) - (2 if act else 0), 4))
-                seg, sw = (P("chip", f" {rt} "), dw(rt) + 2) if act else (P("meta", rt), dw(rt))
+                if act: seg, sw = P("flash" if flash and act == "copy" else "chip", f" {rt} "), dw(rt) + 2
+                elif rt[-1:] in ("▰", "▱"): lead, _, m = rt.rpartition(" "); seg, sw = P("meta", lead + " ") + P("accent", m), dw(rt)
+                else: seg, sw = P("meta", rt), dw(rt)
             fill = max(W - 1 - 7 - dw(text) - (sw + 2 if rt else 0), 1)
             if rt and act: c0 = 4 + dw(text) + 1 + fill + 1; hits.append((r, c0, c0 + sw, act))
             if act == "pgup": hits.append((r, 4, 4 + dw(text), act))
@@ -820,25 +855,30 @@ def beat(tab="", last=[0.0]):
 
 
 def loop(next_key, write, size, load_state, clock=time.time, reload_every=2.0, stop=lambda: False, heartbeat=lambda: None, io=None, work=None,
-         emit=lambda s: None, color=True):
+         emit=lambda s: None, color=True, motion=False):
     """Draw only when something changed: a key, a click, a new size, or new data. next_key(timeout) -> key|mouse event|None.
     work(st, ui) runs at start and on every data reload (the panel's own Claude jobs). emit(s) writes control sequences (mouse on/off)."""
-    ui = new_ui(); st = load_state(); last_load = clock(); last_size = None; dirty = True
+    ui = new_ui(); ui["motion"] = motion; st = load_state(); last_load = clock(); last_size = None; dirty = True
     if work: work(st, ui)
     while not stop():
         heartbeat()
         W, H = size()
         if dirty or (W, H) != last_size:
+            ui["now"] = clock(); t = time.perf_counter()
             write(render(st, ui, W, H, color)); last_size = (W, H); dirty = False
-        k = next_key(0.1 if ui["spinning"] else 0.25)                       # 10 frames a second while the spinner turns, else idle
+            if ui["motion"] and time.perf_counter() - t > SLOW_FRAME_S:
+                ui["slow"] += 1; ui["motion"] = ui["slow"] < 3                # a terminal this slow gets still frames for the rest of the session
+        moving = ui["motion"] and (ui["spinning"] or ui["animating"])
+        k = next_key(0.03 if ui["motion"] and ui["animating"] else 0.1 if moving else 0.25)   # ~30 frames a second while a card unfolds, 10 while shimmering
         if k is None:
-            if ui["spinning"]: ui["tick"] += 1; dirty = True
+            if moving: ui["tick"] += 1; dirty = True
             if clock() - last_load >= reload_every:
                 new = load_state(); last_load = clock()
                 if signature(new) != signature(st):
                     if new.get("session") != st.get("session"): ui.update(sel=None, lo=0, cs=0, detail=False, dscroll=0)      # another conversation: start at its newest prompt
                     st = new; dirty = True
                 if work: work(st, ui)
+                if ui["spinning"]: dirty = True                             # a queued prompt may have timed out: "Claude working" must not stick
             continue
         if handle(ui, st, k, io): return
         if ui.pop("reload", False): st = load_state(); last_load = clock()
@@ -864,6 +904,7 @@ def main(argv):
     else:
         import termios, tty
         fd = sys.stdin.fileno(); old = termios.tcgetattr(fd); tty.setcbreak(fd)
+    if truecolor(os.environ): CODE.update(TRUECOLOR)
     out = sys.stdout
     out.write("\033[?1049h\033[?25l" + MOUSE_ON); out.flush(); t0 = time.time()
     try:
@@ -872,7 +913,7 @@ def main(argv):
              lambda: build(a.history, session=tab_session(a.tab)), stop=lambda: bool(a.exit_after) and time.time() - t0 > a.exit_after,
              heartbeat=lambda: beat(a.tab),
              work=lambda st, ui: (mark_shown(st["session"]), autopilot(st, ui))[1], emit=lambda s: (out.write(s), out.flush()),
-             color=not os.environ.get("NO_COLOR"))                         # https://no-color.org: set and not empty = no colour
+             color=not os.environ.get("NO_COLOR"), motion=coach.motion_on())   # https://no-color.org: set and not empty = no colour
     except KeyboardInterrupt:
         pass
     finally:

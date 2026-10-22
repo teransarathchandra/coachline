@@ -15,11 +15,10 @@ class Snapshots(Base):
     def setUp(self):
         super().setUp()
         self._stamp = watch.stamp; watch.stamp = lambda ts: "Jun 15 09:30"     # the clock and the time zone are not part of the look
-        self._spin = watch.SPIN; watch.SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"                          # nor which console it runs in
         self._cmd = watch.coach.py_cmd; watch.coach.py_cmd = lambda *a: "python " + " ".join(a)   # nor where it is installed
 
     def tearDown(self):
-        watch.stamp, watch.SPIN, watch.coach.py_cmd = self._stamp, self._spin, self._cmd; super().tearDown()
+        watch.stamp, watch.coach.py_cmd = self._stamp, self._cmd; super().tearDown()
 
     def screen(self, name, W, H, **ui_kw):
         st = watch.build(self.path); out = []

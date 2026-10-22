@@ -36,6 +36,12 @@ class Tick(unittest.TestCase):
     def tick(self, session="s1", now=None):
         return pane.tick(session, width=80, io=self.io, now=now)
 
+    def test_the_claude_code_pane_has_no_meter_until_0_19(self):
+        history(self.cfg, [("s1", "p", SOLID)])
+        head = self.tick()["entries"][0]["lines"][0]
+        self.assertEqual(head[:3], ["prompt", "head", "Your prompt"])
+        self.assertFalse(set("▰▱") & set(head[3]), head[3])
+
     def test_it_returns_only_this_sessions_prompts_with_card_lines(self):
         history(self.cfg, [("s1", "p", VAGUE), ("s2", "p", SOLID)])
         st = self.tick()

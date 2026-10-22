@@ -57,7 +57,9 @@ With the mouse on, the wheel scrolls and a click selects a prompt or presses a b
 | `/coach model fast\|research haiku\|sonnet\|opus` | The model for each pass (defaults: fast haiku, research sonnet) |
 | `/coach auto-open on\|off` | Open the panel by itself at session start (on by default on macOS and Linux) |
 | `/coach setup` | Show the current settings |
-| `/coach doctor` | Check that your history, Python and the `claude` CLI work |
+| `/coach motion on\|off` | The panel's animations (on by default; off by itself with `NO_COLOR`, over SSH or in a slow terminal) |
+| `/coach doctor` | Check that your history, Python and the `claude` CLI work, and how much data coachline keeps |
+| `/coach forget all` | Delete everything coachline keeps, except your settings and `llm-off.txt` (asks first) |
 
 ## Colour
 

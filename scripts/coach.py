@@ -6,7 +6,7 @@ Writes only under <config>/coach/.
   python coach.py --coach      before/after for your last prompt (Haiku rewrite via `claude -p`)
   python coach.py --doctor     check that everything this tool depends on works
 """
-import argparse, collections, datetime as dt, glob, json, os, platform, re, shutil, subprocess, sys, tempfile, time
+import argparse, collections, datetime as dt, fnmatch, glob, json, os, platform, re, shutil, subprocess, sys, tempfile, time
 
 CONFIG = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
 HIST = os.path.join(CONFIG, "history.jsonl")
@@ -63,6 +63,31 @@ FIX = {"done-when": "say what proves it is finished (a command, a result, a stat
        "evidence": "paste only the relevant lines, not the whole log",
        "no-vague": "replace 'carefully/best/clean' with a checkable rule or a reference",
        "rejection-loop": "say WHICH rule the last output broke, so it becomes a constraint"}
+
+# --- vagueness: 0 (concrete) .. 1 (nothing to act on). Local, no LLM; held to tests/vague_cases.jsonl (precision >= 0.9) ---------
+EXT = r"py|pyi|ts|tsx|js|jsx|mjs|go|rs|md|json|ya?ml|toml|java|kt|rb|php|cs|cpp|cc|c|h|hpp|sh|ps1|sql|css|scss|html|vue|svelte|swift|tf|lock|env|txt|csv"
+ANCHOR = re.compile(r"`[^`]+`|https?://\S+|\b[A-Z][A-Z0-9]+-\d+\b|(?<![\w.-])[\w.-]*/[\w./-]+|(?<![\w-])[\w-]+\.(?:" + EXT + r")\b|\b[a-z]+[A-Z]\w*\b"
+                    r"|\b[A-Za-z0-9]+_\w+\b|\b\w*(?:Error|Exception)\b|\b\d+(?:\.\d+)*(?:%|ms|s|px|[kmg]b|x)?\b|'[^'\s][^']{2,}'|\"[^\"]{3,}\"|=")
+CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")   # no spaces between words: about two characters a word
+DEICTIC = re.compile(r"\b(it|this|that|them|everything|the thing)\b", re.I)
+
+def vagueness(text):
+    """How little the prompt gives Claude to act on: short, no anchor (file, path, identifier, error, number, ticket, link), soft
+    qualifiers, 'it/this' pointing at nothing. A paste or two anchors make it concrete."""
+    b = body(text); words = len(b.split()) + len(CJK.findall(b)) // 2
+    anchors = len(ANCHOR.findall(b[:2000]))                # a prompt's anchors are near its start; a minified paste must not stall a frame
+    s = 0.5 if words < 8 else 0.25 if words < 14 else 0.0
+    if not anchors:
+        s += 0.35
+        if DEICTIC.search(b): s += 0.15
+    if not r4_qualifiers(text): s += 0.25
+    s -= 0.3 * min(anchors, 2)
+    if words > 25 and r1_done_when(text): s -= 0.3       # a long prompt that says what done looks like
+    if PASTE.search(text): s -= 0.6
+    return max(0.0, min(1.0, s))
+
+def vague(text):
+    return vagueness(text) >= 0.6
 
 CATS = {
     "commit/PR/ticket text": r"commit message|pr title|pr description|ticket.*comment|comment.*ticket|\bpr\b$",
@@ -331,6 +356,35 @@ def advisable(text, fails):
 ALIVE = os.path.join(STATE, "watch.alive")  # watch.py touches this every second while it is open
 REWRITES = os.path.join(STATE, "rewrites.jsonl")  # append-only log of finished analyses, keyed by prompt_key; later lines win
 REVIEW_LOCK = os.path.join(STATE, "review.running")  # review.py holds this while it runs
+STALE_DAYS = 7          # a per-tab or per-session file untouched this long belongs to a tab or session that is gone
+REWRITES_KEEP = 5000    # rewrites.jsonl keeps its newest lines; later lines win anyway
+SWEPT = ("current-session-*.json", "watch-*.alive", "watch-*.launching", "pane-*.json", "pane-*.lock")
+
+def sweep(now=None):
+    """SessionStart housekeeping: delete stale per-tab / per-session files and cut rewrites.jsonl to its newest REWRITES_KEEP lines.
+    The shared files (watch.alive, current-session.json, ...) and your settings are never touched. Returns the names removed."""
+    cut = (time.time() if now is None else now) - STALE_DAYS * 86400; gone = []
+    def tab_in_use(p):                               # current-session-<tab>.json lives as long as its tab's panel does
+        return panel_alive(max_age=STALE_DAYS * 86400, tab=os.path.basename(p)[len("current-session-"):-len(".json")])
+    for pat in SWEPT:
+        for p in glob.glob(os.path.join(STATE, pat)):
+            try:
+                if os.path.getmtime(p) < cut and not (pat.startswith("current-session") and tab_in_use(p)): os.remove(p); gone.append(os.path.basename(p))
+            except OSError: pass
+    try:
+        size = os.path.getsize(REWRITES)
+        with open(REWRITES, encoding="utf-8") as f: lines = f.readlines()
+    except OSError: return gone
+    if len(lines) > REWRITES_KEEP:
+        tmp = f"{REWRITES}.{os.getpid()}.tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f: f.writelines(lines[-REWRITES_KEEP:])
+            if os.path.getsize(REWRITES) == size: _replace(tmp, REWRITES)   # an analysis appended meanwhile: keep it, compact next time
+        except OSError: pass
+        finally:
+            try: os.remove(tmp)
+            except OSError: pass
+    return gone
 
 def tab_key(env=None):
     """The Windows Terminal tab Claude Code runs in (each has its own WT_SESSION), as a file-name part; '' outside Windows Terminal.
@@ -358,11 +412,9 @@ def record_session(raw, tab=""):
         sid = d.get("session_id")
         if not (isinstance(sid, str) and re.fullmatch(r"[0-9A-Za-z-]{8,64}", sid)): return
         if tab and d.get("source") in ("startup", "resume", "clear"):    # this tab's panel shows exactly this session, resumed ones too
-            os.makedirs(STATE, exist_ok=True)
-            with open(per_tab(session_file(), tab), "w", encoding="utf-8") as f: json.dump({"id": sid, "ts": time.time()}, f)
+            write_json(per_tab(session_file(), tab), {"id": sid, "ts": time.time()})
         if d.get("source") not in ("startup", "clear"): return      # a resumed session is found by its transcript; only a brand-new one needs announcing
-        os.makedirs(STATE, exist_ok=True)
-        with open(session_file(), "w", encoding="utf-8") as f: json.dump({"id": sid, "ts": time.time(), "source": str(d.get("source", ""))[:20]}, f)
+        write_json(session_file(), {"id": sid, "ts": time.time(), "source": str(d.get("source", ""))[:20]})
     except (ValueError, AttributeError, OSError):
         pass
 
@@ -373,6 +425,29 @@ def started_session(tab=""):
         return (d["id"], float(d["ts"])) if isinstance(d["id"], str) else None
     except (OSError, ValueError, KeyError, TypeError):
         return None
+
+def write_json(path, d, stamp=True, indent=None):
+    """Write whole or not at all: a panel, a hook or a background job may be reading it. stamp adds "v": 1 (coachline's own files
+    only; never Claude's settings.json). Readers ignore "v": a file without one is a 0.17 file and reads the same."""
+    if stamp: d = {**d, "v": 1}
+    path = os.path.realpath(path)                    # a settings.json linked from a dotfiles repo stays a link
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, indent=indent)
+        _replace(tmp, path)
+    except BaseException:
+        try: os.remove(tmp)
+        except OSError: pass
+        raise
+
+def _replace(tmp, path):
+    for i in range(5):                                # Windows refuses to replace a file another process is reading: wait a moment
+        try:
+            os.replace(tmp, path); return
+        except PermissionError:
+            if i == 4: raise
+            time.sleep(0.05 * (i + 1))
 
 def setting(name, default=None):
     try:
@@ -387,8 +462,7 @@ def set_setting(name, value):
     except (OSError, ValueError):
         d = {}
     d[name] = value
-    os.makedirs(STATE, exist_ok=True)
-    with open(USER_CFG, "w", encoding="utf-8") as f: json.dump(d, f, indent=2)
+    write_json(USER_CFG, d, indent=2)
 
 MODELS = ("haiku", "sonnet", "opus")
 
@@ -418,6 +492,14 @@ def auto_open_on():
     """The panel opens by itself at session start: the Claude Code pane on macOS / Linux, a Windows Terminal split on Windows."""
     v = setting("auto_open_watch")
     return bool(defaults_on() if v is None else v)
+
+def motion_on(env=None):
+    """The panel's motion (shimmer, reveal, Copied flash, meter fill). On unless switched off, NO_COLOR is set, or over SSH, where
+    every frame crosses the network."""
+    env = os.environ if env is None else env
+    if env.get("NO_COLOR") or env.get("SSH_CONNECTION") or env.get("SSH_TTY"): return False
+    v = setting("motion")
+    return True if v is None else bool(v)
 
 NOTICE = "Claude analysis is on: prompts go redacted to your subscription, task topics to web search · /coach panel-ai off"
 NOTICE_SESSIONS = 3
@@ -565,6 +647,36 @@ def script_of(cmd):
     except ValueError: parts = cmd.split()
     return next((p for p in parts if p.lower().endswith("statusline.py")), None)
 
+KEPT = ("config.json", "llm-off.txt",   # your settings: forgetting llm-off.txt would start sending a project you kept private
+        "panel.py", "*.running", "*.launching")   # the panel's launcher, and the locks of jobs running now
+
+def data_usage():
+    """(files, bytes) coachline keeps under STATE."""
+    n = size = 0
+    for root, _dirs, files in os.walk(STATE):
+        for name in files:
+            try: size += os.path.getsize(os.path.join(root, name)); n += 1
+            except OSError: pass
+    return n, size
+
+def forget(what):
+    """Delete what coachline learned and cached. 'all' is everything but your settings (KEPT). Returns the paths removed."""
+    if what != "all": raise ValueError(what)
+    gone = []
+    for root, dirs, files in os.walk(STATE, topdown=False):
+        for name in files:
+            p = os.path.join(root, name)
+            if root == STATE and any(fnmatch.fnmatch(name, k) for k in KEPT): continue
+            try: os.remove(p); gone.append(p)
+            except OSError: pass
+        for name in dirs:
+            try: os.rmdir(os.path.join(root, name))
+            except OSError: pass
+    return gone
+
+def size_text(n):
+    return f"{n / 1024:.0f} KB" if n < 10 * 1024 * 1024 else f"{n / 1024 / 1024:.0f} MB"
+
 def doctor(path):
     ok = True
     def line(good, msg):
@@ -580,6 +692,8 @@ def doctor(path):
     switch(ai_on(), "Claude analysis in the panel", "--panel-ai")
     switch(research_on(), f"web research per new task, {model_for('research')}", "--research")
     switch(auto_open_on(), "panel opens itself at session start", "--auto-open")
+    n, size = data_usage()
+    print(f"ok   coachline data: {n} file{'s' if n != 1 else ''}, {size_text(size)} in {STATE} (wipe: {py_cmd('coach.py', '--forget', 'all')})")
     print("     open the panel by hand: " + py_cmd("watch.py"))
     sys.exit(0 if ok else 1)
 
@@ -590,8 +704,13 @@ if __name__ == "__main__":
     ap.add_argument("--doctor", action="store_true"); ap.add_argument("--show", action="store_true", help="list rejection-rule hits")
     ap.add_argument("--bg-rewrite", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--key", help=argparse.SUPPRESS); ap.add_argument("--copy", action="store_true", help="with --coach: copy the enhanced prompt to the clipboard")
+    ap.add_argument("--forget", metavar="all", help="delete what coachline keeps, except your settings and llm-off.txt")
     a = ap.parse_args()
-    if a.bg_rewrite:
+    if a.forget is not None:
+        if a.forget != "all": print("usage: coach.py --forget all"); sys.exit(2)
+        before = data_usage()[1]; gone = forget("all")
+        print(f"removed {len(gone)} files ({size_text(before - data_usage()[1])}); kept your settings and llm-off.txt")
+    elif a.bg_rewrite:
         if a.key: bg_rewrite(a.history, a.key)
     elif a.doctor: doctor(a.history)
     elif a.coach: coach(a.history, llm=not a.no_llm, copy=a.copy)

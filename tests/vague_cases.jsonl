@@ -1,0 +1,40 @@
+{"text": "fix it", "vague": true}
+{"text": "make it better", "vague": true}
+{"text": "clean this up properly", "vague": true}
+{"text": "still not working", "vague": true}
+{"text": "do the thing we discussed", "vague": true}
+{"text": "can you improve this", "vague": true}
+{"text": "it's broken again", "vague": true}
+{"text": "make the code cleaner and use best practices", "vague": true}
+{"text": "refactor this properly", "vague": true}
+{"text": "no that's wrong", "vague": true}
+{"text": "make it look nicer", "vague": true}
+{"text": "optimize everything", "vague": true}
+{"text": "handle this carefully and make it good for all the customers we have", "vague": true}
+{"text": "fix the bug", "vague": true}
+{"text": "update that", "vague": true}
+{"text": "this doesn't work, fix it", "vague": true}
+{"text": "write some tests", "vague": true}
+{"text": "make it faster", "vague": true}
+{"text": "add the best error handling", "vague": true}
+{"text": "do it the clean way", "vague": true}
+{"text": "fix the typo in README.md line 12", "vague": false}
+{"text": "[Pasted text #1 +40 lines] why does this stack trace happen when I run npm test?", "vague": false}
+{"text": "rename getUserById to findUser in src/users/service.ts and update its callers", "vague": false}
+{"text": "the /api/orders endpoint returns 500 when page=0; return 400 with a message instead", "vague": false}
+{"text": "add a unit test for parse_date in utils/dates.py covering leap years and an empty string", "vague": false}
+{"text": "CMPI-1234: bump the axios version to 1.7.2 and run the test suite", "vague": false}
+{"text": "TypeError: Cannot read properties of undefined (reading 'map') in ProductList.tsx, find the cause", "vague": false}
+{"text": "corrige l'erreur dans config/settings.py ligne 40, la variable DEBUG doit venir de l'environnement", "vague": false}
+{"text": "arregla el test test_login en tests/test_auth.py, falla con un timeout de 30s", "vague": false}
+{"text": "reduce the p95 latency of GET /search below 300ms; the query is in search/repo.go", "vague": false}
+{"text": "move the retry logic from client.py into a decorator so fetch and post share it, behaviour unchanged", "vague": false}
+{"text": "add a dark mode toggle to the settings page using the existing theme context in src/theme.tsx", "vague": false}
+{"text": "write a GitHub Actions workflow that runs pytest on Python 3.9 and 3.13 for every pull request", "vague": false}
+{"text": "explain what the function merge_intervals in algo/intervals.py does and its time complexity", "vague": false}
+{"text": "delete the unused export formatPrice from lib/money.ts and verify nothing imports it", "vague": false}
+{"text": "the docker build fails at step 7 with 'pip: not found'; fix the Dockerfile without changing the base image", "vague": false}
+{"text": "add pagination to the orders table: 25 rows per page, keep the current sort, done when the e2e test passes", "vague": false}
+{"text": "https://github.com/acme/app/issues/88 describes the bug; reproduce it with a failing test first", "vague": false}
+{"text": "convert the callbacks in scripts/sync.js to async/await and keep the same exit codes", "vague": false}
+{"text": "set the session cookie to SameSite=Lax and Secure in middleware/session.ts", "vague": false}
