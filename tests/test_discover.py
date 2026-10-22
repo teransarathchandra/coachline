@@ -197,7 +197,8 @@ class Asking(AskingBase):
         discover.for_advice(self.adv, fresh=True)
         self.assertEqual(self.calls(), 2)
         with open(os.path.join(coach.STATE, "discover-cache.json")) as f: c = json.load(f)
-        for v in c.values(): v["ts"] = time.time() - 8 * 86400
+        for v in c.values():
+            if isinstance(v, dict): v["ts"] = time.time() - 8 * 86400    # the entries; "v" is the file's version
         with open(os.path.join(coach.STATE, "discover-cache.json"), "w") as f: json.dump(c, f)
         discover.for_advice(self.adv)
         self.assertEqual(self.calls(), 3)                                # expired after 7 days

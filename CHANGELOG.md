@@ -2,6 +2,16 @@
 
 All notable changes to coachline. Versions follow [semantic versioning](https://semver.org); the version lives in `.claude-plugin/plugin.json`.
 
+## Unreleased
+
+- **A quality meter** on each prompt in the panel: five cells, filled by how concrete the prompt is (a file, an identifier, an error, a number, a link; what done looks like). It is worked out on your machine; nothing is sent.
+- **Motion** in the panel: the header shimmers while Claude works, a new analysis unfolds top-down, Copied lights up for a moment. `/coach motion off` keeps every frame still, and it is off by itself with `NO_COLOR`, over SSH or in a terminal too slow to draw it. With motion off the panel no longer redraws ten times a second while Claude works.
+- coachline's coral accent: the panel's name chip, the meter and the Copied flash in terminals with 24-bit colour (Windows Terminal, and any that sets `COLORTERM`); the Claude Code pane's name too. The desktop app and the editors keep their own theme.
+- coachline's files are written whole or not at all, Claude Code's `settings.json` among them, so a crash or a full disk can no longer leave half a file. Each of coachline's own files carries a version.
+- At session start, files of tabs and sessions untouched for 7 days are removed, and the log of analyses keeps its newest 5,000.
+- `/coach forget all` deletes what coachline keeps, except your settings and `llm-off.txt`. `/coach doctor` says how much that is.
+- The tests hold the local vagueness score to 40 labelled prompts in CI.
+
 ## 0.17.0 (2026-10-21)
 
 - **VS Code, Cursor, Windsurf and Antigravity**: with the Claude Code extension, the coachline pane opens beside the Claude Code tab and updates as the analysis and the web finds come in. It is drawn in the editor's own theme, light or dark: its cards and border colour, its accent and text colours, its buttons, Copy first.

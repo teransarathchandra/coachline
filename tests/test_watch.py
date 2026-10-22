@@ -87,10 +87,10 @@ class Base(unittest.TestCase):
     def analyse(self, i, text, advice=ADVICE, **extra):
         self.add_record(key_for(i, text), text="AFTER: " + advice["after"], advice=advice, **extra)
 
-    def drive(self, keys, W=100, H=30, io=None, work=None, color=True):
+    def drive(self, keys, W=100, H=30, io=None, work=None, color=True, motion=False):
         """Run the real loop with injected keys; return every frame that was drawn."""
         frames, it = [], iter(keys)
-        watch.loop(lambda t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (W, H), lambda: watch.build(self.path), io=io, work=work, color=color)
+        watch.loop(lambda t: next(it, "q"), lambda rows: frames.append("\n".join(rows)), lambda: (W, H), lambda: watch.build(self.path), io=io, work=work, color=color, motion=motion)
         return frames
 
 
@@ -256,7 +256,7 @@ class Colours(Base):
         self.analyse(0, "UNIQUEPROMPT " + VAGUE)
         self.assertIn("\x1b[92m\u25cf Claude on", self.rows()[0])
         history(self.cfg, [("now", "p", "UNIQUEPROMPT " + VAGUE), ("now", "p", VAGUE + " newer one")])
-        self.assertRegex(self.rows()[0], "\x1b\\[93m[" + re.escape(watch.SPIN) + "] Claude working")      # a recent prompt is queued: it spins
+        self.assertIn("\x1b[93m… Claude working", self.rows()[0])                                  # a recent prompt is queued
 
 
 class Status(Base):
@@ -266,13 +266,14 @@ class Status(Base):
         self.assertNotIn("[", frame)
         self.assertIn("›", frame)
 
-    def test_the_spinner_turns_only_while_claude_works(self):
+    def test_the_header_shimmers_only_while_claude_works_and_motion_is_on(self):
         history(self.cfg, [("now", "p", VAGUE)])
-        idle = self.drive([None, None, None])
+        idle = self.drive([None, None, None], motion=True)
         self.assertEqual(len(idle), 1)                                                   # nothing happening: drawn once, no redraws
         self.write_json("config.json", {"panel_ai": True})
-        heads = [f.splitlines()[0] for f in self.drive([None, None, None])]
-        self.assertEqual(len(heads), 4)                                                  # each idle tick moves the spinner
+        self.assertEqual(len(self.drive([None, None, None])), 1)                         # motion off: still, even while Claude works
+        heads = [f.splitlines()[0] for f in self.drive([None, None, None], motion=True)]
+        self.assertEqual(len(heads), 4)                                                  # each idle tick moves the shimmer
         self.assertEqual(len(set(heads)), 4, heads)
 
     def test_old_prompts_are_never_queued_so_the_header_does_not_spin_forever(self):

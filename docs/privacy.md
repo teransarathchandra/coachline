@@ -28,7 +28,7 @@ Never sent:
 
 ## What stays on your machine
 
-Everything coachline keeps is in `~/.claude/coach/`, including `suggestions.json` (what you hid or marked as used).
+Everything coachline keeps is in `~/.claude/coach/`, including `suggestions.json` (what you hid or marked as used). `/coach doctor` says how much that is; `/coach forget all` deletes it, keeping only your settings and `llm-off.txt`, so a project you kept private stays private. Files of tabs and sessions untouched for 7 days are removed at session start, and the log of analyses keeps its newest 5,000.
 
 ## How answers are checked
 

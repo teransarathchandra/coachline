@@ -6,6 +6,7 @@
   python setup.py --auto-open on|off    split a pane with the panel at session start (tmux or Windows Terminal only)
   python setup.py --research on|off     web research once per new task: tools, modern approaches, docs, reference sites (verified here)
   python setup.py --model fast|research haiku|sonnet|opus   the model of each pass (defaults: fast haiku, research sonnet)
+  python setup.py --motion on|off      the panel's animations (on by default; off by itself with NO_COLOR, over SSH, in a slow terminal)
   python setup.py --uninstall           remove the old coachline statusline entry from settings.json
   python setup.py --refresh             silent: used by the SessionStart hook (refreshes the launcher, records which session started, migrates the old statusline)
 Old names still work: --advisor and --auto-rewrite mean --panel-ai, --discover means --research.
@@ -17,7 +18,7 @@ import coach
 import launch
 
 SETTINGS = os.path.join(coach.CONFIG, "settings.json")
-KNOWN = {"--panel-ai", "--advisor", "--auto-rewrite", "--auto-open", "--research", "--discover", "--model", "--uninstall", "--refresh"}
+KNOWN = {"--panel-ai", "--advisor", "--auto-rewrite", "--auto-open", "--research", "--discover", "--model", "--motion", "--uninstall", "--refresh"}
 
 
 def ours(sl):
@@ -29,8 +30,7 @@ def ours(sl):
 
 def write(s):
     if os.path.exists(SETTINGS): shutil.copyfile(SETTINGS, SETTINGS + ".coach-bak")
-    os.makedirs(coach.CONFIG, exist_ok=True)
-    with open(SETTINGS, "w", encoding="utf-8") as f: json.dump(s, f, indent=2)
+    coach.write_json(SETTINGS, s, stamp=False, indent=2)       # Claude Code's own file: whole or not at all, and no "v" of ours
 
 
 def onoff(argv, flag):
@@ -57,7 +57,10 @@ def hook_json(wait=1.0):
 
 def main(argv):
     if "-h" in argv or "--help" in argv: print(__doc__); return
-    if "--refresh" in argv: coach.record_session(hook_json(), tab=coach.tab_key())      # the hook's JSON: which session just started
+    if "--refresh" in argv:
+        coach.record_session(hook_json(), tab=coach.tab_key())      # the hook's JSON: which session just started
+        try: coach.sweep()
+        except OSError: pass                                         # housekeeping never fails a session start
     bad = [a for a in argv if a.startswith("-") and a not in KNOWN]
     if bad: sys.exit(f"unknown option {bad[0]}; nothing was changed (see --help)")
     try:
@@ -99,6 +102,12 @@ def main(argv):
         coach.set_setting("model_" + which, name)
         print(f"The {which} pass now uses {name}.")
         return
+    if "--motion" in argv:
+        on = onoff(argv, "--motion")
+        coach.set_setting("motion", on)
+        print("Motion ON: the panel shimmers while Claude works, reveals a new analysis, flashes Copied and fills the meter. "
+              "Off by itself with NO_COLOR, over SSH or in a slow terminal. Turn off: setup.py --motion off" if on else "Motion OFF: every frame is still.")
+        return
     if "--auto-open" in argv:
         on = onoff(argv, "--auto-open")
         coach.set_setting("auto_open_watch", on)
@@ -110,6 +119,7 @@ def main(argv):
     print(f"  Claude analysis (--panel-ai):  {'ON' if coach.ai_on() else 'off'}")
     print(f"  auto-open a split pane (--auto-open):  {'ON' if coach.auto_open_on() else 'off'}")
     print(f"  web research per new task (--research):  {'ON' if coach.research_on() else 'off'}")
+    print(f"  motion (--motion):  {'ON' if coach.motion_on() else 'off'}")
     print(f"  fast model:  {coach.model_for('fast')}   research model:  {coach.model_for('research')}   (--model fast|research <name>)")
     print(f"open the panel by hand, in a second tab or pane:\n  {launch.panel_command()}")
 

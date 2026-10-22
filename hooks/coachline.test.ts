@@ -314,6 +314,18 @@ test('each section of the card is a rounded box in its colour, a web find named 
   expect(await ui.find({ type: 'Text', text: /^w$/ })).toBeDefined()
 })
 
+test('the terminal pane names coachline in the coral accent', async ($, on) => {
+  base(on)
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('process.run', ($, e) => (e.argv.includes('--version') ? RESULT('Python 3.13.0') : RESULT(STATE({ entries: [WITH_WEB] }))))
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit(SUBMIT)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  expect((await ui.find({ type: 'Text', text: /^coachline$/ }))?.props).toMatchObject({ bold: true, color: '#E8735A' })
+})
+
 test('keeps checking while web research is under way, then stops', async ($, on) => {
   base(on, false)
   const clock = mock.clock(on)
@@ -570,7 +582,8 @@ async function shown(ui: { findAll: (q: { type?: string }) => Promise<{ type: st
   const out: string[] = []
   for (const el of await ui.findAll({})) {
     if (el.type === 'Button') out.push(`[${String(el.props.label).slice(0, 40)}]`)
-    else if (el.type === 'Text' && el.text.trim()) out.push(el.text.trim().replace(/^coachline · this thread/, 'This thread'))
+    // the terminal names the pane in its header (an app does in its title bar): its own Text, in the accent
+    else if (el.type === 'Text' && el.text.trim() && el.text.trim() !== 'coachline') out.push(el.text.trim().replace(/^· this thread/, 'This thread'))
   }
   return out
 }

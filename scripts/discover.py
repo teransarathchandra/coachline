@@ -172,6 +172,7 @@ def have_names():
 def _load(name):
     try:
         with open(os.path.join(coach.STATE, name), encoding="utf-8") as f: d = json.load(f)
+        if isinstance(d, dict): d.pop("v", None)     # the file's version, not an entry: maps keyed by topic must never see it
         return d if isinstance(d, dict) else {}
     except (OSError, ValueError):
         return {}
@@ -179,18 +180,7 @@ def _load(name):
 
 def _dump(name, d):
     """Write whole or not at all: another research or analysis job may be reading it."""
-    os.makedirs(coach.STATE, exist_ok=True)
-    tmp = os.path.join(coach.STATE, f"{name}.{os.getpid()}.tmp")
-    with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f)
-    for i in range(5):                            # Windows refuses to replace a file another process is reading: wait a moment
-        try:
-            os.replace(tmp, os.path.join(coach.STATE, name)); return
-        except PermissionError:
-            if i == 4:
-                try: os.remove(tmp)
-                except OSError: pass
-                raise
-            time.sleep(0.05 * (i + 1))
+    coach.write_json(os.path.join(coach.STATE, name), d)
 
 
 def pause_until(err, now=None):

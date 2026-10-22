@@ -132,10 +132,9 @@ def count_prompts(path):
 def write_outputs(requests, mistakes, dropped, n_prompts, days):
     os.makedirs(coach.STATE, exist_ok=True)
     today = dt.date.today().isoformat()
-    with open(coach.LEARNED, "w", encoding="utf-8") as f:
-        json.dump({"generated": today, "prompts": n_prompts, "history_prompts": count_prompts(coach.HIST),
-                   "requests": [{k: r[k] for k in ("name", "keywords", "count")} for r in requests],
-                   "mistakes": [{k: m[k] for k in ("name", "keywords", "fix")} for m in mistakes]}, f, indent=2)
+    coach.write_json(coach.LEARNED, {"generated": today, "prompts": n_prompts, "history_prompts": count_prompts(coach.HIST),
+                                     "requests": [{k: r[k] for k in ("name", "keywords", "count")} for r in requests],
+                                     "mistakes": [{k: m[k] for k in ("name", "keywords", "fix")} for m in mistakes]}, indent=2)
     lines = [f"# coachline review - {today}", "",
              f"{n_prompts} of your prompts from the last {days} days, analysed by Claude and re-checked locally. "
              "Counts are computed on your machine; the model only proposed the patterns.", "", "## Repeated requests worth a skill", ""]
