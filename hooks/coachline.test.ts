@@ -14,6 +14,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number; box?: s
   const ran: string[][] = []
   const fills: { text: string; mode?: string; decorations?: unknown[] }[] = []
   const submits: string[] = []
+  const stdins: (string | undefined)[] = []
   mock.env(on, opts.os ? { OS: opts.os } : {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.attach', ($, e) => ({ clientId: e.clientId }))
@@ -26,6 +27,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number; box?: s
     return { isFilled: true }
   })
   on('turn.complete', () => ({ text: '' }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('session.id', () => ({ value: 's1' }))
   on('ui.panes', () => ({ value: [] }))
   on('ui.open', ($, e) => {
@@ -34,6 +36,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number; box?: s
   })
   on('process.run', ($, e) => {
     ran.push([...e.argv])
+    stdins.push(e.init?.stdin)
     const version = e.argv.includes('--version')
     return {
       value: {
@@ -45,7 +48,7 @@ function world(on: On, opts: { os?: string; out?: string; exit?: number; box?: s
       },
     }
   })
-  return { opened, ran, fills, submits }
+  return { opened, ran, fills, submits, stdins }
 }
 
 const START = { cwd: '/w', surface: 'terminal', isInteractive: true } as const
@@ -154,6 +157,7 @@ test('runs one pane.py at a time and catches up once afterwards', async ($, on) 
   let runs = 0
   on('process.run', async ($, e) => {
     if (e.argv.includes('--version')) return RESULT('Python 3.13.0')
+    if (!e.argv.includes('--json')) return RESULT('')          // outcome reports run on their own: this is about refreshes
     runs += 1
     running += 1
     most = Math.max(most, running)
@@ -661,7 +665,8 @@ test('every button does the same on every surface', async ($, on) => {
 })
 
 // the hint under the prompt box: the draft scored by pane.py --score, drawn as PromptHint's tail
-function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (draft: string) => object; fail?: boolean; hints?: boolean; hold?: Promise<void>[] } = {}) {
+function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (draft: string) => object; fail?: boolean; hints?: boolean; hold?: Promise<void>[];
+  holding?: boolean; refuse?: boolean } = {}) {
   mock.env(on, opts.os ? { OS: opts.os } : {})
   const clock = mock.clock(on)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -670,12 +675,16 @@ function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (dra
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('prompt.read', () => ({ value: { text: (opts.draft ?? (() => 'fix it now please'))(), cursor: 0 } }))
   const scored: string[] = []
+  const sent: string[] = []
+  const filled: string[] = []
+  on('prompt.submit', ($, e) => (sent.push(e.text), { text: e.text }))
+  on('prompt.fill', ($, e) => (opts.refuse ? { isFilled: false } : (filled.push(e.text), { isFilled: true })))
   on('process.run', async ($, e) => {
     const score = e.argv.includes('--score')
     if (score) scored.push(e.init?.stdin ?? '')
     if (score && opts.hold?.length) await opts.hold.shift()                     // a slow Python: this answer waits for the test
     const out = e.argv.includes('--version') ? 'Python 3.13.0'
-      : score ? JSON.stringify((opts.score ?? (() => ({ meter: '▰▱▱▱▱', hint: 'name a file, function, error or number', words: 4 })))(e.init?.stdin ?? ''))
+      : score ? JSON.stringify((opts.score ?? (() => ({ meter: '▰▱▱▱▱', hint: 'name a file, function, error or number', words: 4, hold: !!opts.holding })))(e.init?.stdin ?? ''))
       : STATE({ hints: opts.hints ?? true })
     return { value: { exitCode: score && opts.fail ? 1 : 0, stdout: out, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -686,7 +695,7 @@ function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (dra
     const { Text } = $.ui.resolve(e)
     return h(Text, null, 'line')
   })
-  return { clock, scored, tails }
+  return { clock, scored, tails, sent, filled }
 }
 const HINT = { isDraft: true, isWorking: false, hint: '? for shortcuts' }
 const draw = async ($: Parameters<TestBody>[0], props = HINT) => {
@@ -813,4 +822,107 @@ test('a draft typed while an older one is being scored is scored next', async ($
   expect(w.scored).toEqual(['fix it now please', 'fix it now please, the login page'])
   await draw($)
   expect(w.tails.at(-1)).toBe('· ▰▱▱▱▱  name a file, function, error or number')
+})
+
+// the outcome loop: an interrupted turn, and a follow-up, reported to pane.py --outcome with the texts on stdin
+function outcomes(w: { ran: string[][]; stdins: (string | undefined)[] }) {
+  return w.ran.flatMap((a, n) => (a.includes('--outcome') ? [`${a[a.indexOf('--outcome') + 1]} ${w.stdins[n]}`] : []))
+}
+
+const ABORT = (turnId: string, more = {}) => ({ answer: '', durationMs: 5, isAborted: true, turnId, reason: 'aborted', ...more }) as never
+
+test('a turn you interrupt is reported with its prompt; a subagent ending is not', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit({ text: 'fix it now please' })
+  await $.turn.start({ text: 'fix it now please', turnId: 't1' } as never)
+  await $.turn.complete(ABORT('t1', { agentId: 'a1' }))
+  await settle()
+  expect(outcomes(w)).toEqual([])
+  await $.turn.complete(ABORT('t1'))
+  await settle()
+  expect(outcomes(w)).toEqual(['aborted fix it now please'])
+})
+
+test('an interrupted turn you did not start blames nothing, and a queued prompt is not blamed for the running one', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit({ text: 'fix it now please' })
+  await $.turn.start({ text: 'fix it now please', turnId: 't1' } as never)
+  await $.turn.complete({ answer: 'done', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+  await $.turn.start({ text: '', turnId: 't2' } as never)                    // a scheduled task, a notification, /compact
+  await $.turn.complete(ABORT('t2'))
+  await $.prompt.submit({ text: 'make the header sticky on scroll' })
+  await $.turn.start({ text: 'make the header sticky on scroll', turnId: 't3' } as never)
+  await $.prompt.submit({ text: 'then add a footer with links' })            // queued while t3 runs
+  await $.turn.complete(ABORT('t3'))
+  await settle()
+  expect(outcomes(w).filter(o => o.startsWith('aborted'))).toEqual(['aborted make the header sticky on scroll'])
+})
+
+test('a reply to a question Claude asked is not reported as a correction, nor a prompt from before /clear', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit({ text: 'update the parser for the new date format' })
+  await $.turn.complete({ answer: 'Done. Should I also update the tests?', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+  await $.prompt.submit({ text: 'no, just the parser' })
+  await $.session.start(START)                                               // /clear: a new conversation
+  await $.prompt.submit({ text: 'no, I meant the header' })
+  await settle()
+  expect(outcomes(w)).toEqual([])
+})
+
+test('each prompt you send reports the one before it, for a correction to be found', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit({ text: 'make it look nicer please' })
+  await $.prompt.submit({ text: 'no, I meant the header' })
+  await settle()
+  expect(outcomes(w)).toEqual([`next ${JSON.stringify({ prev: 'make it look nicer please', text: 'no, I meant the header' })}`])
+})
+
+// hold (opt-in): a clearly vague prompt stops at Enter, goes back in the box; a second Enter sends it
+async function scoredDraft($: Parameters<TestBody>[0], w: { clock: { advance: (ms: number) => Promise<void> } }) {
+  await $.session.start(START)
+  await draw($)
+  await w.clock.advance(600)
+}
+
+test('hold stops a vague prompt at Enter with what it lacks, puts it back, and the second Enter sends it', async ($, on) => {
+  const w = hinting(on, { holding: true })
+  await scoredDraft($, w)
+  const first = await $.prompt.submit({ text: 'fix it now please' })
+  expect(first.drop).toBe('coachline held this: name a file, function, error or number. Press Enter again to send it as is')
+  expect(w.filled).toEqual(['fix it now please'])
+  expect(w.sent).toEqual([])
+  const second = await $.prompt.submit({ text: 'fix it now please' })
+  expect(second.drop).toBeUndefined()
+  expect(w.sent).toEqual(['fix it now please'])
+})
+
+test('hold lets a prompt through when it is off', async ($, on) => {
+  const off = hinting(on, { holding: false })
+  await scoredDraft($, off)
+  expect((await $.prompt.submit({ text: 'fix it now please' })).drop).toBeUndefined()
+  expect(off.filled).toEqual([])
+})
+
+test('hold lets through a text not scored yet, and a prompt with a pasted image', async ($, on) => {
+  const w = hinting(on, { holding: true })
+  await scoredDraft($, w)
+  expect((await $.prompt.submit({ text: 'something typed too fast to score' })).drop).toBeUndefined()
+  const pasted = await $.prompt.submit({ text: 'fix it now please', attachments: [{ id: 'i1', kind: 'image' }] } as never)
+  expect(pasted.drop).toBeUndefined()
+  expect(w.filled).toEqual([])
+})
+
+test('hold never drops a prompt it cannot put back', async ($, on) => {
+  const w = hinting(on, { holding: true, refuse: true })
+  await scoredDraft($, w)
+  expect((await $.prompt.submit({ text: 'fix it now please' })).drop).toBeUndefined()
+  expect(w.sent).toEqual(['fix it now please'])
 })

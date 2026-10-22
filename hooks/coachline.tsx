@@ -15,9 +15,12 @@ const showPatterns = atom({ plugin: 'coachline', key: 'showPatterns' } as const,
 const closed = atom({ plugin: 'coachline', key: 'closed' } as const, false)
 const msg = atom({ plugin: 'coachline', key: 'msg' } as const, '')
 // the hint under the prompt box: the draft it was worked out for, and the tail to draw while the box still holds that draft
-const hint = atom({ plugin: 'coachline', key: 'hint' } as const, null as { draft: string; tail: string | null } | null)
+const hint = atom({ plugin: 'coachline', key: 'hint' } as const,
+  null as { draft: string; tail: string | null; hint: string | null; hold: boolean } | null)
 
 const DEBOUNCE_MS = 600   // a pause in typing, not every key: one pane.py --score per pause
+const HOLD_REARM_MS = 30000   // hold: the same prompt sent again within this goes through
+let held = { text: '', at: -Infinity }
 const ARM_MS = 5000       // Use over a draft: the second press within this replaces it
 const ASK = /\[ASK:[^\]]*\]/g
 let armedAt = -Infinity
@@ -215,21 +218,30 @@ async function score($: EngineInterface, draft: string) {
     if ((await read($, state))?.hints === false) return
     const r = await run($, ['--score'], draft)
     if (!r.ok) return
-    const d = JSON.parse(r.out) as { meter: string | null; hint: string | null; words: number }
+    const d = JSON.parse(r.out) as { meter: string | null; hint: string | null; words: number; hold?: boolean }
     if ((await $.prompt.read()).text !== draft) return
     const tail = d.meter && d.words >= 3 ? `· ${d.meter}${d.hint ? `  ${d.hint}` : ''}` : null
-    await update($, hint, () => ({ draft, tail }))
+    await update($, hint, () => ({ draft, tail, hint: d.words >= 3 ? d.hint : null, hold: !!d.hold }))
   } finally {
     scoring = false
     if (planned !== draft && planned.trim() && !waiting) void score($, planned).catch(ignore)   // typed while this one ran
   }
 }
 
+// The outcome loop: the last prompt YOU sent (not a plugin's, a schedule's or a peer's), reported when you interrupt its turn, and
+// with your next prompt so pane.py can tell a correction ("no, I meant…"). Texts go on stdin; pane.py keeps a redacted line, locally.
+const HUMAN = ['composer', 'sdk', 'bridge']
+let last: string | null = null
+// the main loop's running turn, and its prompt only when it is the one you sent: a schedule's or /compact's turn blames nothing
+let running: { turnId: string; text: string | null } | null = null
+let asked = false     // the last answer ended in a question: "no, just the parser" answers it, it corrects nothing
+
 export const register: Register = on => {
   // The terminal's pane, but not the Windows terminal's, which has watch.py's panel. The desktop app and the editors' Claude Code
   // extension run their session as an SDK host does (no surface, not interactive) and attach afterwards, after its first
   // prompt: session.attach; at a reload they are already attached
   on('session.start', async ($, e, next) => {
+    last = null; running = null; asked = false; held = { text: '', at: -Infinity }     // a new conversation (/clear, a resume)
     const r = await next(e)
     if ((e.isInteractive && (await $.env.get('OS')) !== 'Windows_NT') || (await $.session.surfaces()).some(x => APPS.includes(x))) wake($)
     return r
@@ -242,7 +254,23 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    // hold (opt-in): only on the hint already worked out for exactly this text, so Enter never waits on Python; and only when the
+    // text can go back in the box, so nothing is lost
+    const h = await read($, hint)
+    if (h?.hold && h.hint && h.draft === e.text && !e.command && !e.attachments?.length && (!e.origin || HUMAN.includes(e.origin.kind))) {
+      const now = await $.clock.now()
+      if (!(held.text === e.text && now - held.at < HOLD_REARM_MS) && (await $.prompt.fill({ text: e.text, mode: 'replace' })).isFilled) {
+        held = { text: e.text, at: now }
+        return { drop: `coachline held this: ${h.hint}. Press Enter again to send it as is` }
+      }
+    }
     const r = await next(e)
+    if (r.drop === undefined && !e.command && (!e.origin || HUMAN.includes(e.origin.kind))) {
+      const prev = last
+      last = e.text
+      if (prev && !asked) void run($, ['--outcome', 'next'], JSON.stringify({ prev, text: e.text })).catch(ignore)
+      asked = false
+    }
     if (!active) return r
     await update($, sel, () => -1)             // follow the newest prompt
     let s = await read($, state)
@@ -254,8 +282,20 @@ export const register: Register = on => {
     return r
   })
 
+  on('turn.start', async ($, e, next) => {
+    const r = await next(e)
+    if (!e.agentId) running = { turnId: e.turnId, text: e.text && e.text === last ? e.text : null }
+    return r
+  })
+
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
+    if (!e.agentId) {
+      const t = running?.turnId === e.turnId ? running.text : null
+      if (e.isAborted && t) void run($, ['--outcome', 'aborted'], t).catch(ignore)
+      asked = !e.isAborted && e.answer.trim().endsWith('?')
+      running = null
+    }
     if (active) await refresh($)
     return r
   })

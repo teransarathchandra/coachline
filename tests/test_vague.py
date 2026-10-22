@@ -44,6 +44,12 @@ class Vagueness(unittest.TestCase):
         for c in CASES:
             if c["vague"]: self.assertIsNotNone(coach.hint_for(c["text"]), c["text"])
 
+    def test_beginner_hints_say_why(self):
+        self.assertEqual(coach.hint_for("fix it", beginner=True),
+                         "say what 'it' or 'this' is: a file, a function, an error — so Claude doesn't pick the wrong thing")
+        self.assertEqual(coach.hint_for("write some tests", beginner=True), "name a file, function, error or number — so Claude doesn't have to guess")
+        self.assertIsNone(coach.hint_for(SOLID, beginner=True))
+
     def test_score_is_bounded(self):
         for c in CASES + [{"text": ""}, {"text": "x" * 5000}]:
             self.assertTrue(0.0 <= coach.vagueness(c["text"]) <= 1.0, c["text"][:40])

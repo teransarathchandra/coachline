@@ -36,6 +36,20 @@ class Defaults(unittest.TestCase):
         with self.on("Windows"):
             self.assertTrue(coach.ai_on()); self.assertTrue(coach.auto_open_on())
 
+    def history(self, n):
+        p = os.path.join(self.tmp.name, "history.jsonl")
+        with open(p, "w", encoding="utf-8") as f:
+            for i in range(n): f.write(json.dumps({"display": f"please rework the invoice module part {i}", "timestamp": 1750000000000 + i}) + "\n")
+        return mock.patch.object(coach, "HIST", p)
+
+    def test_level_is_beginner_until_50_prompts_unless_set(self):
+        with self.history(10): self.assertEqual(coach.level(), "beginner")
+        with self.history(60): self.assertEqual(coach.level(), "pro")
+        self.write(level="pro")
+        with self.history(10): self.assertEqual(coach.level(), "pro")
+        self.write(level="beginner")
+        with self.history(60): self.assertEqual(coach.level(), "beginner")
+
     def test_the_old_auto_rewrite_name_is_still_honoured(self):
         self.write(auto_rewrite=False)
         with self.on("Windows"): self.assertFalse(coach.ai_on())
@@ -73,6 +87,23 @@ class SetupSwitches(unittest.TestCase):
             for want in ("web research per new task (--research):  ON", "research model:  opus", "fast model:  haiku"):
                 self.assertIn(want, shown)
 
+
+    def test_level_switch(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            self.assertEqual(run(cfg, "setup.py", "--level", "pro").returncode, 0)
+            self.assertEqual(self.conf(cfg)["level"], "pro")
+            r = run(cfg, "setup.py", "--level", "expert")
+            self.assertNotEqual(r.returncode, 0); self.assertIn("usage", r.stderr)
+            self.assertIn("--level", run(cfg, "setup.py").stdout)
+
+    def test_hold_is_off_until_switched_on(self):
+        with tempfile.TemporaryDirectory() as cfg:
+            self.assertEqual(run(cfg, "setup.py", "--hold", "on").returncode, 0)
+            self.assertIs(self.conf(cfg)["hold"], True)
+            self.assertIn("30 s", run(cfg, "setup.py", "--hold", "on").stdout)
+            self.assertEqual(run(cfg, "setup.py", "--hold", "off").returncode, 0)
+            self.assertIs(self.conf(cfg)["hold"], False)
+            self.assertIn("--hold", run(cfg, "setup.py").stdout)
 
     def test_hints_switch_and_the_pane_state_carries_it(self):
         with tempfile.TemporaryDirectory() as cfg:

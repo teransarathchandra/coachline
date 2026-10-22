@@ -160,7 +160,7 @@ class Forget(Base):
             os.makedirs(os.path.join(cfg, "coach")); p = os.path.join(cfg, "coach", "rewrites.jsonl")
             with open(p, "w") as f: f.write("{}\n")
             r = run(cfg, "coach.py", "--forget", "library")
-            self.assertEqual(r.returncode, 2, r.stderr); self.assertIn("usage: coach.py --forget all", r.stdout + r.stderr)
+            self.assertEqual(r.returncode, 2, r.stderr); self.assertIn("usage: coach.py --forget all|outcomes", r.stdout + r.stderr)
             self.assertTrue(os.path.exists(p))
             r = run(cfg, "coach.py", "--forget", "all")
             self.assertEqual(r.returncode, 0, r.stderr); self.assertIn("kept your settings and llm-off.txt", r.stdout)

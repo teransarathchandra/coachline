@@ -103,8 +103,8 @@ def score(draft):
     """The hint under the prompt box for a draft being typed: local only, no lock, no state."""
     words = len(coach.body(draft).split())
     command = draft.lstrip()[:1] in ("!", "#") or coach.BUILTIN.match(draft.strip())   # a shell line, a memory note, a setting
-    if not words or command or not coach.hints_on(): return {"meter": None, "hint": None, "words": 0}
-    return {"meter": watch.meter(draft), "hint": coach.hint_for(draft), "words": words}
+    if not words or command or not coach.hints_on(): return {"meter": None, "hint": None, "words": 0, "hold": False}
+    return {"meter": watch.meter(draft), "hint": coach.hint_for(draft, beginner=coach.level() == "beginner"), "words": words, "hold": coach.hold_on()}   # hold rides with the draft
 
 
 def main(argv):
@@ -112,8 +112,19 @@ def main(argv):
     ap.add_argument("--json", action="store_true"); ap.add_argument("--session"); ap.add_argument("--width", type=int, default=80)
     ap.add_argument("--enhance", metavar="KEY"); ap.add_argument("--install", metavar="SLUG")
     ap.add_argument("--mark", nargs=2, metavar=("STATUS", "ID")); ap.add_argument("--research", metavar="KEY")
+    ap.add_argument("--outcome", choices=("aborted", "next"), help="from the pane module: a turn you interrupted (the prompt on stdin), or "
+                    "your next prompt ({prev, text} JSON on stdin); recorded locally, nothing is printed or sent")
     ap.add_argument("--score", action="store_true", help="the draft on stdin -> its meter and hint as JSON (nothing is saved or sent)")
     a = ap.parse_args(argv)
+    if a.outcome:
+        raw = sys.stdin.buffer.read().decode("utf-8", "replace")
+        try:
+            if a.outcome == "aborted": coach.record_outcome("aborted", raw)
+            else:
+                d = json.loads(raw)
+                if isinstance(d, dict) and coach.is_correction(str(d.get("text", ""))): coach.record_outcome("corrected", str(d.get("prev", "")))
+        except (ValueError, OSError): pass                    # evidence is a bonus: never fail the pane over it
+        return 0
     if a.score:
         # bytes in, ASCII out: right whatever the console code page (cp1252 on Windows), and JSON.parse reads the escapes
         sys.stdout.write(json.dumps(score(sys.stdin.buffer.read().decode("utf-8", "replace")))); return 0
