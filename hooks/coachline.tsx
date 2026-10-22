@@ -22,6 +22,10 @@ const hint = atom({ plugin: 'coachline', key: 'hint' } as const,
 const DEBOUNCE_MS = 600   // a pause in typing, not every key: one pane.py --score per pause
 const HOLD_REARM_MS = 30000   // hold: the same prompt sent again within this goes through
 let held = { text: '', at: -Infinity }
+// the prompt hold just put back in the box, until the box next changes: Claude Code (2.1.308) hands a dropped prompt back to the
+// box too, joined to what hold put there, and the doubled text would then be held again at every Enter
+let back: string | null = null
+const twice = (box: string, text: string) => box.trim() !== text.trim() && box.replace(text, '').trim() === text.trim()
 const ARM_MS = 5000       // Use over a draft: the second press within this replaces it
 const ASK = /\[ASK:[^\]]*\]/g
 let armedAt = -Infinity
@@ -271,7 +275,7 @@ export const register: Register = on => {
   // extension run their session as an SDK host does (no surface, not interactive) and attach afterwards, after its first
   // prompt: session.attach; at a reload they are already attached
   on('session.start', async ($, e, next) => {
-    last = null; running = null; asked = false; held = { text: '', at: -Infinity }     // a new conversation (/clear, a resume)
+    last = null; running = null; asked = false; held = { text: '', at: -Infinity }; back = null     // a new conversation (/clear, a resume)
     project = e.cwd
     const r = await next(e)
     if ((e.isInteractive && (await $.env.get('OS')) !== 'Windows_NT') || (await $.session.surfaces()).some(x => APPS.includes(x))) wake($)
@@ -291,7 +295,7 @@ export const register: Register = on => {
     if (h?.hold && h.hint && h.draft === e.text && !e.command && !e.attachments?.length && (!e.origin || HUMAN.includes(e.origin.kind))) {
       const now = await $.clock.now()
       if (!(held.text === e.text && now - held.at < HOLD_REARM_MS) && (await $.prompt.fill({ text: e.text, mode: 'replace' })).isFilled) {
-        held = { text: e.text, at: now }
+        held = { text: e.text, at: now }; back = e.text
         return { drop: `coachline held this: ${h.hint}. Press Enter again to send it as is` }
       }
     }
@@ -344,6 +348,12 @@ export const register: Register = on => {
   })
 
   on('prompt.change', async ($, e, next) => {
+    if (back !== null && e.text !== back) {
+      const text = back
+      back = null
+      // the engine's hand-back after hold's own fill: the held prompt once, as the second Enter sends it
+      if (twice(e.text, text)) void $.prompt.fill({ text, mode: 'replace' }).catch(ignore)
+    }
     schedule($, e.text)
     return next(e)
   })
