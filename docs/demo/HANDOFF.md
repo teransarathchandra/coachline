@@ -62,18 +62,19 @@ Paste this whole file into a fresh Claude Code window on the Mac, opened in the 
    - `docs/assets/desktop.png`: the Claude desktop app with the coachline pane, light and dark side by side, about 1200×1380, the same layout as the current file
    - `docs/assets/editor.png`: VS Code with the Claude Code extension and the coachline pane, light and dark, the same layout as the current file
    - `docs/assets/screenshot.png` comes from the `still` in `website.zoom.json`; `record-all.sh website` rewrites it
-8. **Wire the new GIFs into the README and the website:**
+8. **Rebuild the website's media:** run `bash docs/demo/web_media.sh`. The site plays MP4s with WebP posters made from the GIFs, and loads the screenshots as WebP. Re-crop `docs/assets/screenshot-pane.png` (the coachline pane alone, for phones) if the new `screenshot.png` moved the pane.
+9. **Wire the new GIFs into the README and the website:**
    - **README.md:** under "### 4 · Keep what works", add `hint.gif` after the hint bullet, `use.gif` after the Use bullet, and `library.gif` after the Library bullet. Use `<img src="docs/assets/<name>.gif" alt="<what it shows, one sentence>" width="100%">` with a real alt text.
    - **site/index.html:** in the "How it works" `.steps`, add a step 04 "Keep what works", with `assets/use.gif` and a one-line description. Then check the page at 390 px and 1280 px wide, in light and dark (a local server: `cd _site && python3 -m http.server`, after copying as `.github/workflows/pages.yml` does): no horizontal scroll, no overlaps, no broken images.
-9. **Social preview:** `python3 docs/demo/social.py` writes `docs/assets/social.png` (needs Playwright). Then ask the owner to upload it in GitHub: Settings → General → Social preview. That step has no API.
-10. **Live check of 0.19–0.21 in the demo login** (the owner hasn't seen these in a real session yet). Report what works and what doesn't, with `claude --debug` lines for anything broken:
+10. **Social preview:** `python3 docs/demo/social.py` writes `docs/assets/social.png` (needs Playwright). Then ask the owner to upload it in GitHub: Settings → General → Social preview. That step has no API.
+11. **Live check of 0.19–0.21 in the demo login** (the owner hasn't seen these in a real session yet). Report what works and what doesn't, with `claude --debug` lines for anything broken:
     - the hint under the box after a pause
     - **Use** on an analysed prompt
     - `/coach hold on`, then a vague prompt is held, and Enter again sends it
     - a prompt that works first time appears in the Library after two clean follow-ups, and a similar draft then gets `↻ similar prompt worked before`
     - `l` in the standalone panel (`/coach watch`)
-11. **Commit, when the owner asks:**
-    - Stage only `docs/assets/*.gif docs/assets/*.png docs/demo/*.tape docs/demo/*.zoom.json README.md site/index.html`.
+12. **Commit, when the owner asks:**
+    - Stage only `docs/assets/*.gif docs/assets/*.png docs/assets/*.mp4 docs/assets/*.webp docs/demo/*.tape docs/demo/*.zoom.json README.md site/index.html`.
     - Message: `docs: GIFs and screenshots recorded on macOS for 0.18–0.21`.
     - Push, then open a PR: title as the message, one-sentence description.
     - Don't merge; the owner merges. The pages workflow redeploys the site once it is merged.
@@ -84,7 +85,7 @@ Paste this whole file into a fresh Claude Code window on the Mac, opened in the 
 - **Stills:** `desktop.png`, `editor.png` and `screenshot.png` are fresh, light and dark.
 - **Wired in:** the README and the website show the hint, Use and Library GIFs, and the site passes the 390 / 1280, light / dark check.
 - **Tests still pass:** the unittest suite and `claude plugin test .`.
-- **Reported:** the step 10 live checks, with anything broken written up.
+- **Reported:** the step 11 live checks, with anything broken written up.
 - **Open PR, not merged:** the PR is open, with no Claude trace, waiting for the owner.
 
 ## Don't touch
