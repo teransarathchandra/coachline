@@ -8,7 +8,8 @@ Source docs/demo/hires.tape
 Hide
 Type "source docs/demo/real.sh --keep-plugin" Enter
 Sleep 3s
-Type "claude" Enter
+# no edits or shell: a file Claude changes opens Claude Code's own diff pane in coachline's place
+Type "claude --disallowed-tools 'Edit,Write,NotebookEdit,Bash'" Enter
 Sleep 9s
 Show
 

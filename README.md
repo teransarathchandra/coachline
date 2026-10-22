@@ -63,9 +63,18 @@ For a new task, coachline names the **skills and plugins** you have that fit, th
 ### 4 · Keep what works
 
 - **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold. You fill them and send; nothing is sent for you.
+
+  <img src="docs/assets/use.gif" alt="Pressing Use in the coachline panel puts the enhanced prompt in Claude Code's prompt box, its [ASK] gap in bold, without sending it" width="100%">
+
 - **A hint as you type**: pause, and the line under the box shows how concrete your draft is (`▰▰▱▱▱`) and the one thing it lacks most.
+
+  <img src="docs/assets/hint.gif" alt="Typing &quot;fix it now please&quot; shows an empty meter and what the draft lacks under the prompt box; naming the file and when it is done fills the meter" width="100%">
+
 - **Evidence**: coachline notes when you stop a turn or say "no, I meant…", and shows how often vague prompts led to rework compared with concrete ones.
 - **Library**: a prompt that worked first time is kept. Type something like it later and you are told so; the Library puts it back in the box.
+
+  <img src="docs/assets/library.gif" alt="In the standalone panel, l opens the Library of three saved prompts, one is chosen and copied, and l goes back to the card" width="100%">
+
 - **Hold**, if you turn it on: a clearly vague prompt stops at Enter with what it lacks. Enter again sends it as is.
 
 All of it is worked out on your machine. More on the [website](https://teransarathchandra.github.io/coachline/).

@@ -679,6 +679,11 @@ function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (dra
   const filled: string[] = []
   on('prompt.submit', ($, e) => (sent.push(e.text), { text: e.text }))
   on('prompt.fill', ($, e) => (opts.refuse ? { isFilled: false } : (filled.push(e.text), { isFilled: true })))
+  on('prompt.change', ($, e) => ({ text: e.text }))
+  on('prompt.edit', ($, e) => {
+    const text = e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end)
+    return { text, cursor: e.start + e.inputText.length }
+  })
   on('process.run', async ($, e) => {
     const score = e.argv.includes('--score')
     if (score) scored.push(e.init?.stdin ?? '')
@@ -902,6 +907,40 @@ test('hold stops a vague prompt at Enter with what it lacks, puts it back, and t
   const second = await $.prompt.submit({ text: 'fix it now please' })
   expect(second.drop).toBeUndefined()
   expect(w.sent).toEqual(['fix it now please'])
+})
+
+// Claude Code hands a dropped prompt back to the box as well, joined to what hold had already put there
+const handBack = ($: Parameters<TestBody>[0], text: string) =>
+  ($.prompt as unknown as { change: (e: object) => Promise<unknown> }).change({ text, cursor: text.length, origin: { kind: 'engine' } })
+
+test('hold puts the prompt back once where Claude Code hands it back too, and the second Enter sends it', async ($, on) => {
+  const w = hinting(on, { holding: true })
+  await scoredDraft($, w)
+  expect((await $.prompt.submit({ text: 'fix it now please' })).drop).toContain('coachline held this')
+  await handBack($, 'fix it now please\nfix it now please')
+  expect(w.filled).toEqual(['fix it now please', 'fix it now please'])
+  expect((await $.prompt.submit({ text: 'fix it now please' })).drop).toBeUndefined()
+  expect(w.sent).toEqual(['fix it now please'])
+})
+
+test('hold leaves the box alone once it holds something else', async ($, on) => {
+  const w = hinting(on, { holding: true })
+  await scoredDraft($, w)
+  await $.prompt.submit({ text: 'fix it now please' })
+  await handBack($, 'fix it now please in src/auth/login.js')
+  await handBack($, 'fix it now please\nfix it now please')
+  expect(w.filled).toEqual(['fix it now please'])
+})
+
+test('hold forgets what it put back once you type', async ($, on) => {
+  const w = hinting(on, { holding: true })
+  await scoredDraft($, w)
+  await $.prompt.submit({ text: 'fix it now please' })
+  const text = 'fix it now please'
+  await ($.prompt as unknown as { edit: (e: object) => Promise<unknown> }).edit({
+    text, cursor: text.length, start: text.length, end: text.length, inputText: '!', origin: { kind: 'composer' } })
+  await handBack($, 'fix it now please\nfix it now please')
+  expect(w.filled).toEqual(['fix it now please'])
 })
 
 test('hold lets a prompt through when it is off', async ($, on) => {
