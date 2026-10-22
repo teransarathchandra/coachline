@@ -8,7 +8,7 @@ command -v ffmpeg >/dev/null || { echo "missing: ffmpeg" >&2; exit 1; }
 if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libwebp; then webp() { ffmpeg -hide_banner -loglevel error -y -i "$1" -c:v libwebp -quality 84 "$2"; }
 else command -v cwebp >/dev/null || { echo "missing: a WebP encoder (brew install webp)" >&2; exit 1; }; webp() { cwebp -quiet -q 84 "$1" -o "$2"; }; fi
 frame=$(mktemp -t poster).png
-for g in prompt install website hint use library; do
+for g in prompt install website; do
   ffmpeg -hide_banner -loglevel error -y -i "$g.gif" -movflags +faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -c:v libx264 -crf 24 -preset slow "$g.mp4"
   d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$g.mp4")
   at=0.82; [ "$g" = hint ] && at=0.075       # the hint's words show after the first pause; by the end the meter is full and says no more
