@@ -4,6 +4,8 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **The website, redesigned** around coachline's keys: press H, Enter, E, U, C or L (or tap them) to see what each one does. The proof is the real thing: the panel's own output, rendered by `docs/demo/site_frames.py`, the recordings, and the live star count. No glow, no icon grids. JetBrains Mono is self-hosted (SIL Open Font License) so the panel's box drawing lines up. `PRODUCT.md` and `DESIGN.md` record the product and the design system.
+
 - **A website**: https://teransarathchandra.github.io/coachline/, published from `site/` by a GitHub Pages workflow, with the README's images. A new coral mark and banner, and a social preview image (`docs/demo/social.py`).
 - The README gains a short "Keep what works" section for Use, the hint, the evidence line, the Library and hold.
 - `docs/demo/` gains tapes for the hint, Use and the panel's Library, `record-all.sh` to record every GIF on a Mac, and `HANDOFF.md`, the steps for that.
