@@ -2,39 +2,21 @@
 
 All notable changes to coachline. Versions follow [semantic versioning](https://semver.org); the version lives in `.claude-plugin/plugin.json`.
 
-## Unreleased
+## 0.18.0 (2026-10-22)
 
-- **README and website**: recordings now cover only install and the vague prompt. A new task, Use, the hint and hold are animated illustrations with coachline's real messages, the same on the site and in the README (`docs/demo/scene_gifs.py` makes the GIFs from the site); browse, patterns and the Library are GIFs of the panel's own rendered frames. The meter in rendered frames no longer pushes the card's border out of line.
-- **Website**: the hint and Use sections show animated illustrations instead of the macOS recordings, which were too small to read; hold gets one too. Each plays the true sequence with coachline's real messages (the hint and meter for each draft, Use asking before it replaces a draft, hold and the second Enter), the same at every width, and replays on its key.
+Use and a hint as you type, the Library of prompts that worked, what vague prompts cost you, opt-in hold, a quality meter, and a website.
 
-- Hold: a held prompt now goes back in the box once, so the second Enter sends it (Claude Code 2.1.308 also puts a dropped prompt back, which doubled it).
-- **Website audit and polish**:
-  - **Honest keys:** only E, C and L are keys in coachline's panel, so only they are drawn as keycaps. The hint, Use and hold are dashed caps, with a legend.
-  - **Shortcuts:** the page's single-key shortcuts have an on/off switch, never fire while a control has focus, and move focus to the section they open.
-  - **Layout:** no sideways scroll at 320px, targets of at least 24px (44px for buttons on touch screens), a skip link, and font sizes in rem.
-  - **Weight:** the recordings play as MP4 (2 MB instead of 6.7 MB) and the screenshots load as WebP. Inter and JetBrains Mono are self-hosted, so the page asks nothing of Google.
-  - **Hero:** plays the real prompt recording, with a pause button.
-  - **Demos:** every demo sits in one window chrome tagged "rendered output" or "illustration".
-  - **Privacy:** the privacy section now says what is sent and to which model.
-
-- **The website, redesigned** around coachline's keys: press H, Enter, E, U, C or L (or tap them) to see what each one does. The proof is the real thing: the panel's own output, rendered by `docs/demo/site_frames.py`, the recordings, and the live star count. No glow, no icon grids. JetBrains Mono is self-hosted (SIL Open Font License) so the panel's box drawing lines up. `PRODUCT.md` and `DESIGN.md` record the product and the design system.
-
-- **A website**: https://teransarathchandra.github.io/coachline/, published from `site/` by a GitHub Pages workflow, with the README's images. A new coral mark and banner, and a social preview image (`docs/demo/social.py`).
-- The README gains a short "Keep what works" section for Use, the hint, the evidence line, the Library and hold.
-- `docs/demo/` gains tapes for the hint, Use and the panel's Library, `record-all.sh` to record every GIF on a Mac, and `HANDOFF.md`, the steps for that.
-
-- The standalone panel (Windows Terminal, `/coach watch`) has the **Library** too: `l` opens it, `↑` `↓` choose a saved prompt, `c` copies it (the panel runs apart from Claude Code, so it copies rather than filling the prompt box) and `x` forgets it. The footer names `l`.
+- **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold, for you to fill and send; it never sends anything. A draft in the box is replaced only on a second press. Where there is no prompt box (the desktop app, an editor), it copies instead.
+- **A hint as you type**: after a short pause, the line under the prompt box shows how concrete your draft is and the one thing it lacks most. Worked out on your machine, the draft is never sent; terminal only for now. `/coach hints off` turns it off.
+- The Claude Code pane shows the quality meter on each prompt too.
 
 - **Library**: a prompt of 12 words or more that worked first time (its turn ended normally and your next two prompts didn't correct it) is saved on your machine, redacted. A draft close to a saved prompt gets `↻ similar prompt worked before` under the box, and **Library** in the Claude Code pane lists them with **Use** and **Forget**. Another project's prompts are offered when it shares a framework with this one, never from a project in `llm-off.txt`. Up to 200 per project and 500 in all, the least used dropped first. `/coach forget library` deletes them.
+- The standalone panel (Windows Terminal, `/coach watch`) has the **Library** too: `l` opens it, `↑` `↓` choose a saved prompt, `c` copies it (the panel runs apart from Claude Code, so it copies rather than filling the prompt box) and `x` forgets it. The footer names `l`.
 
 - **What your prompts cost you**: when you stop Claude mid-turn, or your next prompt starts with "no", "actually", "I meant" or "revert", coachline notes it on your machine (up to four words from the start of the prompt, known secret patterns redacted; kept 90 days). With enough of them, the patterns open with how often vague prompts led to rework compared with concrete ones.
 - **Hold**, off by default (`/coach hold on`): a prompt the hint calls vague stops at Enter with what it lacks and goes back in the box; Enter again within 30 seconds sends it. It never waits on anything, so Enter is never slowed.
 - Hints say why while you are new (fewer than 50 prompts in your history): `name a file, function, error or number — so Claude doesn't have to guess`. `/coach level beginner|pro|auto` sets it.
 - `/coach forget outcomes` deletes the record of interrupted and corrected prompts.
-
-- **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold, for you to fill and send; it never sends anything. A draft in the box is replaced only on a second press. Where there is no prompt box (the desktop app, an editor), it copies instead.
-- **A hint as you type**: after a short pause, the line under the prompt box shows how concrete your draft is and the one thing it lacks most. Worked out on your machine, the draft is never sent; terminal only for now. `/coach hints off` turns it off.
-- The Claude Code pane shows the quality meter on each prompt too.
 
 - **A quality meter** on each prompt in the panel: five cells, filled by how concrete the prompt is (a file, an identifier, an error, a number, a link; what done looks like). It is worked out on your machine; nothing is sent.
 - **Motion** in the panel: the header shimmers while Claude works, a new analysis unfolds top-down, Copied lights up for a moment. `/coach motion off` keeps every frame still, and it is off by itself with `NO_COLOR`, over SSH or in a terminal too slow to draw it. With motion off the panel no longer redraws ten times a second while Claude works.
@@ -43,6 +25,22 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 - At session start, files of tabs and sessions untouched for 7 days are removed, and the log of analyses keeps its newest 5,000.
 - `/coach forget all` deletes what coachline keeps, except your settings and `llm-off.txt`. `/coach doctor` says how much that is.
 - The tests hold the local vagueness score to 40 labelled prompts in CI.
+
+### Website and README
+
+- **A website**: https://teransarathchandra.github.io/coachline/, published from `site/` by a GitHub Pages workflow, with the README's images. A new coral mark and banner, and a social preview image (`docs/demo/social.py`).
+- **The website, redesigned** around coachline's keys: press H, Enter, E, U, C or L (or tap them) to see what each one does. The proof is the real thing: the panel's own output, rendered by `docs/demo/site_frames.py`, the recordings, and the live star count. No glow, no icon grids. JetBrains Mono is self-hosted (SIL Open Font License) so the panel's box drawing lines up. `PRODUCT.md` and `DESIGN.md` record the product and the design system.
+- **Website audit and polish**:
+  - **Honest keys:** only E, C and L are keys in coachline's panel, so only they are drawn as keycaps. The hint, Use and hold are dashed caps, with a legend.
+  - **Shortcuts:** the page's single-key shortcuts have an on/off switch, never fire while a control has focus, and move focus to the section they open.
+  - **Layout:** no sideways scroll at 320px, targets of at least 24px (44px for buttons on touch screens), a skip link, and font sizes in rem.
+  - **Weight:** the recordings play as MP4 (2 MB instead of 6.7 MB) and the screenshots load as WebP. Inter and JetBrains Mono are self-hosted, so the page asks nothing of Google.
+  - **Hero:** plays the real prompt recording, with a pause button.
+  - **Demos:** every demo sits in one window chrome tagged "rendered output" or "illustration".
+  - **Privacy:** the privacy section now says what is sent and to which model.
+- **README and website**: recordings now cover only install and the vague prompt. A new task, Use, the hint and hold are animated illustrations with coachline's real messages, the same on the site and in the README (`docs/demo/scene_gifs.py` makes the GIFs from the site); browse, patterns and the Library are GIFs of the panel's own rendered frames. The meter in rendered frames no longer pushes the card's border out of line.
+- **Website**: the hint and Use sections show animated illustrations instead of the macOS recordings, which were too small to read; hold gets one too. Each plays the true sequence with coachline's real messages (the hint and meter for each draft, Use asking before it replaces a draft, hold and the second Enter), the same at every width, and replays on its key.
+- The README gains a short "Keep what works" section for Use, the hint, the evidence line, the Library and hold.
 
 ## 0.17.0 (2026-10-21)
 
