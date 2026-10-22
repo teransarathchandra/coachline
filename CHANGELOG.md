@@ -4,6 +4,11 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **What your prompts cost you**: when you stop Claude mid-turn, or your next prompt starts with "no", "actually", "I meant" or "revert", coachline notes it on your machine (up to four words from the start of the prompt, known secret patterns redacted; kept 90 days). With enough of them, the patterns open with how often vague prompts led to rework compared with concrete ones.
+- **Hold**, off by default (`/coach hold on`): a prompt the hint calls vague stops at Enter with what it lacks and goes back in the box; Enter again within 30 seconds sends it. It never waits on anything, so Enter is never slowed.
+- Hints say why while you are new (fewer than 50 prompts in your history): `name a file, function, error or number — so Claude doesn't have to guess`. `/coach level beginner|pro|auto` sets it.
+- `/coach forget outcomes` deletes the record of interrupted and corrected prompts.
+
 - **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold, for you to fill and send; it never sends anything. A draft in the box is replaced only on a second press. Where there is no prompt box (the desktop app, an editor), it copies instead.
 - **A hint as you type**: after a short pause, the line under the prompt box shows how concrete your draft is and the one thing it lacks most. Worked out on your machine, the draft is never sent; terminal only for now. `/coach hints off` turns it off.
 - The Claude Code pane shows the quality meter on each prompt too.

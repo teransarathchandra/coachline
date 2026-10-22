@@ -30,6 +30,8 @@ Never sent:
 
 Everything coachline keeps is in `~/.claude/coach/`, including `suggestions.json` (what you hid or marked as used). `/coach doctor` says how much that is; `/coach forget all` deletes it, keeping only your settings and `llm-off.txt`, so a project you kept private stays private. Files of tabs and sessions untouched for 7 days are removed at session start, and the log of analyses keeps its newest 5,000.
 
+`outcomes.jsonl` records a turn you interrupted or a prompt your next one corrected: when, which, how vague, and up to four words from the start of the prompt (a short prompt can be all of it), with known secret patterns such as keys, tokens and `PASSWORD=` values redacted. It stays on your machine, is kept 90 days, and `/coach forget outcomes` deletes it.
+
 ## How answers are checked
 
 Claude can invent patterns, so its answers are checked on your machine before you see them:

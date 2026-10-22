@@ -240,6 +240,7 @@ def build(path, session=None, notice=True):
                               "error": None if adv else rec.get("error"), "off": coach.llm_off(proj), "advisable": coach.advisable(text, fails)})
     st["research_paused"] = discover.paused_until() if st["ai"] else None
     st["insights"] = insights(st["entries"], rows, L)
+    st["evidence"] = coach.evidence_line(rows)
     st["notice"] = coach.notice(cur) if notice and cur else None
     return st
 
@@ -247,7 +248,8 @@ def build(path, session=None, notice=True):
 def signature(st):
     return (st.get("session"), len(st["entries"]), sum(bool(e["advice"]) + bool(e["error"]) for e in st["entries"]), len(st["insights"]),
             st["learned"].get("generated"), st["review_running"], st["ai"],
-            tuple((memory.item_id(x), x.get("status")) for e in st["entries"] for x in e.get("items", [])), st.get("research_paused"))
+            tuple((memory.item_id(x), x.get("status")) for e in st["entries"] for x in e.get("items", [])), st.get("research_paused"),
+            st.get("evidence"))
 
 
 # ---------------------------------------------------------------- presentation helpers
@@ -269,8 +271,8 @@ def status(e, st, ui):
 
 
 def pattern_texts(st):
-    """Plain-English one-liners about patterns from your past chats that also appear in this thread."""
-    out = []
+    """Plain-English one-liners about patterns from your past chats that also appear in this thread; the outcome evidence first."""
+    out = [st["evidence"]] if st.get("evidence") else []
     for x in st["insights"]:
         total = x["past"] + x["here"]
         if x["kind"] == "request":

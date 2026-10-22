@@ -34,7 +34,7 @@ declare module 'claude-code' {
       showPatterns: boolean
       closed: boolean
       msg: string
-      hint: { draft: string; tail: string | null } | null
+      hint: { draft: string; tail: string | null; hint: string | null; hold: boolean } | null
     }
   }
 }

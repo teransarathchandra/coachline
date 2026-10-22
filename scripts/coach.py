@@ -28,6 +28,8 @@ _SECRETS = [
     (r"\b(sk|pk|ghp|gho|ghs|xox[bap]|AKIA)[-_A-Za-z0-9]{16,}", "<key>"),
     (r"(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{16,}", "<token>"),
     (r"(?i)\b(password|passwd|pwd|secret|accountkey|sharedaccesskey|api[_-]?key|token)\s*[=:]\s*\S+", "<secret>"),
+    (r"(?i)\b\w*_(password|passwd|pwd|secret|token|key)\w*\s*[=:]\s*\S+", "<secret>"),          # DB_PASSWORD=…, GITHUB_TOKEN: …
+    (r"(?i)\b(password|passcode|passphrase|pin)\s+(is|was)\s+\S+", "<secret>"),
 ]
 
 def redact(t):
@@ -89,15 +91,21 @@ def vagueness(text):
 def vague(text):
     return vagueness(text) >= 0.6
 
-def hint_for(text):
-    """The one thing a vague prompt lacks most, as the hint under the prompt box says it; None when the prompt is concrete enough."""
+HINTS = [   # (the hint, why it matters: shown to beginners)
+    ("replace 'best/properly/clean' with a rule you can check", "so Claude knows what good means here"),
+    ("say what 'it' or 'this' is: a file, a function, an error", "so Claude doesn't pick the wrong thing"),
+    ("name a file, function, error or number", "so Claude doesn't have to guess"),
+    ("say what done looks like", "so Claude knows when to stop"),
+]
+
+def hint_for(text, beginner=False):
+    """The one thing a vague prompt lacks most, as the hint under the prompt box says it (with why, for a beginner); None when the
+    prompt is concrete enough."""
     b = body(text)[:2000]
     if not b.strip() or not vague(text): return None
     anchored = bool(ANCHOR.search(b))
-    if not r4_qualifiers(text): return "replace 'best/properly/clean' with a rule you can check"
-    if DEICTIC.search(b) and not anchored: return "say what 'it' or 'this' is: a file, a function, an error"
-    if not anchored: return "name a file, function, error or number"
-    return "say what done looks like"
+    n = 0 if not r4_qualifiers(text) else 1 if DEICTIC.search(b) and not anchored else 2 if not anchored else 3
+    return HINTS[n][0] + (" — " + HINTS[n][1] if beginner else "")
 
 CATS = {
     "commit/PR/ticket text": r"commit message|pr title|pr description|ticket.*comment|comment.*ticket|\bpr\b$",
@@ -369,6 +377,94 @@ REVIEW_LOCK = os.path.join(STATE, "review.running")  # review.py holds this whil
 STALE_DAYS = 7          # a per-tab or per-session file untouched this long belongs to a tab or session that is gone
 REWRITES_KEEP = 5000    # rewrites.jsonl keeps its newest lines; later lines win anyway
 SWEPT = ("current-session-*.json", "watch-*.alive", "watch-*.launching", "pane-*.json", "pane-*.lock")
+OUTCOMES = os.path.join(STATE, "outcomes.jsonl")   # turns you interrupted, prompts your next one corrected: one line each, kept OUTCOME_DAYS
+OUTCOME_DAYS = 90
+CORRECTION_WORDS = 6
+# a follow-up that says the last prompt was misread. Not REJECT: "still failing" is about the code, not the prompt
+# "no"/"nope" only on their own ("no, …", "No."): "no worries", "no need to…", "no-op" are not corrections; nor "actually also…"
+CORRECTION = re.compile(r"^((no|nope)(?=\s*[,.!;:]|\s*$)|that['\u2019]?s (wrong|not)\b|not what i\b|not quite\b|(wait,?\s+)?i meant\b|undo that\b)", re.I)
+
+def is_correction(text):
+    return bool(CORRECTION.match(" ".join(re.sub(r"^\W+", "", body(text)).split()[:CORRECTION_WORDS])))
+
+def record_outcome(kind, prompt, now=None):
+    """One line in outcomes.jsonl: when, what happened, how vague the prompt was, its first words redacted. Never the prompt itself.
+    Commands (/clear, !ls, # note) and bare replies are not prompts. One write of one line: several tabs may append at once."""
+    t = prompt.strip()
+    if t[:1] in ("/", "!", "#") or not scorable(t): return False
+    now = time.time() if now is None else now
+    head = " ".join(redact(body(t)).split()[:4])
+    if kind == "corrected" and any(o.get("kind") == "aborted" and o.get("head") == head and abs(o["ts"] - now) < 600 for o in outcomes(1, now)):
+        return False                                          # stopped, then "no, I meant…": one rework, not two
+    v = vagueness(t)
+    line = json.dumps({"v": 1, "ts": now, "kind": kind, "vague": v >= 0.6, "cells": round(5 * (1 - v)), "head": head})
+    append_line(OUTCOMES, line)
+    return True
+
+def append_line(path, line):
+    """Append one line whole while other processes append too. POSIX O_APPEND writes are atomic; Windows seeks then writes, so
+    there the first byte is locked around the write (msvcrt.locking retries for up to ~10 s, then raises)."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data = (line + "\n").encode("utf-8")
+    fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o644)
+    try:
+        if os.name != "nt": os.write(fd, data); return
+        import msvcrt
+        os.lseek(fd, 0, os.SEEK_SET); msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        try:
+            os.lseek(fd, 0, os.SEEK_END); os.write(fd, data)
+        finally:
+            os.lseek(fd, 0, os.SEEK_SET); msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    finally:
+        os.close(fd)
+
+def outcomes(days, now=None):
+    cut = (time.time() if now is None else now) - days * 86400
+    try:
+        with open(OUTCOMES, encoding="utf-8") as f: rows = [json.loads(l) for l in f if l.strip()]
+    except (OSError, ValueError): return []
+    return [r for r in rows if isinstance(r, dict) and isinstance(r.get("ts"), (int, float)) and r["ts"] >= cut]
+
+EVIDENCE_MIN, EVIDENCE_DAYS = 3, 14
+
+def evidence_line(rows, now=None):
+    """Rework (interrupts, corrections) after vague prompts vs concrete ones, out of your prompts of each kind in the same 14 days.
+    rows: history as load_full gives it. None until there are EVIDENCE_MIN events: a rate of two is an anecdote."""
+    now = time.time() if now is None else now
+    ev = outcomes(EVIDENCE_DAYS, now)
+    if len(ev) < EVIDENCE_MIN: return None
+    cut = now - EVIDENCE_DAYS * 86400
+    sent = [vague(r[2]) for r in rows if r[0] >= cut and r[2].strip()[:1] not in ("/", "!", "#") and scorable(r[2])]
+    a = sum(1 for e in ev if e.get("vague")); b = len(ev) - a
+    n = max(sum(sent), a); m = max(len(sent) - sum(sent), b)          # an event whose prompt is older than history still counts
+    return f"Vague prompts led to rework {a} of {n} times in {EVIDENCE_DAYS} days; concrete ones {b} of {m}"
+
+def _rewrite(path, keep):
+    """Rewrite a line log with keep(lines) -> lines, unless a line was appended meanwhile (then next time). Never raises."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, encoding="utf-8") as f: lines = f.readlines()
+    except OSError: return
+    kept = keep(lines)
+    if kept == lines: return
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f: f.writelines(kept)
+        if os.path.getsize(path) == size: _replace(tmp, path)
+    except OSError: pass
+    finally:
+        try: os.remove(tmp)
+        except OSError: pass
+
+def _recent(cut):
+    def keep(lines):
+        out = []
+        for l in lines:
+            try: ts = json.loads(l).get("ts", 0)
+            except (ValueError, AttributeError): continue
+            if isinstance(ts, (int, float)) and ts >= cut: out.append(l)
+        return out
+    return keep
 
 def sweep(now=None):
     """SessionStart housekeeping: delete stale per-tab / per-session files and cut rewrites.jsonl to its newest REWRITES_KEEP lines.
@@ -381,19 +477,8 @@ def sweep(now=None):
             try:
                 if os.path.getmtime(p) < cut and not (pat.startswith("current-session") and tab_in_use(p)): os.remove(p); gone.append(os.path.basename(p))
             except OSError: pass
-    try:
-        size = os.path.getsize(REWRITES)
-        with open(REWRITES, encoding="utf-8") as f: lines = f.readlines()
-    except OSError: return gone
-    if len(lines) > REWRITES_KEEP:
-        tmp = f"{REWRITES}.{os.getpid()}.tmp"
-        try:
-            with open(tmp, "w", encoding="utf-8") as f: f.writelines(lines[-REWRITES_KEEP:])
-            if os.path.getsize(REWRITES) == size: _replace(tmp, REWRITES)   # an analysis appended meanwhile: keep it, compact next time
-        except OSError: pass
-        finally:
-            try: os.remove(tmp)
-            except OSError: pass
+    _rewrite(REWRITES, lambda lines: lines[-REWRITES_KEEP:])
+    _rewrite(OUTCOMES, _recent((time.time() if now is None else now) - OUTCOME_DAYS * 86400))
     return gone
 
 def tab_key(env=None):
@@ -502,6 +587,29 @@ def auto_open_on():
     """The panel opens by itself at session start: the Claude Code pane on macOS / Linux, a Windows Terminal split on Windows."""
     v = setting("auto_open_watch")
     return bool(defaults_on() if v is None else v)
+
+BEGINNER_PROMPTS = 50
+
+def level():
+    """'beginner' or 'pro': the setting when it is one of those, else beginner until your history holds BEGINNER_PROMPTS prompts.
+    Reads history only as far as it needs: this runs on every pause in typing."""
+    v = setting("level")
+    if v in ("beginner", "pro"): return v
+    n = 0
+    try:
+        with open(HIST, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try: t = json.loads(line).get("display", "")
+                except (ValueError, AttributeError): continue
+                if isinstance(t, str) and scorable(t):
+                    n += 1
+                    if n >= BEGINNER_PROMPTS: return "pro"
+    except OSError: pass
+    return "beginner"
+
+def hold_on():
+    """Hold a clearly vague prompt at Enter (the Claude Code pane; a second Enter sends it). Off unless you switch it on."""
+    return bool(setting("hold", False))
 
 def hints_on():
     """The hint under the prompt box as you type (the Claude Code pane): on unless switched off. Local; nothing is sent."""
@@ -675,7 +783,11 @@ def data_usage():
     return n, size
 
 def forget(what):
-    """Delete what coachline learned and cached. 'all' is everything but your settings (KEPT). Returns the paths removed."""
+    """Delete what coachline learned and cached: 'all' is everything but your settings (KEPT), 'outcomes' the outcome log only.
+    Returns the paths removed."""
+    if what == "outcomes":
+        try: os.remove(OUTCOMES); return [OUTCOMES]
+        except OSError: return []
     if what != "all": raise ValueError(what)
     gone = []
     for root, dirs, files in os.walk(STATE, topdown=False):
@@ -719,12 +831,12 @@ if __name__ == "__main__":
     ap.add_argument("--doctor", action="store_true"); ap.add_argument("--show", action="store_true", help="list rejection-rule hits")
     ap.add_argument("--bg-rewrite", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--key", help=argparse.SUPPRESS); ap.add_argument("--copy", action="store_true", help="with --coach: copy the enhanced prompt to the clipboard")
-    ap.add_argument("--forget", metavar="all", help="delete what coachline keeps, except your settings and llm-off.txt")
+    ap.add_argument("--forget", metavar="all|outcomes", help="delete what coachline keeps (all: except your settings and llm-off.txt)")
     a = ap.parse_args()
     if a.forget is not None:
-        if a.forget != "all": print("usage: coach.py --forget all"); sys.exit(2)
-        before = data_usage()[1]; gone = forget("all")
-        print(f"removed {len(gone)} files ({size_text(before - data_usage()[1])}); kept your settings and llm-off.txt")
+        if a.forget not in ("all", "outcomes"): print("usage: coach.py --forget all|outcomes"); sys.exit(2)
+        before = data_usage()[1]; gone = forget(a.forget)
+        print(f"removed {len(gone)} files ({size_text(before - data_usage()[1])})" + ("; kept your settings and llm-off.txt" if a.forget == "all" else ""))
     elif a.bg_rewrite:
         if a.key: bg_rewrite(a.history, a.key)
     elif a.doctor: doctor(a.history)

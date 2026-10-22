@@ -15,6 +15,10 @@ Each prompt gets a card: each part in a rounded box of its own colour, in the Cl
 
 While you type, the line under the prompt box ends with how concrete your draft is (`▰▰▱▱▱`) and the one thing it lacks most, such as `name a file, function, error or number`. It appears after a short pause, only in the terminal, and is worked out on your machine: the draft is never sent.
 
+When you stop Claude mid-turn, or your next prompt starts with "no", "actually", "I meant" or "revert", coachline notes it on your machine. Once there are a few, the patterns open with a line such as *Vague prompts led to rework 4 of 9 times in 14 days; concrete ones 1 of 12*.
+
+With `/coach hold on`, a prompt that the hint under the box calls vague stops at Enter: the reason shows, your text goes back in the box, and Enter again within 30 seconds sends it as is. It only holds when that hint is already there for exactly your text, so Enter is never slowed.
+
 Below the card: one line of patterns from your past chats (`i` opens it) and the list of prompts in this thread.
 
 ## Keys
@@ -61,6 +65,9 @@ With the mouse on, the wheel scrolls and a click selects a prompt or presses a b
 | `/coach model fast\|research haiku\|sonnet\|opus` | The model for each pass (defaults: fast haiku, research sonnet) |
 | `/coach auto-open on\|off` | Open the panel by itself at session start (on by default on macOS and Linux) |
 | `/coach setup` | Show the current settings |
+| `/coach hold on\|off` | Hold a clearly vague prompt at Enter; press Enter again within 30 s to send it as is (off by default) |
+| `/coach level beginner\|pro\|auto` | Hint wording: beginners also get why (auto: beginner until 50 prompts in your history) |
+| `/coach forget outcomes` | Delete the local record of interrupted and corrected prompts |
 | `/coach hints on\|off` | The hint under the prompt box as you type (on by default; worked out locally, nothing is sent) |
 | `/coach motion on\|off` | The panel's animations (on by default; off by itself with `NO_COLOR`, over SSH or in a slow terminal) |
 | `/coach doctor` | Check that your history, Python and the `claude` CLI work, and how much data coachline keeps |
