@@ -7,7 +7,7 @@ import html, os, re, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SITE = os.path.join(ROOT, "site", "index.html")
-W, H = 64, 30
+W, H = 74, 30
 NARROW = 44                                                        # the same frames for phones, below 640px
 
 if os.environ.get("SITE_FRAMES_CHILD") != "1":                    # coach.py fixes its paths at import: run in a fresh config
