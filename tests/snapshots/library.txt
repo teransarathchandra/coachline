@@ -1,0 +1,31 @@
+library 100x30
+--- plain ---
+  coachline · this thread · 6 prompts                                                 ○ Claude off 
+
+ ╭─ Library ───────────────────────────────────── 2 saved in this project · c copies · x forgets ─╮
+ │   add pagination to the orders table with 25 rows per page and keep the current sort order     │
+ │ › write a migration that adds an index on the created_at column of the events table in         │
+ │   postgres                                                                                     │
+ ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ─────────────────────────────────────────────────────────────────────────────────────────────────
+ Prompts in this thread  ▴ 
+   ! Jun 15 09:30  P03 handle this carefully and make it good for all the customers we have
+   ! Jun 15 09:30  P04 handle this carefully and make it good for all the customers we have
+   ! Jun 15 09:30  P05 handle this carefully and make it good for all the customers we have
+ › ! Jun 15 09:30  P06 handle this carefully and make it good for all the customers we have        
+ ↑↓ choose  c copy  x forget  l back  q quit
+--- ansi (␛ = ESC) ---
+␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                                                 ␛[37m○ Claude off ␛[0;100m␛[0m
+
+ ␛[96m╭─ ␛[0m␛[1;96mLibrary␛[0m ␛[96m─────────────────────────────────────␛[0m ␛[90m2 saved in this project · c copies · x forgets␛[0m ␛[96m─╮␛[0m
+ ␛[96m│␛[0m ␛[90m  add pagination to the orders table with 25 rows per page and keep the current sort order␛[0m     ␛[96m│␛[0m
+ ␛[96m│␛[0m ␛[96m› write a migration that adds an index on the created_at column of the events table in␛[0m         ␛[96m│␛[0m
+ ␛[96m│␛[0m ␛[96m  postgres␛[0m                                                                                     ␛[96m│␛[0m
+ ␛[96m╰────────────────────────────────────────────────────────────────────────────────────────────────╯␛[0m
+␛[90m ─────────────────────────────────────────────────────────────────────────────────────────────────␛[0m
+␛[90m Prompts in this thread  ▴ ␛[0m
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP03 handle this carefully and make it good for all the customers we have
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP04 handle this carefully and make it good for all the customers we have
+   ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP05 handle this carefully and make it good for all the customers we have
+␛[7m › ! Jun 15 09:30  P06 handle this carefully and make it good for all the customers we have        ␛[0m
+␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mchoose␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97mx␛[0;100m ␛[37mforget␛[0;100m  ␛[1;97ml␛[0;100m ␛[37mback␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m                                                       ␛[0m

@@ -18,7 +18,7 @@ local-hints 100x30
    ! Jun 15 09:30  P04 handle this carefully and make it good for all the customers we have
    ! Jun 15 09:30  P05 handle this carefully and make it good for all the customers we have
  › ! Jun 15 09:30  P06 handle this carefully and make it good for all the customers we have        
- ↑↓ prompt  c copy  e analyse  Enter full  i patterns  s skill  q quit  m mouse
+ ↑↓ prompt  c copy  e analyse  Enter full  i patterns  l library  s skill  q quit  m mouse
 --- ansi (␛ = ESC) ---
 ␛[100m ␛[1;97;44m coachline␛[0;100m␛[37m · this thread · 6 prompts␛[0;100m                                                 ␛[37m○ Claude off ␛[0;100m␛[0m
 
@@ -38,4 +38,4 @@ local-hints 100x30
    ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP04 handle this carefully and make it good for all the customers we have
    ␛[94m!␛[0m ␛[90mJun 15 09:30  ␛[0mP05 handle this carefully and make it good for all the customers we have
 ␛[7m › ! Jun 15 09:30  P06 handle this carefully and make it good for all the customers we have        ␛[0m
-␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mprompt␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97me␛[0;100m ␛[37manalyse␛[0;100m  ␛[1;97mEnter␛[0;100m ␛[37mfull␛[0;100m  ␛[1;97mi␛[0;100m ␛[37mpatterns␛[0;100m  ␛[1;97ms␛[0;100m ␛[37mskill␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m  ␛[1;97mm␛[0;100m ␛[37mmouse␛[0;100m                    ␛[0m
+␛[100m ␛[1;97m↑↓␛[0;100m ␛[37mprompt␛[0;100m  ␛[1;97mc␛[0;100m ␛[37mcopy␛[0;100m  ␛[1;97me␛[0;100m ␛[37manalyse␛[0;100m  ␛[1;97mEnter␛[0;100m ␛[37mfull␛[0;100m  ␛[1;97mi␛[0;100m ␛[37mpatterns␛[0;100m  ␛[1;97ml␛[0;100m ␛[37mlibrary␛[0;100m  ␛[1;97ms␛[0;100m ␛[37mskill␛[0;100m  ␛[1;97mq␛[0;100m ␛[37mquit␛[0;100m  ␛[1;97mm␛[0;100m ␛[37mmouse␛[0;100m         ␛[0m

@@ -122,6 +122,7 @@ coachline is active straight away.
 | `↑` `↓` | choose a prompt | `c` | copy the enhanced prompt |
 | `Enter` | read it full width | `e` | analyse it now |
 | `i` | patterns from past chats | `s` | install a drafted skill |
+| `l` | the Library of saved prompts | `x` | forget one (in the Library) |
 | `m` | mouse on or off | `q` | quit |
 
 In the Claude Code pane, the desktop app and the editors, click its buttons (`[ Copy ]`, `[ Analyse ]`); the keys are for the standalone panel (Windows and `/coach watch`). Every key, mark and `/coach` command: [usage guide](docs/usage.md).
