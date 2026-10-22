@@ -171,6 +171,8 @@
   .chrome-tag.real { color: #e8735a; border: 1px solid rgba(232, 115, 90, .45); }
   .chrome .term, .chrome .box { border: 0; border-radius: 0; }
   .chrome video { display: block; width: 100%; height: auto; }
+  /* phones get the illustrations: a whole terminal at phone width is too small to read */
+  @media (max-width: 639px) { .chrome video.wide-only { display: none; } }
   /* the panel's own output */
   .term { margin: 0; background: var(--term); color: #cdd6f4; border: 1px solid var(--term-line); border-radius: 12px; padding: 18px;
           font: 400 0.71875rem/1.3 var(--mono); overflow-x: auto; white-space: pre; scrollbar-color: #333342 var(--term); }
@@ -336,10 +338,14 @@
       </ul>
     </div>
     <figure>
-      <div class="chrome"><div class="chrome-bar"><span>Claude Code · prompt box</span><span class="chrome-tag real">recording</span></div>
-        <video data-demo="video" src="assets/hint.mp4" poster="assets/hint-poster.webp" muted loop playsinline preload="none" width="1120" height="688"
-               aria-label="Typing &quot;fix it now please&quot; in Claude Code: after a pause, the line under the box shows an empty meter and what the draft lacks; naming the file and when it is done fills the meter"></video></div>
-      <div class="media-row"><figcaption>Recorded in Claude Code on macOS: a vague draft gets its hint after a pause, and the meter fills as the file and the done-when are typed.</figcaption><button class="playpause" type="button">Pause</button></div>
+      <div class="chrome"><div class="chrome-bar"><span>Claude Code · prompt box</span><span class="chrome-tag real wide-only">recording</span><span class="chrome-tag narrow-only">illustration</span></div>
+        <video class="wide-only" data-demo="video" src="assets/hint.mp4" poster="assets/hint-poster.webp" muted loop playsinline preload="none" width="1120" height="688"
+               aria-label="Typing &quot;fix it now please&quot; in Claude Code: after a pause, the line under the box shows an empty meter and what the draft lacks; naming the file and when it is done fills the meter"></video>
+        <div class="box narrow-only" data-demo="hint">
+          <div class="area"><span class="gt">&gt; </span><span data-type>fix it now please</span><span class="caret" aria-hidden="true"></span></div>
+          <div class="tail" data-later>· <span class="m">▰▱▱▱▱</span>  <span class="h">name a file, function, error or number</span></div>
+        </div></div>
+      <div class="media-row"><figcaption><span class="wide-only">Recorded in Claude Code on macOS: a vague draft gets its hint after a pause, and the meter fills as the file and the done-when are typed.</span><span class="narrow-only">coachline draws the hint in Claude Code's own line, under the box.</span></figcaption><button class="playpause wide-only" type="button">Pause</button></div>
     </figure>
   </div>
 </section>
@@ -455,10 +461,14 @@
       </ul>
     </div>
     <figure>
-      <div class="chrome"><div class="chrome-bar"><span>Claude Code · coachline pane</span><span class="chrome-tag real">recording</span></div>
-        <video data-demo="video" src="assets/use.mp4" poster="assets/use-poster.webp" muted loop playsinline preload="none" width="1120" height="688"
-               aria-label="Pressing Use in the coachline pane puts the enhanced prompt in Claude Code's prompt box, its [ASK] gap in bold, without sending it"></video></div>
-      <div class="media-row"><figcaption>Recorded in Claude Code on macOS: Use in the pane puts the enhanced prompt in the box, its [ASK] gap in bold. Nothing is sent.</figcaption><button class="playpause" type="button">Pause</button></div>
+      <div class="chrome"><div class="chrome-bar"><span class="wide-only">Claude Code · coachline pane</span><span class="narrow-only">Claude Code · prompt box</span><span class="chrome-tag real wide-only">recording</span><span class="chrome-tag narrow-only">illustration</span></div>
+        <video class="wide-only" data-demo="video" src="assets/use.mp4" poster="assets/use-poster.webp" muted loop playsinline preload="none" width="1120" height="688"
+               aria-label="Pressing Use in the coachline pane puts the enhanced prompt in Claude Code's prompt box, its [ASK] gap in bold, without sending it"></video>
+        <div class="box narrow-only" data-demo="use">
+          <div class="area"><span class="gt">&gt; </span><span>Fix the login bug in src/auth/login.ts: <span class="ask">[ASK: which error do users see?]</span>. Find the cause before changing code. Done when the login test fails now and passes after.</span><span class="caret" aria-hidden="true"></span></div>
+          <div class="sent" data-later>in your prompt box: fill the [ASK] parts, then send</div>
+        </div></div>
+      <div class="media-row"><figcaption><span class="wide-only">Recorded in Claude Code on macOS: Use in the pane puts the enhanced prompt in the box, its [ASK] gap in bold. Nothing is sent.</span><span class="narrow-only">The enhanced prompt, in your box, waiting for your answers.</span></figcaption><button class="playpause wide-only" type="button">Pause</button></div>
     </figure>
   </div>
 </section>
