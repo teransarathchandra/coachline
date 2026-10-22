@@ -4,6 +4,8 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **Library**: a prompt of 12 words or more that worked first time (its turn ended normally and your next two prompts didn't correct it) is saved on your machine, redacted. A draft close to a saved prompt gets `↻ similar prompt worked before` under the box, and **Library** in the Claude Code pane lists them with **Use** and **Forget**. Another project's prompts are offered when it shares a framework with this one, never from a project in `llm-off.txt`. Up to 200 per project and 500 in all, the least used dropped first. `/coach forget library` deletes them.
+
 - **What your prompts cost you**: when you stop Claude mid-turn, or your next prompt starts with "no", "actually", "I meant" or "revert", coachline notes it on your machine (up to four words from the start of the prompt, known secret patterns redacted; kept 90 days). With enough of them, the patterns open with how often vague prompts led to rework compared with concrete ones.
 - **Hold**, off by default (`/coach hold on`): a prompt the hint calls vague stops at Enter with what it lacks and goes back in the box; Enter again within 30 seconds sends it. It never waits on anything, so Enter is never slowed.
 - Hints say why while you are new (fewer than 50 prompts in your history): `name a file, function, error or number — so Claude doesn't have to guess`. `/coach level beginner|pro|auto` sets it.

@@ -57,7 +57,7 @@ class Tick(unittest.TestCase):
         self.assertIsNotNone(vague["hint"]); self.assertEqual(len(vague["meter"]), 5); self.assertEqual(vague["words"], 4)
         self.assertIsNone(self.score(SOLID)["hint"])
         self.assertEqual(self.score("x")["words"], 1)
-        self.assertEqual(self.score(""), {"meter": None, "hint": None, "words": 0, "hold": False})
+        self.assertEqual(self.score(""), {"meter": None, "hint": None, "words": 0, "hold": False, "match": None})
         self.assertEqual(self.score("請求モジュールの税計算を地域ごとに見直して、拡張しにくいので読みやすく直してください")["words"], 1)   # UTF-8 in, whatever the code page
 
     def test_score_keeps_the_draft_off_disk(self):
@@ -72,7 +72,7 @@ class Tick(unittest.TestCase):
         self.assertIs(self.score("fix it now please")["hold"], True)
 
     def test_score_is_quiet_for_commands_and_with_hints_off(self):
-        nothing = {"meter": None, "hint": None, "words": 0, "hold": False}
+        nothing = {"meter": None, "hint": None, "words": 0, "hold": False, "match": None}
         for draft in ("!git status --short now", "# always use pnpm here", "/model sonnet please now"):
             self.assertEqual(self.score(draft), nothing, draft)
         coach.set_setting("hints", False)
