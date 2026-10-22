@@ -1,0 +1,763 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T13:01:10+00:00",
+  "title": "Design System: coachline",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Instrument Black",
+        "canonical": "#0b0b0f",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#242529",
+          "#414146",
+          "#606166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8cf",
+          "#eeeef4"
+        ]
+      },
+      "ground-raised": {
+        "role": "neutral",
+        "displayName": "Raised Black",
+        "canonical": "#111117",
+        "tonalRamp": [
+          "#0a0a10",
+          "#24242b",
+          "#414148",
+          "#606068",
+          "#81818a",
+          "#a4a4ad",
+          "#c8c8d1",
+          "#ededf7"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#23232c",
+        "tonalRamp": [
+          "#0a0a12",
+          "#24242d",
+          "#41414b",
+          "#60606b",
+          "#81818c",
+          "#a4a4af",
+          "#c8c8d4",
+          "#ededfa"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "#2e2e39",
+        "tonalRamp": [
+          "#0a0a13",
+          "#24242e",
+          "#41414c",
+          "#60606c",
+          "#81818e",
+          "#a3a4b1",
+          "#c7c8d6",
+          "#ededfc"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#ececf1",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252528",
+          "#414145",
+          "#616165",
+          "#828286",
+          "#a4a4a9",
+          "#c8c8cd",
+          "#eeeef3"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Ink Muted",
+        "canonical": "#a3a3ae",
+        "tonalRamp": [
+          "#0a0a12",
+          "#24242d",
+          "#41414a",
+          "#60606a",
+          "#81818c",
+          "#a4a4af",
+          "#c8c8d3",
+          "#ededf9"
+        ]
+      },
+      "ink-faint": {
+        "role": "neutral",
+        "displayName": "Ink Faint",
+        "canonical": "#8a8a95",
+        "tonalRamp": [
+          "#0a0a13",
+          "#24242e",
+          "#41414c",
+          "#60606c",
+          "#81818d",
+          "#a4a4b0",
+          "#c8c8d5",
+          "#ededfb"
+        ]
+      },
+      "coral": {
+        "role": "primary",
+        "displayName": "Keystroke Coral",
+        "canonical": "#e8735a",
+        "tonalRamp": [
+          "#2d0000",
+          "#500000",
+          "#742110",
+          "#994331",
+          "#bf6551",
+          "#e68873",
+          "#ffac96",
+          "#ffd1ba"
+        ]
+      },
+      "coral-ink": {
+        "role": "primary",
+        "displayName": "Ink on Coral",
+        "canonical": "#0b0b0f",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#242529",
+          "#414146",
+          "#606166",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8cf",
+          "#eeeef4"
+        ]
+      },
+      "cap": {
+        "role": "neutral",
+        "displayName": "Cap Face",
+        "canonical": "#1a1a22",
+        "tonalRamp": [
+          "#0a0a12",
+          "#24242c",
+          "#41414a",
+          "#60606a",
+          "#81818c",
+          "#a4a4af",
+          "#c8c8d3",
+          "#ededf9"
+        ]
+      },
+      "cap-lip": {
+        "role": "neutral",
+        "displayName": "Cap Lip",
+        "canonical": "#07070a",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252529",
+          "#414146",
+          "#616165",
+          "#828287",
+          "#a4a4aa",
+          "#c8c8ce",
+          "#eeeef3"
+        ]
+      },
+      "cap-ink": {
+        "role": "neutral",
+        "displayName": "Cap Ink",
+        "canonical": "#ececf1",
+        "tonalRamp": [
+          "#0b0b0e",
+          "#252528",
+          "#414145",
+          "#616165",
+          "#828286",
+          "#a4a4a9",
+          "#c8c8cd",
+          "#eeeef3"
+        ]
+      },
+      "term": {
+        "role": "terminal",
+        "displayName": "Terminal Ground",
+        "canonical": "#14141b",
+        "tonalRamp": [
+          "#0a0a11",
+          "#24242c",
+          "#414149",
+          "#606069",
+          "#81818b",
+          "#a4a4ae",
+          "#c8c8d2",
+          "#ededf8"
+        ]
+      },
+      "term-line": {
+        "role": "terminal",
+        "displayName": "Terminal Edge",
+        "canonical": "#262631",
+        "tonalRamp": [
+          "#0a0a13",
+          "#24242f",
+          "#41414d",
+          "#60606d",
+          "#81818e",
+          "#a3a4b2",
+          "#c7c8d6",
+          "#ededfc"
+        ]
+      },
+      "term-area-line": {
+        "role": "terminal",
+        "displayName": "Prompt Area Edge",
+        "canonical": "#3a3a48",
+        "tonalRamp": [
+          "#0a0a15",
+          "#242431",
+          "#40404f",
+          "#5f606f",
+          "#808191",
+          "#a3a3b4",
+          "#c7c7d9",
+          "#ecedff"
+        ]
+      },
+      "term-text": {
+        "role": "terminal",
+        "displayName": "Terminal Text",
+        "canonical": "#cdd6f4",
+        "tonalRamp": [
+          "#06091d",
+          "#1e243a",
+          "#3a4159",
+          "#59607a",
+          "#79819d",
+          "#9ba4c0",
+          "#bfc8e6",
+          "#e4edff"
+        ]
+      },
+      "term-soft": {
+        "role": "terminal",
+        "displayName": "Terminal Soft",
+        "canonical": "#bac2de",
+        "tonalRamp": [
+          "#06091c",
+          "#1e2439",
+          "#3b4158",
+          "#596079",
+          "#7a819b",
+          "#9ca4bf",
+          "#c0c8e4",
+          "#e5edff"
+        ]
+      },
+      "term-dim": {
+        "role": "terminal",
+        "displayName": "Terminal Dim",
+        "canonical": "#8b90a8",
+        "tonalRamp": [
+          "#07091a",
+          "#202337",
+          "#3d4155",
+          "#5b6076",
+          "#7c8198",
+          "#9ea4bc",
+          "#c2c8e1",
+          "#e7edff"
+        ]
+      },
+      "term-blue": {
+        "role": "terminal",
+        "displayName": "Terminal Blue",
+        "canonical": "#89b4fa",
+        "tonalRamp": [
+          "#000039",
+          "#00205a",
+          "#1b3f7c",
+          "#3a60a0",
+          "#5a82c5",
+          "#7ba6eb",
+          "#9ecaff",
+          "#c3f0ff"
+        ]
+      },
+      "term-cyan": {
+        "role": "terminal",
+        "displayName": "Terminal Cyan",
+        "canonical": "#94e2d5",
+        "tonalRamp": [
+          "#00140e",
+          "#003028",
+          "#004f46",
+          "#1b7065",
+          "#449286",
+          "#68b6a9",
+          "#8ddace",
+          "#b2fff3"
+        ]
+      },
+      "term-green": {
+        "role": "terminal",
+        "displayName": "Terminal Green",
+        "canonical": "#a6e3a1",
+        "tonalRamp": [
+          "#001400",
+          "#003100",
+          "#155013",
+          "#387035",
+          "#599355",
+          "#7cb777",
+          "#9fdc9a",
+          "#c4ffbe"
+        ]
+      },
+      "term-yellow": {
+        "role": "terminal",
+        "displayName": "Terminal Yellow",
+        "canonical": "#f9e2af",
+        "tonalRamp": [
+          "#180700",
+          "#342100",
+          "#523f0c",
+          "#735e2f",
+          "#958050",
+          "#b8a372",
+          "#ddc795",
+          "#ffecb9"
+        ]
+      },
+      "ground-light": {
+        "role": "neutral",
+        "displayName": "Instrument Black (light theme)",
+        "canonical": "#f7f6f3",
+        "tonalRamp": [
+          "#0c0b09",
+          "#262523",
+          "#434240",
+          "#62615f",
+          "#838280",
+          "#a6a5a2",
+          "#cac9c6",
+          "#efeeeb"
+        ]
+      },
+      "ground-raised-light": {
+        "role": "neutral",
+        "displayName": "Raised Black (light theme)",
+        "canonical": "#efede8",
+        "tonalRamp": [
+          "#0c0b08",
+          "#262521",
+          "#43423e",
+          "#63615d",
+          "#84827e",
+          "#a7a5a0",
+          "#cbc9c4",
+          "#f0eee9"
+        ]
+      },
+      "line-light": {
+        "role": "neutral",
+        "displayName": "Hairline (light theme)",
+        "canonical": "#dedad3",
+        "tonalRamp": [
+          "#0d0b07",
+          "#28251f",
+          "#45423c",
+          "#64615b",
+          "#85827b",
+          "#a8a49e",
+          "#ccc9c2",
+          "#f2eee7"
+        ]
+      },
+      "line-strong-light": {
+        "role": "neutral",
+        "displayName": "Hairline Strong (light theme)",
+        "canonical": "#cfcac1",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28251e",
+          "#46413a",
+          "#656159",
+          "#868279",
+          "#a9a49c",
+          "#cdc8bf",
+          "#f3eee5"
+        ]
+      },
+      "ink-light": {
+        "role": "neutral",
+        "displayName": "Ink (light theme)",
+        "canonical": "#131318",
+        "tonalRamp": [
+          "#0b0b0f",
+          "#24242a",
+          "#414147",
+          "#606067",
+          "#818288",
+          "#a4a4ab",
+          "#c8c8d0",
+          "#edeef5"
+        ]
+      },
+      "ink-muted-light": {
+        "role": "neutral",
+        "displayName": "Ink Muted (light theme)",
+        "canonical": "#4f4f59",
+        "tonalRamp": [
+          "#0a0a12",
+          "#24242d",
+          "#41414b",
+          "#60606a",
+          "#81818c",
+          "#a4a4af",
+          "#c8c8d4",
+          "#ededf9"
+        ]
+      },
+      "ink-faint-light": {
+        "role": "neutral",
+        "displayName": "Ink Faint (light theme)",
+        "canonical": "#6b6b75",
+        "tonalRamp": [
+          "#0a0a11",
+          "#24242c",
+          "#41414a",
+          "#60606a",
+          "#81818b",
+          "#a4a4af",
+          "#c8c8d3",
+          "#ededf9"
+        ]
+      },
+      "coral-light": {
+        "role": "primary",
+        "displayName": "Keystroke Coral (light theme)",
+        "canonical": "#b4402a",
+        "tonalRamp": [
+          "#2d0000",
+          "#500000",
+          "#74210f",
+          "#994331",
+          "#bf6551",
+          "#e68873",
+          "#ffac95",
+          "#ffd1ba"
+        ]
+      },
+      "coral-ink-light": {
+        "role": "primary",
+        "displayName": "Ink on Coral (light theme)",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "cap-light": {
+        "role": "neutral",
+        "displayName": "Cap Face (light theme)",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "cap-lip-light": {
+        "role": "neutral",
+        "displayName": "Cap Lip (light theme)",
+        "canonical": "#c9c4ba",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28251d",
+          "#464139",
+          "#656158",
+          "#868278",
+          "#a9a49b",
+          "#cec9bf",
+          "#f3eee4"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero line only; second clause in ink-faint."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Every section heading."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Hero paragraph."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Section prose."
+      },
+      "body-sm": {
+        "displayName": "Body Sm",
+        "purpose": "Lists, definitions, tab captions."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Nav, tabs, proof line, links."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Figcaptions, footnotes, footer."
+      },
+      "mono-cap": {
+        "displayName": "Mono Cap",
+        "purpose": "Keycap legends (18px on section caps)."
+      },
+      "mono-command": {
+        "displayName": "Mono Command",
+        "purpose": "Install commands and prompt-box text."
+      },
+      "mono-terminal": {
+        "displayName": "Mono Terminal",
+        "purpose": "Real panel frames: 11.5px under 480px, 12.5px to 999px, 13.5px from 1000px."
+      },
+      "mono-label": {
+        "displayName": "Mono Label",
+        "purpose": "Opt-in chip and key board device label."
+      }
+    },
+    "shadows": [
+      {
+        "name": "key-lip",
+        "value": "0 5px 0 var(--cap-lip), 0 8px 14px -6px rgba(0, 0, 0, .55)",
+        "purpose": "Keycaps at rest only."
+      },
+      {
+        "name": "key-lip-pressed",
+        "value": "0 1px 0 var(--cap-lip), 0 2px 4px -2px rgba(0, 0, 0, .5)",
+        "purpose": "Pressed keycap, with translateY(4px)."
+      },
+      {
+        "name": "frame-flash",
+        "value": "0 0 0 1px #e8735a",
+        "purpose": "Start of the 0.9s ring on a replayed terminal frame; fades to none."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "The one easing for every transition."
+      },
+      {
+        "name": "key-press",
+        "value": "140ms",
+        "purpose": "Cap travel; the down state holds 180ms."
+      },
+      {
+        "name": "demo-delay",
+        "value": "450ms",
+        "purpose": "Wait after the smooth scroll before the section demo replays."
+      },
+      {
+        "name": "type-step",
+        "value": "42ms",
+        "purpose": "Per character when the prompt box retypes its draft, after 250ms."
+      },
+      {
+        "name": "status-fade",
+        "value": "350ms",
+        "purpose": "Prompt-box status line fades back in."
+      },
+      {
+        "name": "frame-flash",
+        "value": "900ms",
+        "purpose": "Coral ring fade on a replayed terminal frame."
+      },
+      {
+        "name": "caret-blink",
+        "value": "1.1s steps(1) infinite",
+        "purpose": "Prompt-box caret."
+      },
+      {
+        "name": "copy-confirm",
+        "value": "1600ms",
+        "purpose": "How long Copy reads Copied."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "term-sm",
+        "value": "480px"
+      },
+      {
+        "name": "keys-6",
+        "value": "560px to 999px"
+      },
+      {
+        "name": "narrow-frame",
+        "value": "max 639px"
+      },
+      {
+        "name": "gutter",
+        "value": "720px"
+      },
+      {
+        "name": "md",
+        "value": "820px"
+      },
+      {
+        "name": "hero",
+        "value": "900px"
+      },
+      {
+        "name": "lg",
+        "value": "1000px"
+      },
+      {
+        "name": "touch",
+        "value": "(hover: none)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Keycap",
+      "kind": "custom",
+      "refersTo": "keycap",
+      "description": "A pressable key with a solid lip; drops 4px and turns coral when pressed.",
+      "html": "<a class=\"ds-key\" href=\"#\"><span class=\"ds-cap\">E</span>analyse</a> <a class=\"ds-key ds-down\" href=\"#\"><span class=\"ds-cap\">U</span>use it</a>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-key{display:inline-grid;justify-items:center;gap:10px;margin:8px 12px;text-decoration:none;color:var(--ink-2);font:400 12.5px/1.3 var(--sans)} .ds-cap{width:64px;height:64px;display:grid;place-items:center;border-radius:10px;font:700 20px/1 var(--mono);color:var(--cap-ink);background:var(--cap);border:1px solid var(--line-2);box-shadow:0 5px 0 var(--cap-lip),0 8px 14px -6px rgba(0,0,0,.55);transition:transform .14s var(--ease),box-shadow .14s var(--ease),border-color .2s,color .2s} .ds-key:hover .ds-cap{border-color:var(--coral)} .ds-key:active .ds-cap,.ds-down .ds-cap{transform:translateY(4px);box-shadow:0 1px 0 var(--cap-lip),0 2px 4px -2px rgba(0,0,0,.5);border-color:var(--coral);color:var(--coral)} .ds-key:focus-visible{outline:none} .ds-key:focus-visible .ds-cap{outline:2px solid var(--coral);outline-offset:3px}"
+    },
+    {
+      "name": "Command Line with Copy",
+      "kind": "input",
+      "refersTo": "command-line",
+      "description": "An install command with a coral prompt and a Copy button.",
+      "html": "<div class=\"ds-cmd\"><code><span class=\"ds-p\">&gt; </span>/plugin install coachline@coachline</code><button class=\"ds-copy\" type=\"button\">Copy</button></div>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-cmd{display:flex;align-items:center;gap:10px;max-width:560px;border:1px solid var(--line-2);border-radius:8px;background:var(--ground-2);padding:6px 6px 6px 14px;color:var(--ink)} .ds-cmd code{flex:1;font:400 14px/1.6 var(--mono)} .ds-p{color:var(--coral);user-select:none} .ds-copy{font:500 12px/1 var(--sans);color:var(--ink-2);background:none;border:1px solid var(--line-2);border-radius:6px;padding:7px 9px;cursor:pointer} .ds-copy:hover{color:var(--ink);border-color:var(--ink-3)} .ds-copy:focus-visible{outline:2px solid var(--coral);outline-offset:3px} .ds-copy:active{color:var(--coral);border-color:var(--coral)}"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-github",
+      "description": "The page's button shape: outlined, 6px radius, Inter 500 13px.",
+      "html": "<a class=\"ds-btn\" href=\"#\">GitHub <span class=\"ds-n\">1,204</span></a>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-btn{display:inline-flex;align-items:center;gap:8px;font:500 13px/1 var(--sans);color:var(--ink);text-decoration:none;border:1px solid var(--line-2);border-radius:6px;padding:7px 10px} .ds-n{font-variant-numeric:tabular-nums;color:var(--ink-2);border-left:1px solid var(--line-2);padding-left:8px} .ds-btn:hover{border-color:var(--ink-3)} .ds-btn:focus-visible{outline:2px solid var(--coral);outline-offset:3px}"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "Sticky 56px bar, hairline below, mono wordmark, muted Inter links.",
+      "html": "<header class=\"ds-bar\"><a class=\"ds-mark\" href=\"#\"><svg viewBox=\"0 0 32 32\" width=\"22\" height=\"22\"><rect width=\"32\" height=\"32\" rx=\"8\" fill=\"#E8735A\"/><path d=\"M10 10l7 6-7 6\" fill=\"none\" stroke=\"#0B0B0F\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M18 22h5\" stroke=\"#0B0B0F\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg>coachline</a><nav><a href=\"#\">Keys</a><a href=\"#\">Watch it work</a><a href=\"#\">Privacy</a></nav></header>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-bar{display:flex;align-items:center;gap:16px;height:56px;padding:0 16px;background:var(--ground);border-bottom:1px solid var(--line)} .ds-mark{display:inline-flex;align-items:center;gap:10px;font:500 16px/1 var(--mono);color:var(--ink);text-decoration:none} .ds-bar nav{display:flex;gap:22px;margin-left:auto;font:400 14px/1 var(--sans)} .ds-bar nav a{color:var(--ink-2);text-decoration:none} .ds-bar nav a:hover{color:var(--ink)} .ds-bar a:focus-visible{outline:2px solid var(--coral);outline-offset:3px;border-radius:4px}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab-selected",
+      "description": "Hairline baseline; the selected tab gets a 2px coral underline.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">A vague prompt</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Install</button></div>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)} .ds-tab{font:500 14px/1 var(--sans);color:var(--ink-2);background:none;border:0;border-bottom:2px solid transparent;padding:12px 14px 13px;margin-bottom:-1px;cursor:pointer} .ds-tab:hover{color:var(--ink)} .ds-tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--coral)} .ds-tab:focus-visible{outline:2px solid var(--coral);outline-offset:3px;border-radius:4px}"
+    },
+    {
+      "name": "Opt-in Chip",
+      "kind": "chip",
+      "refersTo": "chip-optin",
+      "description": "Marks an off-by-default feature beside a headline.",
+      "html": "<span class=\"ds-chip\">opt-in</span>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-chip{display:inline-block;font:500 12px/1 var(--mono);color:var(--coral);border:1px solid var(--coral);border-radius:4px;padding:4px 6px}"
+    },
+    {
+      "name": "Terminal Frame",
+      "kind": "card",
+      "refersTo": "terminal-frame",
+      "description": "Real panel output rendered by watch.py; dark in both themes.",
+      "html": "<pre class=\"ds-term\"><span class=\"ds-brand\"> coachline</span><span class=\"ds-dim\"> · this thread · 4 prompts</span>\n\n <span class=\"ds-blu\">╭─ <b>Improve</b> ──────────────────╮</span>\n <span class=\"ds-blu\">│ • Paste the error and steps. │</span>\n <span class=\"ds-blu\">╰──────────────────────────────╯</span></pre>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-term{margin:0;background:var(--term);color:#cdd6f4;border:1px solid var(--term-line);border-radius:12px;padding:22px;font:400 13.5px/1.3 var(--mono);white-space:pre;overflow-x:auto} .ds-brand{font-weight:700;color:#0b0b0f;background:#e8735a} .ds-dim{color:#8b90a8} .ds-blu{color:#89b4fa}"
+    },
+    {
+      "name": "Prompt Box Illustration",
+      "kind": "custom",
+      "refersTo": "prompt-box",
+      "description": "Drawing of Claude Code's prompt box with a coral caret and a status line.",
+      "html": "<div class=\"ds-box\"><div class=\"ds-area\"><span class=\"ds-gt\">&gt; </span>fix it now please<span class=\"ds-caret\"></span></div><div class=\"ds-tail\">· <span class=\"ds-m\">▰▱▱▱▱</span>  <span class=\"ds-h\">name a file, function, error or number</span></div></div>",
+      "css": ":root{--ground:#0b0b0f;--ground-2:#111117;--line:#23232c;--line-2:#2e2e39;--ink:#ececf1;--ink-2:#a3a3ae;--ink-3:#8a8a95;--coral:#e8735a;--coral-ink:#0b0b0f;--cap:#1a1a22;--cap-lip:#07070a;--cap-ink:#ececf1;--term:#14141b;--term-line:#262631;--sans:Inter,ui-sans-serif,system-ui,sans-serif;--mono:'JetBrains Mono Full','JetBrains Mono',ui-monospace,monospace;--ease:cubic-bezier(.16,1,.3,1)} .ds-box{background:var(--term);border:1px solid var(--term-line);border-radius:12px;padding:22px;font:400 14px/1.6 var(--mono);color:#cdd6f4} .ds-area{border:1px solid #3a3a48;border-radius:8px;padding:12px 14px;min-height:76px} .ds-gt{color:#8b90a8} .ds-caret{display:inline-block;width:8px;height:1.15em;vertical-align:-.2em;background:#e8735a;animation:ds-blink 1.1s steps(1) infinite} @keyframes ds-blink{50%{opacity:0}} .ds-tail{margin-top:10px;font-size:13px;color:#8b90a8} .ds-m{color:#e8735a} .ds-h{color:#bac2de} @media (prefers-reduced-motion:reduce){.ds-caret{animation:none}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Keyboard Beside the Turn",
+    "overview": "coachline is a tool you operate with keys, and the system is built from that fact. The ground is a near-black instrument surface; the one warm colour, coral, marks what you can press, what is focused and what just happened. Everything else is hairline rules, grey ink and real product output. The page reads like a precise device spec: a keycap you can press, the plain sentence of what it does, and the actual terminal frame it produces.\n\nDensity is calm and documentary. Prose sits in Inter at reading sizes with tight, heavy headlines; anything the user would type, press or see in the product is JetBrains Mono. Depth exists only where it is physical (the keycap's lip) or literal (the terminal window); every other surface is flat, separated by 1px lines and a one-step tonal raise.\n\nThe owner confirmed the rejections: no stock photography, no gradients, no glow, no icon tiles. Proof is always the real thing: pane screenshots, recorded GIFs, and terminal frames rendered by the product's own `scripts/watch.py`.",
+    "keyCharacteristics": [
+      "Near-black ground, one coral accent, grey ink in three steps.",
+      "Physical keycaps with a bottom lip and a pressed state are the signature.",
+      "Real terminal output, set in mono, in a dark frame in both themes.",
+      "Hairline 1px rules carry structure; tonal raise, not shadow, separates surfaces.",
+      "Light and dark themes share every rule; only the token values change."
+    ],
+    "rules": [
+      {
+        "name": "The One Warm Key Rule",
+        "body": "Coral is the only chromatic colour outside a terminal frame. It marks what is pressable, focused or just done, never decoration or a section background.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dark Terminal Rule",
+        "body": "Terminal frames and the prompt box stay on `term` in both themes, because they show a terminal. Terminal colours never leak onto the page.",
+        "section": "colors"
+      },
+      {
+        "name": "The Mono Means Real Rule",
+        "body": "Mono is for things you press, type or would see in the product. Prose, headings and buttons that are page UI stay in Inter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Count Rule",
+        "body": "Numbers that are facts (star count, proof line) use `font-variant-numeric: tabular-nums`.",
+        "section": "typography"
+      },
+      {
+        "name": "The Only Lip Rule",
+        "body": "The solid offset lip belongs to keycaps. Cards, buttons and frames never get an offset or drop shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep coral the only chromatic accent on the page, and use it for pressable, focused and just-done states.",
+      "Do set keys, commands and product output in JetBrains Mono, and everything else in Inter.",
+      "Do show real product output: screenshots, recordings, and frames rendered by watch.py; label any illustration as one in its caption.",
+      "Do keep terminal frames and the prompt box dark (`term`) in both themes.",
+      "Do separate surfaces with 1px hairlines and the one-step `ground-raised` raise.",
+      "Do give every motion a reader trigger and a reduced-motion final state.",
+      "Do ship a narrow terminal frame under 640px instead of shrinking the wide one."
+    ],
+    "donts": [
+      "Don't use gradients, glow, or icon tiles.",
+      "Don't use stock photography or invented proof.",
+      "Don't give anything but a keycap an offset lip or drop shadow.",
+      "Don't use terminal colours outside terminal frames and the prompt box.",
+      "Don't set prose or headings in mono, or keys and commands in Inter."
+    ]
+  }
+}

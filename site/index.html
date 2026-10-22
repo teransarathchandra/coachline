@@ -3,292 +3,791 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>coachline · a prompt coach for Claude Code</title>
-<meta name="description" content="A side panel for Claude Code that shows what each prompt leaves out, hands you a better one, and learns which prompts cost you rework. On your own subscription, no API key.">
-<meta property="og:title" content="coachline · a prompt coach for Claude Code">
-<meta property="og:description" content="See what your prompt leaves out, put a better one in the box, and keep the prompts that worked.">
+<title>coachline · coach every prompt in Claude Code</title>
+<meta name="description" content="A Claude Code plugin that coaches each prompt beside the turn, not inside it: what the prompt leaves out, a sharper version in your prompt box, a hint as you type, and a library of prompts that worked. No API key.">
+<meta property="og:title" content="coachline · coach every prompt in Claude Code">
+<meta property="og:description" content="Beside the turn, not inside it. See what your prompt leaves out and put a sharper one in the box before you send.">
 <meta property="og:image" content="https://teransarathchandra.github.io/coachline/assets/social.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="dark light">
 <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  @font-face { font-family: "Inter"; src: url("fonts/Inter-Variable.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: "JetBrains Mono Full"; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: "JetBrains Mono Full"; src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
   :root {
-    --bg: #0b0b0f; --surface: #14141a; --raised: #1b1b23; --line: #26262f;
-    --text: #ededf0; --muted: #9a9aa6; --accent: #e8735a; --accent-ink: #0b0b0f; --mint: #6fd3a8;
-    --shadow: 0 30px 80px -30px rgba(0, 0, 0, .7);
-    --radius: 14px; --max: 1120px;
-    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ground: #0b0b0f; --ground-2: #111117; --line: #23232c; --line-2: #2e2e39;
+    --ink: #ececf1; --ink-2: #a3a3ae; --ink-3: #8a8a95;
+    --coral: #e8735a; --coral-ink: #0b0b0f;
+    --cap: #1a1a22; --cap-lip: #07070a; --cap-ink: #ececf1;
+    --term: #14141b; --term-line: #262631;
+    --max: 1180px; --gutter: 16px;
+    --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono Full", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ease: cubic-bezier(.16, 1, .3, 1);
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
-      --bg: #fbfaf8; --surface: #ffffff; --raised: #f3f1ee; --line: #e6e3de;
-      --text: #15151a; --muted: #5d5d68; --accent: #c4523a; --accent-ink: #ffffff; --mint: #1f8a5c;
-      --shadow: 0 30px 70px -35px rgba(30, 20, 10, .35);
+      --ground: #f7f6f3; --ground-2: #efede8; --line: #dedad3; --line-2: #cfcac1;
+      --ink: #131318; --ink-2: #4f4f59; --ink-3: #6b6b75;
+      --coral: #b4402a; --coral-ink: #ffffff;
+      --cap: #ffffff; --cap-lip: #c9c4ba; --cap-ink: #131318;
     }
   }
   :root[data-theme="light"] {
-    --bg: #fbfaf8; --surface: #ffffff; --raised: #f3f1ee; --line: #e6e3de;
-    --text: #15151a; --muted: #5d5d68; --accent: #c4523a; --accent-ink: #ffffff; --mint: #1f8a5c;
-    --shadow: 0 30px 70px -35px rgba(30, 20, 10, .35);
+    --ground: #f7f6f3; --ground-2: #efede8; --line: #dedad3; --line-2: #cfcac1;
+    --ink: #131318; --ink-2: #4f4f59; --ink-3: #6b6b75;
+    --coral: #b4402a; --coral-ink: #ffffff;
+    --cap: #ffffff; --cap-lip: #c9c4ba; --cap-ink: #131318;
   }
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
-  a { color: inherit; }
-  img { max-width: 100%; height: auto; display: block; }
-  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 16px; }
-  @media (min-width: 720px) { .wrap { padding: 0 32px; } }
+  @media (min-width: 720px) { :root { --gutter: 32px; } }
 
-  /* nav */
-  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(140%) blur(12px); background: color-mix(in srgb, var(--bg) 82%, transparent);
-        border-bottom: 1px solid var(--line); }
-  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 16px; }
-  .brand { display: flex; align-items: center; gap: 10px; font: 600 17px/1 var(--mono); text-decoration: none; letter-spacing: -.01em; }
-  .brand svg { width: 26px; height: 26px; }
-  .navlinks { display: flex; align-items: center; gap: 20px; font-size: 14px; color: var(--muted); }
-  .navlinks a { text-decoration: none; }
-  .navlinks a:hover { color: var(--text); }
-  .navlinks .hide-sm { display: none; }
-  @media (min-width: 720px) { .navlinks .hide-sm { display: inline; } }
-  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; font: 600 14px/1 var(--sans);
-         text-decoration: none; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
-  .btn:hover { border-color: color-mix(in srgb, var(--text) 30%, var(--line)); }
-  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-  .btn.primary:hover { filter: brightness(1.06); }
-  .btn:focus-visible, .copy:focus-visible, .theme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .theme { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; width: 34px; height: 34px; cursor: pointer; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 56px; scrollbar-color: var(--line-2) var(--ground); }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 400 1rem/1.6 var(--sans); -webkit-font-smoothing: antialiased;
+         text-rendering: optimizeLegibility; caret-color: var(--coral); }
+  ::selection { background: var(--coral); color: var(--coral-ink); }
+  a { color: inherit; text-decoration-color: var(--line-2); text-underline-offset: 3px; text-decoration-thickness: 1px; }
+  a:hover { text-decoration-color: var(--coral); }
+  :focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; border-radius: 4px; }
+  h2[tabindex]:focus { outline: none; }
+  img { max-width: 100%; height: auto; display: block; }
+  code, kbd, pre { font-family: var(--mono); }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 var(--gutter); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition-duration: 0s !important; animation: none !important; } }
+
+  .skip { position: absolute; left: 12px; top: -48px; z-index: 30; background: var(--coral); color: var(--coral-ink); padding: 10px 14px; border-radius: 6px; font-weight: 500; text-decoration: none; }
+  .skip:focus { top: 10px; }
+  /* top bar */
+  .bar { position: sticky; top: 0; z-index: 20; background: var(--ground); border-bottom: 1px solid var(--line); }
+  .bar .wrap { display: flex; align-items: center; gap: 16px; height: 56px; }
+  .mark { display: inline-flex; align-items: center; gap: 0.625rem; font: 500 1rem/1 var(--mono); text-decoration: none; color: var(--ink); }
+  .mark svg { width: 22px; height: 22px; flex: none; }
+  .bar nav { display: flex; gap: 1.375rem; margin-left: auto; font-size: 0.875rem; }
+  .bar nav a { text-decoration: none; color: var(--ink-2); }
+  .bar nav a:hover { color: var(--ink); }
+  .bar nav .wide { display: none; }
+  @media (min-width: 820px) { .bar nav .wide { display: inline; } }
+  .gh { display: inline-flex; align-items: center; gap: 0.5rem; font: 500 0.8125rem/1 var(--sans); color: var(--ink); text-decoration: none;
+        border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 10px; }
+  .gh svg { width: 15px; height: 15px; }
+  @media (max-width: 379px) { .ghl { display: none; } .bar .wrap { gap: 10px; } }
+  .gh .stars { font-variant-numeric: tabular-nums; color: var(--ink-2); border-left: 1px solid var(--line-2); padding-left: 8px; display: inline-flex; gap: 5px; align-items: center; }
+  .gh .stars[hidden] { display: none; }
+  .gh .stars svg { width: 12px; height: 12px; color: var(--coral); }
+  .theme { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: 6px; background: none; color: var(--ink-2); cursor: pointer; }
+  .theme svg { width: 15px; height: 15px; }
+  .theme:hover { color: var(--ink); }
 
   /* hero */
-  .hero { padding: 64px 0 40px; text-align: center; }
-  @media (min-width: 720px) { .hero { padding: 104px 0 56px; } }
-  .eyebrow { display: inline-flex; gap: 8px; align-items: center; font: 500 13px/1 var(--mono); color: var(--muted); border: 1px solid var(--line);
-             border-radius: 999px; padding: 7px 12px; background: var(--surface); }
-  .eyebrow b { color: var(--accent); font-weight: 600; }
-  h1 { font: 800 clamp(40px, 7vw, 76px)/1.02 var(--sans); letter-spacing: -.035em; margin: 22px auto 18px; max-width: 13ch; }
-  h1 em { font-style: normal; color: var(--accent); }
-  .lede { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
-  .install { display: inline-flex; flex-direction: column; gap: 8px; text-align: left; max-width: 100%; }
-  .cmd { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-         padding: 10px 10px 10px 14px; font: 14px/1.4 var(--mono); max-width: 100%; }
-  .cmd code { overflow-x: auto; white-space: nowrap; flex: 1; }
-  .cmd code::before { content: "› "; color: var(--accent); }
-  .copy { font: 600 12px/1 var(--sans); background: var(--raised); color: var(--muted); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; cursor: pointer; flex: none; }
-  .copy.done { color: var(--mint); }
-  .ctas { display: flex; gap: 12px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
-  .note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .hero { padding: 56px 0 0; }
+  @media (min-width: 900px) { .hero { padding: 96px 0 0; } }
+  .hero-grid { display: grid; gap: 40px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1000px) { .hero-grid { grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); column-gap: 64px; row-gap: 44px; align-items: end; }
+                               .hero-grid h1 { grid-column: 1 / -1; } }
+  h1 { font-size: clamp(2.5rem, 6vw, 4.625rem); font-weight: 600; line-height: 1; letter-spacing: -.045em; margin: 0; text-wrap: balance; }
+  h1 span { color: var(--ink-2); }
+  .lede { font-size: clamp(1.0625rem, 1.6vw, 1.1875rem); line-height: 1.55; color: var(--ink-2); max-width: 34em; margin: 0 0 30px; }
+  .lede strong { color: var(--ink); font-weight: 500; }
 
-  .shot { margin: 48px auto 0; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--surface); }
-  .glow { position: relative; }
-  .glow::before { content: ""; position: absolute; inset: 10% 15% auto; height: 60%; z-index: -1; filter: blur(80px); opacity: .35;
-                  background: radial-gradient(closest-side, var(--accent), transparent); }
+  .cmds { display: grid; gap: 8px; max-width: 560px; min-width: 0; }
+  .cmd { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--ground-2);
+         padding: 6px 6px 6px 14px; min-width: 0; }
+  .cmd code { flex: 1; min-width: 0; font-size: 0.875rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .cmd code .p { color: var(--coral); user-select: none; }
+  .copy { display: inline-flex; align-items: center; gap: 0.375rem; flex: none; font: 500 0.75rem/1 var(--sans); color: var(--ink-2); background: none;
+          border: 1px solid var(--line-2); border-radius: 6px; padding: 7px 9px; cursor: pointer; }
+  .copy svg { width: 13px; height: 13px; }
+  .copy:hover { color: var(--ink); border-color: var(--ink-3); }
+  .copy[data-done] { color: var(--coral); border-color: var(--coral); }
+  .after-cmds { display: flex; flex-wrap: wrap; gap: 0.375rem 1.25rem; margin-top: 1rem; font-size: 0.875rem; color: var(--ink-2); }
 
-  /* sections */
-  section { padding: 72px 0; border-top: 1px solid var(--line); }
-  h2 { font: 700 clamp(28px, 4vw, 40px)/1.12 var(--sans); letter-spacing: -.025em; margin: 0 0 12px; }
-  .sub { color: var(--muted); max-width: 620px; margin: 0 0 40px; font-size: 17px; }
-  .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
-  @media (min-width: 720px) { .grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1000px) { .grid.three { grid-template-columns: repeat(3, 1fr); } }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; min-width: 0; }
-  .card h3 { font: 650 18px/1.3 var(--sans); margin: 14px 0 8px; letter-spacing: -.01em; }
-  .card p { color: var(--muted); margin: 0; font-size: 15px; }
-  .card .sample { font: 13px/1.5 var(--mono); background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
-                  margin-top: 14px; color: var(--text); overflow-wrap: anywhere; }
-  .sample .a { color: var(--accent); }
-  .sample .m { color: var(--muted); }
-  .icon { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
-  .icon svg { width: 19px; height: 19px; }
-  .tag { font: 500 11px/1 var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; margin-left: 6px; vertical-align: 2px; }
+  /* keycaps */
+  .board { border: 1px solid var(--line); border-radius: 14px; padding: 22px 20px 18px; background: var(--ground-2); }
+  .board-head { display: flex; justify-content: space-between; gap: 0.75rem; font: 500 0.75rem/1.4 var(--mono); color: var(--ink-3); margin-bottom: 18px; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 12px; }
+  @media (min-width: 560px) and (max-width: 999px) { .keys { grid-template-columns: repeat(6, 1fr); } }
+  .key { display: grid; justify-items: center; gap: 0.625rem; text-decoration: none; color: var(--ink-2); font-size: 0.78125rem; line-height: 1.3; text-align: center; }
+  .cap { --s: 4rem; width: var(--s); height: var(--s); display: grid; place-items: center; border-radius: 0.625rem; font: 700 1.25rem/1 var(--mono); color: var(--cap-ink);
+         background: var(--cap); border: 1px solid var(--line-2);
+         box-shadow: 0 5px 0 var(--cap-lip), 0 8px 14px -6px rgba(0, 0, 0, .55); transform: translateY(0);
+         transition: transform .14s var(--ease), box-shadow .14s var(--ease), border-color .2s, color .2s; }
+  .cap svg { width: 22px; height: 22px; }
+  .cap.ghost { background: transparent; border-style: dashed; box-shadow: none; color: var(--ink-2); }
+  .key.down .cap.ghost { transform: scale(.94); box-shadow: none; }
+  .legend { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; justify-content: flex-end; }
+  .legend > span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 4px; border: 1px solid var(--line-2); background: var(--cap); box-shadow: 0 2px 0 var(--cap-lip); }
+  .sw.ghost { background: transparent; border-style: dashed; box-shadow: none; }
+  .key:hover .cap { border-color: var(--coral); }
+  .key.down .cap { transform: translateY(4px); box-shadow: 0 1px 0 var(--cap-lip), 0 2px 4px -2px rgba(0, 0, 0, .5); border-color: var(--coral); color: var(--coral); }
+  .key:focus-visible { outline: none; }
+  .key:focus-visible .cap { outline: 2px solid var(--coral); outline-offset: 3px; }
+  .board-foot { margin: 1.25rem 0 0; font-size: 0.8125rem; color: var(--ink-3); }
+  .hint-touch { display: none; }
+  @media (hover: none) { .hint-keys { display: none; } .hint-touch { display: inline; } }
+  .kbd-switch { font: inherit; color: var(--ink-2); background: none; border: 1px solid var(--line-2); border-radius: 4px; padding: 2px 7px; margin-left: 4px; cursor: pointer; }
+  .kbd-switch[aria-pressed="false"] { color: var(--ink-3); border-style: dashed; }
+  .board-foot kbd { font-size: 0.75rem; color: var(--ink-2); }
 
-  .steps { display: grid; gap: 40px; }
-  .step { display: grid; gap: 20px; align-items: center; }
-  @media (min-width: 900px) { .step { grid-template-columns: 5fr 7fr; gap: 48px; } .step:nth-child(even) .copytext { order: 2; } }
-  .num { font: 600 13px/1 var(--mono); color: var(--accent); }
-  .step h3 { font: 700 24px/1.2 var(--sans); letter-spacing: -.02em; margin: 10px 0 10px; }
-  .step p { color: var(--muted); margin: 0; }
-  .media { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: #1e1e2e; }
+  /* real screenshots */
+  .window { margin: 56px 0 0; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: #1e1e2e; }
+  figure { margin: 0; }
+  .hero-video { display: block; width: 100%; height: auto; aspect-ratio: 1120 / 688; }
+  .hero-still { display: none; }
+  @media (max-width: 639px) { .hero-video { display: none; } .hero-still { display: block; } .hero-media .playpause { display: none; } }
+  figcaption { max-width: 62ch; font-size: 0.8125rem; color: var(--ink-3); padding: 12px 2px 0; }
 
-  .surfaces { display: grid; gap: 16px; grid-template-columns: 1fr; }
-  @media (min-width: 820px) { .surfaces { grid-template-columns: 1fr 1fr; } }
-  .surfaces figure { margin: 0; }
-  .surfaces figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
-  .chip { font: 500 13px/1 var(--sans); border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 9px 14px; }
+  /* proof line */
+  .proof { margin-top: 48px; padding: 6px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .proof ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; }
+  @media (min-width: 900px) { .proof ul { display: flex; justify-content: space-between; } }
+  .proof li { padding: 1rem 0; font-size: 0.875rem; color: var(--ink-2); }
+  .proof li[hidden] { display: none; }
+  .proof li b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 
-  .privacy { display: grid; gap: 16px; grid-template-columns: 1fr; }
-  @media (min-width: 720px) { .privacy { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1000px) { .privacy { grid-template-columns: repeat(4, 1fr); } }
-  .privacy .card h3 { margin-top: 0; }
+  /* key sections */
+  .k { padding: 72px 0; border-bottom: 1px solid var(--line); }
+  .k-grid { display: grid; gap: 36px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 1000px) { .k-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 72px; align-items: start; } }
+  .k-head { display: flex; align-items: center; gap: 18px; margin: 0 0 18px; }
+  .k-cap { --s: 3.25rem; flex: none; }
+  .k h2 { font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 600; line-height: 1.08; letter-spacing: -.03em; margin: 0; text-wrap: balance; }
+  .k p { color: var(--ink-2); margin: 0 0 18px; max-width: 34em; }
+  .k ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.625rem; font-size: 0.9375rem; color: var(--ink-2); max-width: 34em; }
+  .k li { padding-left: 18px; position: relative; }
+  .k li::before { content: ""; position: absolute; left: 0; top: .78em; width: 8px; height: 1px; background: var(--coral); }
+  .k code { font-size: .9em; color: var(--ink); }
+  .optin { display: inline-block; font: 500 0.75rem/1 var(--mono); letter-spacing: 0; color: var(--coral); border: 1px solid var(--coral); border-radius: 4px; padding: 4px 6px; margin-left: 8px; vertical-align: .4em; }
 
-  .cta { text-align: center; }
-  footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: 14px; }
-  footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; }
-  footer a { text-decoration: none; }
-  footer a:hover { color: var(--text); }
+  /* every demo sits in one window chrome: what it is, and whether it is the product's real output */
+  .chrome { border: 1px solid var(--term-line); border-radius: 12px; overflow: hidden; background: var(--term); }
+  .chrome-bar { display: flex; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--term-line);
+                font: 500 0.75rem/1.3 var(--mono); color: #8b90a8; background: #17171f; }
+  .chrome-tag { color: #8b90a8; border: 1px dashed #3a3a48; border-radius: 4px; padding: 1px 6px; }
+  .chrome-tag.real { color: #e8735a; border: 1px solid rgba(232, 115, 90, .45); }
+  .chrome .term, .chrome .box { border: 0; border-radius: 0; }
+  /* the panel's own output */
+  .term { margin: 0; background: var(--term); color: #cdd6f4; border: 1px solid var(--term-line); border-radius: 12px; padding: 18px;
+          font: 400 0.71875rem/1.3 var(--mono); overflow-x: auto; white-space: pre; scrollbar-color: #333342 var(--term); }
+  @media (min-width: 30rem) { .term { font-size: 0.78125rem; } }
+  @media (min-width: 62.5rem) { .term { font-size: 0.78125rem; padding: 22px; } }
+  .term .b { font-weight: 700; } .term .dim { color: #8b90a8; } .term .w { color: #bac2de; } .term .wht { color: #ffffff; }
+  .term .blu { color: #89b4fa; } .term .cyn { color: #94e2d5; } .term .mag { color: #f5c2e7; } .term .grn { color: #a6e3a1; }
+  .term .ylw { color: #f9e2af; } .term .red { color: #f38ba8; } .term .y { color: #e8735a; } .term .rev { background: #cdd6f4; color: #14141b; }
+  .term .bg-bar { background: #2a2a36; } .term .bg-blu, .term .bg-blu2 { background: #3a5cc5; color: #fff; } .term .bg-red { background: #f38ba8; color: #14141b; }
+  .narrow-only { display: none; }
+  @media (max-width: 639px) { .wide-only { display: none; } .narrow-only { display: block; } }
+  .chrome:has(.term.flash) { animation: flash .9s var(--ease) 1; }
+  .term.flash { animation: flash .9s var(--ease) 1; }
+  @keyframes flash { from { border-color: var(--coral); box-shadow: 0 0 0 1px var(--coral); } to { border-color: var(--term-line); box-shadow: none; } }
+  .term.flash { animation: none; }
+
+  /* illustration of Claude Code's prompt box */
+  .box { background: var(--term); border: 0.0625rem solid var(--term-line); border-radius: 0.75rem; padding: 1.375rem; font: 400 0.875rem/1.6 var(--mono); color: #cdd6f4; }
+  .box .area { border: 1px solid #3a3a48; border-radius: 8px; padding: 12px 14px; min-height: 76px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .box .area .gt { color: #8b90a8; user-select: none; }
+  .box .area .ask { font-weight: 700; color: #ffffff; background: rgba(232, 115, 90, .24); border-radius: 4px; padding: 1px 3px; }
+  .box .area .caret { display: inline-block; width: 8px; height: 1.15em; vertical-align: -.2em; background: #e8735a; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .box .tail, .box .note, .box .sent { margin-top: 0.625rem; font-size: 0.8125rem; min-height: 1.6em; overflow-wrap: anywhere; }
+  .box .tail { color: #8b90a8; } .box .tail .m { color: #e8735a; } .box .tail .h { color: #bac2de; }
+  .box .note { color: #f9e2af; } .box .sent { color: #a6e3a1; }
+  .box [data-later] { transition: opacity .35s var(--ease); }
+  .box.playing [data-later] { opacity: 0; }
+
+  /* closing sections */
+  .hero-media .media-row figcaption { padding-top: 14px; }
+  .watch, .where, .private { padding: 80px 0; border-bottom: 1px solid var(--line); }
+  .watch h2, .where h2, .private h2, .close h2 { font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 600; line-height: 1.08; letter-spacing: -.03em; margin: 0 0 14px; }
+  .lead { color: var(--ink-2); margin: 0 0 32px; max-width: 40em; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
+  .tab { font: 500 0.875rem/1 var(--sans); color: var(--ink-2); background: none; border: 0; border-bottom: 2px solid transparent; padding: 12px 14px 13px; cursor: pointer; white-space: nowrap; margin-bottom: -1px; }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--coral); }
+  .tabpanel[hidden] { display: none; }
+  .tabpanel video { display: block; width: 100%; height: auto; aspect-ratio: 1120 / 688; border-radius: 12px; border: 1px solid var(--line-2); background: #1e1e2e; }
+  .media-row { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+  .playpause { font: inherit; font-size: .875rem; color: var(--ink-2); background: none; border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 10px; cursor: pointer; margin-top: 14px; }
+  .playpause:hover { color: var(--ink); }
+  .tabpanel p { max-width: 60ch; color: var(--ink-2); font-size: 0.9375rem; margin: 14px 0 0; max-width: 44em; }
+
+  .shots { display: grid; gap: 24px; }
+  @media (min-width: 820px) { .shots { grid-template-columns: 1fr 1fr; } }
+  .shots picture { display: block; }
+  .shots img { width: 100%; aspect-ratio: 5 / 4; object-fit: cover; object-position: top; border-radius: 12px; border: 1px solid var(--line-2); background: var(--ground-2);
+               }
+  .surfaces { margin: 1.75rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem 1.75rem; font-size: 0.875rem; color: var(--ink-2); }
+  .surfaces li { display: flex; gap: 8px; align-items: center; }
+  .surfaces li::before { content: ""; width: 6px; height: 6px; background: var(--coral); flex: none; }
+  .surfaces code { font-size: .9em; color: var(--ink); }
+
+  .private dl { margin: 0; display: grid; border-top: 1px solid var(--line); }
+  @media (min-width: 820px) { .private dl { grid-template-columns: 1fr 1fr; column-gap: 56px; } }
+  .private dl > div { padding: 22px 0; border-bottom: 1px solid var(--line); }
+  .private dt { font-weight: 500; margin-bottom: 6px; }
+  .private dd { margin: 0; color: var(--ink-2); font-size: 0.9375rem; }
+  .private dd code { font-size: .9em; color: var(--ink); }
+
+  .close { padding: 104px 0 96px; }
+  .close-grid { display: grid; gap: 32px; }
+  @media (min-width: 1000px) { .close-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: end; } }
+  .close p { color: var(--ink-2); margin: 0; max-width: 32em; }
+  .links { display: flex; flex-wrap: wrap; gap: 0.5rem 1.375rem; margin-top: 1.125rem; font-size: 0.875rem; }
+
+  footer { border-top: 0.0625rem solid var(--line); padding: 1.75rem 0 2.5rem; font-size: 0.8125rem; color: var(--ink-3); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; }
+  footer a { color: var(--ink-2); text-decoration: none; display: inline-block; padding: 4px 0; }
+  .after-cmds a, .links a { display: inline-block; padding: 3px 0; }
+  @media (pointer: coarse) {
+    .theme { width: 44px; height: 44px; } .gh { min-height: 44px; } .copy { min-height: 40px; padding: 0 12px; }
+    .tab { padding: 15px 14px 16px; } .mark { min-height: 44px; }
+  }
+  footer a:hover { color: var(--ink); }
 </style>
 </head>
 <body>
-<nav>
+<a class="skip" href="#top">Skip to the content</a>
+<header class="bar">
   <div class="wrap">
-    <a class="brand" href="#" aria-label="coachline home">
+    <a class="mark" href="#top" aria-label="coachline, back to the top">
       <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#E8735A"/><path d="M10 10l7 6-7 6" fill="none" stroke="#0B0B0F" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 22h5" stroke="#0B0B0F" stroke-width="3" stroke-linecap="round"/></svg>
       coachline
     </a>
-    <div class="navlinks">
-      <a class="hide-sm" href="#features">Features</a>
-      <a class="hide-sm" href="#how">How it works</a>
-      <a class="hide-sm" href="#privacy">Privacy</a>
-      <button class="theme" id="theme" aria-label="Switch light or dark theme" title="Light or dark">◐</button>
-      <a class="btn" href="https://github.com/teransarathchandra/coachline">GitHub</a>
-    </div>
-  </div>
-</nav>
-
-<header class="hero">
-  <div class="wrap">
-    <span class="eyebrow"><b>●</b> A plugin for Claude Code · no API key</span>
-    <h1>Every prompt, <em>coached</em>.</h1>
-    <p class="lede">coachline sits beside Claude Code. It shows what each prompt leaves out, puts a sharper one in your prompt box, and learns which prompts cost you rework. Claude does the analysis on your own subscription.</p>
-    <div class="install">
-      <div class="cmd"><code>/plugin marketplace add teransarathchandra/coachline</code><button class="copy" data-copy="/plugin marketplace add teransarathchandra/coachline">Copy</button></div>
-      <div class="cmd"><code>/plugin install coachline@coachline</code><button class="copy" data-copy="/plugin install coachline@coachline">Copy</button></div>
-    </div>
-    <div class="ctas">
-      <a class="btn primary" href="https://github.com/teransarathchandra/coachline#install">Install guide</a>
-      <a class="btn" href="#how">See it work</a>
-    </div>
-    <p class="note">macOS · Linux · Windows · the Claude desktop app · VS Code, Cursor, Windsurf · Python 3.9+</p>
-    <div class="glow">
-      <div class="shot"><img src="assets/screenshot.png" alt="Claude Code with the coachline panel beside it: your prompt, what to improve, and the enhanced prompt, each in its own card" width="2800" height="1720"></div>
-    </div>
+    <nav aria-label="Sections">
+      <a class="wide" href="#keys">Keys</a>
+      <a class="wide" href="#watch">Watch it work</a>
+      <a class="wide" href="#private">Privacy</a>
+      <a class="wide" href="https://github.com/teransarathchandra/coachline/blob/main/docs/usage.md">Docs</a>
+    </nav>
+    <button class="theme" id="theme" type="button" aria-label="Switch between light and dark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <a class="gh" href="https://github.com/teransarathchandra/coachline">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      <span class="ghl">GitHub</span>
+      <span class="stars" id="stars" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span id="star-count"></span><span class="sr"> stars on GitHub</span></span>
+    </a>
   </div>
 </header>
 
-<section id="features">
+<main id="top">
+<section class="hero" aria-labelledby="h-top">
   <div class="wrap">
-    <h2>Better prompts, without leaving the prompt box</h2>
-    <p class="sub">Everything happens next to the conversation you are already in. Nothing to open, nothing to paste into another tool.</p>
-    <div class="grid three">
-      <article class="card">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h12M12 6l6 6-6 6"/></svg></div>
-        <h3>An enhanced prompt, one press away</h3>
-        <p><b>Use</b> puts it in your prompt box with the gaps only you can fill marked in bold. You edit, you send. Nothing is sent for you.</p>
-        <div class="sample">Fix login in <span class="a">[ASK: which file?]</span> · done when tests pass</div>
-      </article>
-      <article class="card">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18h16M4 12h10M4 6h6"/></svg></div>
-        <h3>A hint as you type</h3>
-        <p>Pause, and the line under the box says how concrete your draft is and the one thing it lacks most. Worked out on your machine.</p>
-        <div class="sample"><span class="m">fix it now please</span>  <span class="a">▰▱▱▱▱</span>  name a file, function or error</div>
-      </article>
-      <article class="card">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg></div>
-        <h3>Skills, tools and docs for the task</h3>
-        <p>For something new, it names the skills and plugins you already have that fit, then finds tools and reference docs on the web. Every link is checked before you see it.</p>
-      </article>
-      <article class="card">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></svg></div>
-        <h3>Evidence, not opinions</h3>
-        <p>It notes when you stop a turn or say "no, I meant…", and shows how often vague prompts led to rework compared with concrete ones.</p>
-        <div class="sample">Vague prompts led to rework <span class="a">4 of 9</span> times; concrete ones 1 of 12</div>
-      </article>
-      <article class="card">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg></div>
-        <h3>A library of prompts that worked</h3>
-        <p>A prompt that worked first time is kept. Type something like it later and you are told so; the Library puts it back in the box.</p>
-        <div class="sample"><span class="a">↻</span> similar prompt worked before</div>
-      </article>
-      <article class="card">
-        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
-        <h3>Hold, if you want it <span class="tag">opt-in</span></h3>
-        <p>Turn it on and a clearly vague prompt stops at Enter with what it lacks, back in the box. Enter again sends it as is.</p>
-      </article>
-    </div>
-  </div>
-</section>
+    <div class="hero-grid">
+      <h1 id="h-top">Coach every prompt.<br><span>Beside the turn, not inside it.</span></h1>
+      <div>
+        <p class="lede">coachline is a <strong>Claude Code plugin</strong>. A panel beside your conversation shows what each prompt leaves out and hands you a sharper one, which you can put straight into the prompt box. Other prompt tools slip hidden instructions into Claude's turn; coachline shows you the fix before you send. It runs on your own Claude subscription, with no API key.</p>
+        <div class="cmds" aria-label="Install in Claude Code">
+          <div class="cmd"><code><span class="p">&gt; </span>/plugin marketplace add teransarathchandra/coachline</code><button class="copy" type="button" data-copy="/plugin marketplace add teransarathchandra/coachline" aria-label="Copy the marketplace command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>Copy</span></button></div>
+          <div class="cmd"><code><span class="p">&gt; </span>/plugin install coachline@coachline</code><button class="copy" type="button" data-copy="/plugin install coachline@coachline" aria-label="Copy the install command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>Copy</span></button></div>
+        </div>
+        <div class="after-cmds"><span>Paste both into Claude Code. The panel opens at once.</span><a href="https://github.com/teransarathchandra/coachline#install">Per-platform setup</a></div>
+      </div>
 
-<section id="how">
-  <div class="wrap">
-    <h2>How it works</h2>
-    <p class="sub">Two commands, then keep working the way you do.</p>
-    <div class="steps">
-      <div class="step">
-        <div class="copytext"><span class="num">01</span><h3>Install, and the panel opens</h3><p>In Claude Code, add the marketplace and install. The panel opens beside the conversation at once: no restart, no API key.</p></div>
-        <div class="media"><img src="assets/install.gif" alt="Installing coachline in Claude Code; the panel opens on the right" loading="lazy"></div>
-      </div>
-      <div class="step">
-        <div class="copytext"><span class="num">02</span><h3>Send a prompt, see it coached</h3><p>While Claude works on it, the panel shows what to improve and an enhanced prompt, with [ASK] where only you know the answer.</p></div>
-        <div class="media"><img src="assets/prompt.gif" alt="A vague prompt gets tips and an enhanced prompt in the panel" loading="lazy"></div>
-      </div>
-      <div class="step">
-        <div class="copytext"><span class="num">03</span><h3>Start something new, get the right tools</h3><p>Skills you already have that fit, then tools, docs and reference sites from the web, each one checked first.</p></div>
-        <div class="media"><img src="assets/website.gif" alt="A shoe store website prompt gets a skill to use and verified web finds" loading="lazy"></div>
+      <div class="board" id="keys" role="group" aria-label="coachline's keys">
+        <div class="board-head"><span>coachline</span><span class="legend"><span><i class="sw"></i>a key in the panel</span><span><i class="sw ghost"></i>happens in Claude Code</span></span></div>
+        <div class="keys">
+          <a class="key" href="#k-h" data-key="h"><span class="cap ghost" aria-hidden="true">H</span>the hint, as you type</a>
+          <a class="key" href="#k-enter" data-key="Enter"><span class="cap ghost" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 6v5a3 3 0 0 1-3 3H6"/><path d="M10 10l-4 4 4 4"/></svg></span>hold, at your Enter</a>
+          <a class="key" href="#k-e" data-key="e"><span class="cap" aria-hidden="true">E</span>analyse</a>
+          <a class="key" href="#k-u" data-key="u"><span class="cap ghost" aria-hidden="true">U</span>the Use button</a>
+          <a class="key" href="#k-c" data-key="c"><span class="cap" aria-hidden="true">C</span>copy it</a>
+          <a class="key" href="#k-l" data-key="l"><span class="cap" aria-hidden="true">L</span>the Library</a>
+        </div>
+        <p class="board-foot"><span class="hint-keys">On this page, press <kbd>H</kbd> <kbd>E</kbd> <kbd>U</kbd> <kbd>C</kbd> <kbd>L</kbd> or <kbd>Enter</kbd> to jump to each. <button class="kbd-switch" id="kbd-switch" type="button" aria-pressed="true">Shortcuts on</button></span><span class="hint-touch">Tap a key to see what it does.</span></p>
       </div>
     </div>
-  </div>
-</section>
 
-<section>
-  <div class="wrap">
-    <h2>Wherever you run Claude Code</h2>
-    <p class="sub">The pane takes on the look of where it opens: your terminal, the desktop app, or your editor's theme, light or dark.</p>
-    <div class="surfaces">
-      <figure><div class="media"><img src="assets/desktop.png" alt="The coachline pane in the Claude desktop app, light and dark" loading="lazy"></div><figcaption>The Claude desktop app, macOS and Windows</figcaption></figure>
-      <figure><div class="media"><img src="assets/editor.png" alt="The coachline pane beside Claude Code in VS Code" loading="lazy"></div><figcaption>VS Code, Cursor, Windsurf and Antigravity</figcaption></figure>
-    </div>
-    <div class="chips"><span class="chip">macOS &amp; Linux terminal</span><span class="chip">Windows Terminal</span><span class="chip">Claude desktop app</span><span class="chip">VS Code · Cursor · Windsurf</span><span class="chip">JetBrains · any terminal</span></div>
-  </div>
-</section>
+    <figure class="hero-media">
+      <div class="window">
+        <video class="hero-video" src="assets/prompt.mp4" poster="assets/screenshot.webp" muted loop playsinline preload="metadata" width="1120" height="688"
+               aria-label="Claude Code with the coachline pane: a vague prompt about a login bug gets tips and an enhanced prompt"></video>
+        <div class="hero-still"><picture><source media="(max-width: 639px)" srcset="assets/screenshot-pane.webp" type="image/webp" width="1272" height="1488"><source media="(max-width: 639px)" srcset="assets/screenshot-pane.png" width="1272" height="1488"><source srcset="assets/screenshot.webp" type="image/webp"><img fetchpriority="high" src="assets/screenshot.png" alt="Claude Code in a terminal with the coachline pane on the right: the prompt, what to improve, and the enhanced prompt" width="2800" height="1720"></picture></div>
+      </div>
+      <div class="media-row"><figcaption>A vague prompt in Claude Code, and the coachline pane beside it. Recorded on macOS.</figcaption><button class="playpause" type="button" data-for="hero">Pause</button></div>
+    </figure>
 
-<section id="privacy">
-  <div class="wrap">
-    <h2>Private by design</h2>
-    <p class="sub">Your prompts are yours. Here is exactly what happens to them.</p>
-    <div class="privacy">
-      <article class="card"><h3>No API key</h3><p>Claude runs through your own Claude Code login. No telemetry.</p></article>
-      <article class="card"><h3>Redacted first</h3><p>Emails, keys and tokens are removed before anything is sent. Keep a project out entirely with llm-off.txt.</p></article>
-      <article class="card"><h3>Checked on your machine</h3><p>Counts are recomputed, skill names must exist, and every link must load before you see it.</p></article>
-      <article class="card"><h3>Gone in one command</h3><p>/coach forget deletes what it learned; /coach panel-ai off keeps only the local hints.</p></article>
+    <div class="proof">
+      <ul aria-label="Facts">
+        <li><b>MIT</b> open source</li>
+        <li><b>0</b> dependencies</li>
+        <li>Tested on <b>macOS, Linux, Windows</b></li>
+        <li>Python <b>3.9+</b> · CI on 3.9 and 3.13</li>
+      </ul>
     </div>
   </div>
 </section>
 
-<section class="cta">
+<section class="k" id="k-h" aria-labelledby="h-h">
+  <div class="wrap k-grid">
+    <div class="k-copy">
+      <div class="k-head"><span class="cap ghost k-cap" aria-hidden="true">H</span>
+      <h2 id="h-h" tabindex="-1">A hint while you type</h2></div>
+      <p>Pause, and the line under Claude Code's prompt box shows how concrete your draft is, and the one thing it lacks most.</p>
+      <ul>
+        <li>Worked out on your machine. The draft is never sent anywhere.</li>
+        <li>New to Claude Code? Hints also say why, until you have 50 prompts behind you.</li>
+        <li>Off with <code>/coach hints off</code>.</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="chrome"><div class="chrome-bar"><span>Claude Code · prompt box</span><span class="chrome-tag">illustration</span></div><div class="box" data-demo="hint">
+        <div class="area"><span class="gt">&gt; </span><span data-type>fix it now please</span><span class="caret" aria-hidden="true"></span></div>
+        <div class="tail" data-later>· <span class="m">▰▱▱▱▱</span>  <span class="h">name a file, function, error or number</span></div>
+      </div></div>
+      <figcaption>coachline draws the hint in Claude Code's own line, under the box.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="k" id="k-enter" aria-labelledby="h-enter">
+  <div class="wrap k-grid">
+    <div class="k-copy">
+      <div class="k-head"><span class="cap ghost k-cap" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 6v5a3 3 0 0 1-3 3H6"/><path d="M10 10l-4 4 4 4"/></svg></span>
+      <h2 id="h-enter" tabindex="-1">Hold a vague prompt at Enter<span class="optin">opt-in</span></h2></div>
+      <p>Turn on <code>/coach hold on</code> and a clearly vague prompt stops at Enter. The reason shows, and your text stays in the box.</p>
+      <ul>
+        <li>Enter again within 30 seconds sends it as is.</li>
+        <li>Enter is never slowed: it only holds what the hint has already judged.</li>
+        <li>Off by default.</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="chrome"><div class="chrome-bar"><span>Claude Code · prompt box</span><span class="chrome-tag">illustration</span></div><div class="box" data-demo="hold">
+        <div class="area"><span class="gt">&gt; </span><span data-type>clean this up properly</span><span class="caret" aria-hidden="true"></span></div>
+        <div class="note" data-later>coachline held this: replace 'best/properly/clean' with a rule you can check. Press Enter again to send it as is</div>
+      </div></div>
+      <figcaption>With <code>/coach hold on</code>, a vague prompt waits for a second Enter.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="k" id="k-e" aria-labelledby="h-e">
+  <div class="wrap k-grid">
+    <div class="k-copy">
+      <div class="k-head"><span class="cap k-cap" aria-hidden="true">E</span>
+      <h2 id="h-e" tabindex="-1">Claude's read of your prompt, beside the turn</h2></div>
+      <p>While Claude works on your prompt, coachline asks Claude separately, on your subscription, what the prompt leaves out.</p>
+      <ul>
+        <li>Concrete tips, and the skills and plugins you already have that fit.</li>
+        <li>An enhanced prompt, with <code>[ASK: …]</code> where only you know the answer.</li>
+        <li>For something new: tools, docs and reference sites from the web, each link checked first.</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="chrome"><div class="chrome-bar"><span>coachline · standalone panel</span><span class="chrome-tag real">rendered output</span></div><pre class="term wide-only" data-demo="frame" aria-label="The coachline panel showing what to improve in a vague prompt"><!-- frame:analyse --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar w"> · this thread · 4 prompts</span><span class="bg-bar">                        </span><span class="bg-bar grn">● Claude on </span>
+
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">18:39 · ✓ analysed · earlier prompt, G = newest · …</span> <span class="wht">─╮</span>
+ <span class="wht">│</span> <span class="b wht">fix the login bug, users can&#x27;t sign in</span>                               <span class="wht">│</span>
+ <span class="wht">╰──────────────────────────────────────────────────────────────────────╯</span>
+ <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">────────────────────────────────────────────────</span> <span class="dim">debugging</span> <span class="blu">─╮</span>
+ <span class="blu">│</span> <span class="dim">a login failure with no details</span>                                      <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Paste the error and the steps that trigger it.</span>                     <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Name the file or route, e.g. src/auth/login.ts.</span>                    <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Say what fixed means: a test that fails now and passes after.</span>      <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• use /systematic-debugging: find the cause before changing code</span>     <span class="blu">│</span>
+ <span class="blu">╰──────────────────────────────────────────────────────────────────────╯</span>
+ <span class="cyn">╭─ </span><span class="b cyn">Enhanced prompt</span> <span class="cyn">─────────────────────────────────────────</span> <span class="b wht bg-blu"> c Copy </span> <span class="cyn">─╮</span>
+ <span class="cyn">│</span> <span class="cyn">Fix the login bug: [ASK: what happens, e.g. the error or status</span>      <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">code] when [ASK: the steps that trigger it].</span>                         <span class="cyn">│</span>
+ <span class="cyn">│</span>                                                                      <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">Find the cause in [ASK: the file or route, e.g. src/auth/login.ts]</span>   <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">before changing anything, then write a test that fails now.</span>          <span class="cyn">│</span>
+ <span class="cyn">│</span>                                                                      <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">Done when: that test passes and the existing auth tests still pass.</span>  <span class="cyn">│</span>
+ <span class="cyn">╰──────────────────────────────────────────────────────────────────────╯</span>
+<span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
+<span class="blu"> 2 patterns from your past chats · i to read · s installs a skill</span>
+<span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
+<span class="dim"> Prompts in this thread   ▾</span>
+   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the product page
+<span class="rev"> › ✓ 18:39  fix the login bug, users can&#x27;t sign in                       </span>
+   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more premium
+<span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">prompt</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">e</span><span class="bg-bar"> </span><span class="bg-bar w">analyse</span><span class="bg-bar">  </span><span class="bg-bar b wht">Enter</span><span class="bg-bar"> </span><span class="bg-bar w">full</span><span class="bg-bar">  </span><span class="bg-bar b wht">i</span><span class="bg-bar"> </span><span class="bg-bar w">patterns</span><span class="bg-bar">  </span><span class="bg-bar b wht">s</span><span class="bg-bar"> </span><span class="bg-bar w">skill</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">   </span><!-- /frame --></pre>
+      <pre class="term narrow-only" data-demo="frame" aria-label="The coachline panel showing what to improve in a vague prompt"><!-- frame:analyse-narrow --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar">                    </span><span class="bg-bar grn">● Claude on </span>
+
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">18:39 · ✓ analysed ·…</span> <span class="wht">─╮</span>
+ <span class="wht">│</span> <span class="b wht">fix the login bug, users can&#x27;t sign in</span> <span class="wht">│</span>
+ <span class="wht">╰────────────────────────────────────────╯</span>
+ <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">──────────────────</span> <span class="dim">debugging</span> <span class="blu">─╮</span>
+ <span class="blu">│</span> <span class="dim">a login failure with no details</span>        <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Paste the error and the steps that</span>   <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">  trigger it.</span>                          <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Name the file or route, e.g.</span>         <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">  src/auth/login.ts.</span>                   <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Say what fixed means: a test that</span>    <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">  fails now and passes after.</span>          <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• use /systematic-debugging: find the</span>  <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">  cause before changing code</span>           <span class="blu">│</span>
+ <span class="blu">╰────────────────────────────────────────╯</span>
+ <span class="cyn">╭─ </span><span class="b cyn">Enhanced prompt</span> <span class="cyn">───────────</span> <span class="b wht bg-blu"> c Copy </span> <span class="cyn">─╮</span>
+ <span class="cyn">│</span> <span class="cyn">Fix the login bug: [ASK: what happens,</span> <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">e.g. the error or status code] when</span>    <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">[ASK: the steps that trigger it].</span>      <span class="cyn">│</span>
+ <span class="cyn">│</span>                                        <span class="cyn">│</span>
+ <span class="cyn">╰─ </span><span class="dim">▾ PgDn for more</span> <span class="cyn">──────────────────────╯</span>
+<span class="dim"> ─────────────────────────────────────────</span>
+<span class="blu"> 2 patterns from your past chats · i to re…</span>
+<span class="dim"> ─────────────────────────────────────────</span>
+<span class="dim"> Prompts in this thread   ▾</span>
+   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the produ…
+<span class="rev"> › ✓ 18:39  fix the login bug, users can&#x27;t…</span>
+<span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">prompt</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">e</span><span class="bg-bar"> </span><span class="bg-bar w">analyse</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">      </span><!-- /frame --></pre></div>
+      <figcaption>Rendered by coachline's own code, with made-up chats.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="k" id="k-u" aria-labelledby="h-u">
+  <div class="wrap k-grid">
+    <div class="k-copy">
+      <div class="k-head"><span class="cap ghost k-cap" aria-hidden="true">U</span>
+      <h2 id="h-u" tabindex="-1">Use puts it in your prompt box</h2></div>
+      <p>One press and the enhanced prompt replaces your draft, its gaps in bold. You fill them in and send it yourself.</p>
+      <ul>
+        <li>Nothing is ever sent for you.</li>
+        <li>A draft already in the box is replaced only on a second press.</li>
+        <li>In the Claude Code pane, the desktop app and your editor.</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="chrome"><div class="chrome-bar"><span>Claude Code · prompt box</span><span class="chrome-tag">illustration</span></div><div class="box" data-demo="use">
+        <div class="area"><span class="gt">&gt; </span><span>Fix the login bug in src/auth/login.ts: <span class="ask">[ASK: which error do users see?]</span>. Find the cause before changing code. Done when the login test fails now and passes after.</span><span class="caret" aria-hidden="true"></span></div>
+        <div class="sent" data-later>in your prompt box: fill the [ASK] parts, then send</div>
+      </div></div>
+      <figcaption>The enhanced prompt, in your box, waiting for your answers.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="k" id="k-c" aria-labelledby="h-c">
+  <div class="wrap k-grid">
+    <div class="k-copy">
+      <div class="k-head"><span class="cap k-cap" aria-hidden="true">C</span>
+      <h2 id="h-c" tabindex="-1">Copy it, anywhere</h2></div>
+      <p>The standalone panel runs beside any terminal: Windows Terminal, or <code>/coach watch</code>. There, <code>c</code> copies the enhanced prompt to paste into Claude Code.</p>
+      <ul>
+        <li>The arrow keys move through every prompt of the conversation.</li>
+        <li><code>i</code> shows habits Claude spotted in your history, and <code>s</code> turns a repeated request into a skill.</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="chrome"><div class="chrome-bar"><span>coachline · standalone panel</span><span class="chrome-tag real">rendered output</span></div><pre class="term wide-only" data-demo="frame" aria-label="The coachline panel after copying an enhanced prompt"><!-- frame:copy --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar w"> · this thread · 4 prompts</span><span class="bg-bar">                        </span><span class="bg-bar grn">● Claude on </span>
+
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">───────────────────────────</span> <span class="dim">18:57 · ✓ analysed · </span><span style="color:#e8735a">▰▱▱▱▱</span> <span class="wht">─╮</span>
+ <span class="wht">│</span> <span class="b wht">commit this and open a pr with a good description</span>                    <span class="wht">│</span>
+ <span class="wht">╰──────────────────────────────────────────────────────────────────────╯</span>
+ <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">──────────────────────────────────────────────────────</span> <span class="dim">git</span> <span class="blu">─╮</span>
+ <span class="blu">│</span> <span class="dim">commit and pull request</span>                                              <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Say which changes belong in this commit.</span>                           <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Name the base branch and any reviewers.</span>                            <span class="blu">│</span>
+ <span class="blu">╰──────────────────────────────────────────────────────────────────────╯</span>
+ <span class="cyn">╭─ </span><span class="b cyn">Enhanced prompt</span> <span class="cyn">───────────────────────────────────────</span> <span class="b wht bg-blu"> ✓ Copied </span> <span class="cyn">─╮</span>
+ <span class="cyn">│</span> <span class="cyn">Commit the size picker changes only (not the styling work) with a</span>    <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">conventional commit message, push the branch and open a PR against</span>   <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">main.</span>                                                                <span class="cyn">│</span>
+ <span class="cyn">│</span>                                                                      <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">The PR description says what changed, why, and how it was tested.</span>    <span class="cyn">│</span>
+ <span class="cyn">╰──────────────────────────────────────────────────────────────────────╯</span>
+<span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
+<span class="blu"> 2 patterns from your past chats · i to read · s installs a skill</span>
+<span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
+<span class="dim"> Prompts in this thread    </span>
+   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the product page
+   <span class="grn">✓</span> <span class="dim">18:39  </span>fix the login bug, users can&#x27;t sign in
+   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more premium
+<span class="rev"> › ✓ 18:57  commit this and open a pr with a good description            </span>
+<span class="bg-bar"> </span><span class="bg-bar grn">✓ copied the enhanced prompt (205 characters) via pbcopy</span><span class="bg-bar">                </span><!-- /frame --></pre>
+      <pre class="term narrow-only" data-demo="frame" aria-label="The coachline panel after copying an enhanced prompt"><!-- frame:copy-narrow --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar">                    </span><span class="bg-bar grn">● Claude on </span>
+
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">18:57 · ✓ analysed ·…</span> <span class="wht">─╮</span>
+ <span class="wht">│</span> <span class="b wht">commit this and open a pr with a good</span>  <span class="wht">│</span>
+ <span class="wht">│</span> <span class="b wht">description</span>                            <span class="wht">│</span>
+ <span class="wht">╰────────────────────────────────────────╯</span>
+ <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">────────────────────────</span> <span class="dim">git</span> <span class="blu">─╮</span>
+ <span class="blu">│</span> <span class="dim">commit and pull request</span>                <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Say which changes belong in this</span>     <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">  commit.</span>                              <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">• Name the base branch and any</span>         <span class="blu">│</span>
+ <span class="blu">│</span> <span class="blu">  reviewers.</span>                           <span class="blu">│</span>
+ <span class="blu">╰────────────────────────────────────────╯</span>
+ <span class="cyn">╭─ </span><span class="b cyn">Enhanced prompt</span> <span class="cyn">─────────</span> <span class="b wht bg-blu"> ✓ Copied </span> <span class="cyn">─╮</span>
+ <span class="cyn">│</span> <span class="cyn">Commit the size picker changes only</span>    <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">(not the styling work) with a</span>          <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">conventional commit message, push the</span>  <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">branch and open a PR against main.</span>     <span class="cyn">│</span>
+ <span class="cyn">│</span>                                        <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">The PR description says what changed,</span>  <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">why, and how it was tested.</span>            <span class="cyn">│</span>
+ <span class="cyn">╰────────────────────────────────────────╯</span>
+<span class="dim"> ─────────────────────────────────────────</span>
+<span class="blu"> 2 patterns from your past chats · i to re…</span>
+<span class="dim"> ─────────────────────────────────────────</span>
+<span class="dim"> Prompts in this thread  ▴ </span>
+   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more p…
+<span class="rev"> › ✓ 18:57  commit this and open a pr with…</span>
+<span class="bg-bar"> </span><span class="bg-bar grn">✓ copied the enhanced prompt (205 charact…</span><!-- /frame --></pre></div>
+      <figcaption>Rendered by coachline's own code, with made-up chats.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="k" id="k-l" aria-labelledby="h-l">
+  <div class="wrap k-grid">
+    <div class="k-copy">
+      <div class="k-head"><span class="cap k-cap" aria-hidden="true">L</span>
+      <h2 id="h-l" tabindex="-1">Keep the prompts that worked</h2></div>
+      <p>When a prompt's turn finishes and your next two prompts don't correct it, it's kept, redacted, on your machine.</p>
+      <ul>
+        <li>Type something like it later and the hint says <code>similar prompt worked before</code>.</li>
+        <li>The Library puts it back in the box, or copies it.</li>
+        <li>coachline also notes when you stop a turn or say "no, I meant…", and shows how often vague prompts led to rework.</li>
+      </ul>
+    </div>
+    <figure>
+      <div class="chrome"><div class="chrome-bar"><span>coachline · standalone panel</span><span class="chrome-tag real">rendered output</span></div><pre class="term wide-only" data-demo="frame" aria-label="The coachline Library with three saved prompts"><!-- frame:library --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar w"> · this thread · 4 prompts</span><span class="bg-bar">                        </span><span class="bg-bar grn">● Claude on </span>
+
+ <span class="cyn">╭─ </span><span class="b cyn">Library</span> <span class="cyn">───────────</span> <span class="dim">3 saved in this project · c copies · x forgets</span> <span class="cyn">─╮</span>
+ <span class="cyn">│</span> <span class="dim">  add pagination to the orders table with 25 rows per page, keep the</span> <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  current sort, done when the orders e2e test passes</span>                 <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">› write a migration that adds an index on events.created_at in</span>       <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">  postgres and show the query plan before and after</span>                  <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  fix the flaky checkout test in tests/checkout.spec.ts: find why it</span> <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  times out on CI, no retries, done when it passes 10 runs</span>           <span class="cyn">│</span>
+ <span class="cyn">╰──────────────────────────────────────────────────────────────────────╯</span>
+<span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
+<span class="blu"> 2 patterns from your past chats · i to read · s installs a skill</span>
+<span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
+<span class="dim"> Prompts in this thread    </span>
+   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the product page
+   <span class="grn">✓</span> <span class="dim">18:39  </span>fix the login bug, users can&#x27;t sign in
+   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more premium
+<span class="rev"> › ✓ 18:57  commit this and open a pr with a good description            </span>
+<span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">choose</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">x</span><span class="bg-bar"> </span><span class="bg-bar w">forget</span><span class="bg-bar">  </span><span class="bg-bar b wht">l</span><span class="bg-bar"> </span><span class="bg-bar w">back</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">                             </span><!-- /frame --></pre>
+      <pre class="term narrow-only" data-demo="frame" aria-label="The coachline Library with three saved prompts"><!-- frame:library-narrow --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar">                    </span><span class="bg-bar grn">● Claude on </span>
+
+ <span class="cyn">╭─ </span><span class="b cyn">Library</span> <span class="cyn">──</span> <span class="dim">3 saved in this project …</span> <span class="cyn">─╮</span>
+ <span class="cyn">│</span> <span class="dim">  add pagination to the orders table</span>   <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  with 25 rows per page, keep the</span>      <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  current sort, done when the orders</span>   <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  e2e test passes</span>                      <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">› write a migration that adds an index</span> <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">  on events.created_at in postgres and</span> <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="cyn">  show the query plan before and after</span> <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  fix the flaky checkout test in</span>       <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  tests/checkout.spec.ts: find why it</span>  <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  times out on CI, no retries, done</span>    <span class="cyn">│</span>
+ <span class="cyn">│</span> <span class="dim">  when it passes 10 runs</span>               <span class="cyn">│</span>
+ <span class="cyn">╰────────────────────────────────────────╯</span>
+<span class="dim"> ─────────────────────────────────────────</span>
+<span class="blu"> 2 patterns from your past chats · i to re…</span>
+<span class="dim"> ─────────────────────────────────────────</span>
+<span class="dim"> Prompts in this thread    </span>
+   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the produ…
+   <span class="grn">✓</span> <span class="dim">18:39  </span>fix the login bug, users can&#x27;t…
+   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more p…
+<span class="rev"> › ✓ 18:57  commit this and open a pr with…</span>
+<span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">choose</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">l</span><span class="bg-bar"> </span><span class="bg-bar w">back</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">         </span><!-- /frame --></pre></div>
+      <figcaption>Rendered by coachline's own code, with made-up prompts.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="watch" id="watch" aria-labelledby="h-watch">
   <div class="wrap">
-    <h2>Coach your next prompt</h2>
-    <p class="sub" style="margin: 0 auto 28px">Free and open source, MIT licensed.</p>
-    <div class="ctas">
-      <a class="btn primary" href="https://github.com/teransarathchandra/coachline#install">Install coachline</a>
-      <a class="btn" href="https://github.com/teransarathchandra/coachline/blob/main/docs/usage.md">Read the usage guide</a>
+    <h2 id="h-watch">Watch it work</h2>
+    <p class="lead">Recorded in the real Claude Code on macOS, with a demo login and a throwaway project.</p>
+    <div class="tabs" role="tablist" aria-label="Recordings">
+      <button class="tab" role="tab" id="t-install" aria-selected="true" aria-controls="p-install">Install</button>
+      <button class="tab" role="tab" id="t-task" aria-selected="false" aria-controls="p-task" tabindex="-1">A new task</button>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-install" aria-labelledby="t-install">
+      <video src="assets/install.mp4" poster="assets/install-poster.webp" muted loop playsinline preload="none" aria-label="Adding the marketplace and installing coachline in Claude Code; the pane opens on the right"></video>
+      <div class="media-row"><p>Two commands. The pane opens beside the conversation: no restart, no API key.</p><button class="playpause" type="button">Pause</button></div>
+    </div>
+    <div class="tabpanel" role="tabpanel" id="p-task" aria-labelledby="t-task" hidden>
+      <video src="assets/website.mp4" poster="assets/website-poster.webp" muted loop playsinline preload="none" aria-label="A prompt to build a shoe store website gets a skill to use and checked web finds"></video>
+      <div class="media-row"><p>Starting something new: a skill you already have, then tools and reference docs from the web, each link checked.</p><button class="playpause" type="button">Pause</button></div>
     </div>
   </div>
 </section>
+
+<section class="where" aria-labelledby="h-where">
+  <div class="wrap">
+    <h2 id="h-where">Wherever you run Claude Code</h2>
+    <p class="lead">The pane takes on the look of where it opens, light or dark.</p>
+    <div class="shots">
+      <figure><picture><source srcset="assets/desktop.webp" type="image/webp"><img src="assets/desktop.png" alt="The coachline pane in the Claude desktop app, in light and dark" loading="lazy" width="1212" height="1380"></picture><figcaption>The Claude desktop app, macOS and Windows.</figcaption></figure>
+      <figure><picture><source srcset="assets/editor.webp" type="image/webp"><img src="assets/editor.png" alt="The coachline pane beside Claude Code in VS Code, in light and dark" loading="lazy" width="1256" height="1400"></picture><figcaption>VS Code, Cursor, Windsurf and Antigravity.</figcaption></figure>
+    </div>
+    <ul class="surfaces">
+      <li>Terminal on macOS and Linux</li>
+      <li>Windows Terminal</li>
+      <li>Claude desktop app</li>
+      <li>VS Code, Cursor, Windsurf, Antigravity</li>
+      <li>JetBrains and any terminal, with <code>/coach watch</code></li>
+    </ul>
+  </div>
+</section>
+
+<section class="private" id="private" aria-labelledby="h-private">
+  <div class="wrap">
+    <h2 id="h-private">What happens to your prompts</h2>
+    <p class="lead">Exactly this, and nothing else.</p>
+    <dl>
+      <div><dt>What is sent</dt><dd>Each prompt you send, redacted, with up to five earlier prompts of the same conversation as context. Pasted text never: only its marker.</dd></div>
+      <div><dt>Which model, on whose account</dt><dd>Claude through your own Claude Code login: Haiku by default, Sonnet for web research. Change either with <code>/coach model</code>. No API key, no server of ours, no telemetry.</dd></div>
+      <div><dt>Redacted before it is sent</dt><dd>Emails, keys and tokens are removed first, and pasted text is never sent. List a project in <code>llm-off.txt</code> to keep it out entirely.</dd></div>
+      <div><dt>Checked on your machine</dt><dd>Counts are recomputed locally, skill names must exist, and every link must load before you see it.</dd></div>
+      <div><dt>Deleted in one command</dt><dd><code>/coach forget all</code> deletes what it keeps. <code>/coach panel-ai off</code> leaves only the local hints.</dd></div>
+      <div><dt>Read the details</dt><dd>Every case, with what stays on your machine: <a href="https://github.com/teransarathchandra/coachline/blob/main/docs/privacy.md">privacy and accuracy</a>.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="close" aria-labelledby="h-close">
+  <div class="wrap close-grid">
+    <div>
+      <h2 id="h-close">Your next prompt, coached.</h2>
+      <p>Free and open source under the MIT licence. Needs Claude Code and Python 3.9 or newer.</p>
+      <div class="links"><a href="https://github.com/teransarathchandra/coachline/blob/main/docs/usage.md">Usage guide</a><a href="https://github.com/teransarathchandra/coachline/blob/main/docs/troubleshooting.md">Troubleshooting</a><a href="https://github.com/teransarathchandra/coachline/blob/main/CHANGELOG.md">Changelog</a></div>
+    </div>
+    <div class="cmds">
+      <div class="cmd"><code><span class="p">&gt; </span>/plugin marketplace add teransarathchandra/coachline</code><button class="copy" type="button" data-copy="/plugin marketplace add teransarathchandra/coachline" aria-label="Copy the marketplace command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>Copy</span></button></div>
+      <div class="cmd"><code><span class="p">&gt; </span>/plugin install coachline@coachline</code><button class="copy" type="button" data-copy="/plugin install coachline@coachline" aria-label="Copy the install command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg><span>Copy</span></button></div>
+    </div>
+  </div>
+</section>
+</main>
 
 <footer>
   <div class="wrap">
-    <span>coachline · MIT © Teran Sarathchandra</span>
-    <span><a href="https://github.com/teransarathchandra/coachline">GitHub</a> · <a href="https://github.com/teransarathchandra/coachline/blob/main/docs/privacy.md">Privacy</a> · <a href="https://github.com/teransarathchandra/coachline/blob/main/CHANGELOG.md">Changelog</a></span>
+    <span>coachline · MIT · Teran Sarathchandra</span>
+    <span><a href="https://github.com/teransarathchandra/coachline">GitHub</a> · <a href="https://github.com/teransarathchandra/coachline/blob/main/docs/privacy.md">Privacy</a> · <a href="https://github.com/teransarathchandra/coachline/issues">Report an issue</a></span>
   </div>
 </footer>
 
 <script>
+(() => {
+  const root = document.documentElement, still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // copy
   document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "Copied"; b.classList.add("done"); }
-    catch { b.textContent = "Select it"; }
-    setTimeout(() => { b.textContent = "Copy"; b.classList.remove("done"); }, 1600);
+    const label = b.querySelector("span");
+    try { await navigator.clipboard.writeText(b.dataset.copy); label.textContent = "Copied"; b.dataset.done = ""; }
+    catch {
+      const code = b.parentElement.querySelector("code"), r = document.createRange(); r.selectNodeContents(code);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); label.textContent = "Selected";
+    }
+    setTimeout(() => { label.textContent = "Copy"; delete b.dataset.done; }, 1600);
   }));
-  const root = document.documentElement, key = "coachline-theme";
-  try { const t = localStorage.getItem(key); if (t) root.dataset.theme = t; } catch {}
+
+  // theme: the reader's choice, remembered on this device
+  const KEY = "coachline-theme";
+  try { const t = localStorage.getItem(KEY); if (t) root.dataset.theme = t; } catch {}
   document.getElementById("theme").addEventListener("click", () => {
     const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     root.dataset.theme = dark ? "light" : "dark";
-    try { localStorage.setItem(key, root.dataset.theme); } catch {}
+    try { localStorage.setItem(KEY, root.dataset.theme); } catch {}
   });
+
+  // the repository's real star count; nothing shows if GitHub does not answer
+  fetch("https://api.github.com/repos/teransarathchandra/coachline").then(r => r.ok ? r.json() : null).then(d => {
+    if (!d || typeof d.stargazers_count !== "number" || d.stargazers_count < 100) return;
+    const n = d.stargazers_count.toLocaleString("en");
+    document.getElementById("star-count").textContent = n; document.getElementById("stars").hidden = false;
+  }).catch(() => {});
+
+  // the demos: type the draft, then show what coachline adds
+  const demos = new Map();
+  document.querySelectorAll(".box").forEach(box => {
+    const t = box.querySelector("[data-type]"), text = t ? t.textContent : "";
+    let timer = 0;
+    demos.set(box, () => {
+      clearTimeout(timer); box.classList.remove("playing");
+      if (still) return;
+      void box.offsetWidth; box.classList.add("playing");
+      if (!t) { timer = setTimeout(() => box.classList.remove("playing"), 700); return; }
+      t.textContent = ""; let i = 0;
+      const step = () => { t.textContent = text.slice(0, ++i); timer = i < text.length ? setTimeout(step, 42) : setTimeout(() => box.classList.remove("playing"), 650); };
+      timer = setTimeout(step, 250);
+    });
+  });
+  const play = el => {
+    if (el && el.offsetParent === null) el = [...el.parentElement.querySelectorAll("[data-demo]")].find(x => x.offsetParent !== null);   // the frame shown at this width
+    if (!el) return;
+    if (demos.has(el)) demos.get(el)();
+    else if (!still) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+  };
+  if ("IntersectionObserver" in window) {
+    const seen = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { play(e.target); seen.unobserve(e.target); } }), { threshold: .6 });
+    document.querySelectorAll(".box").forEach(b => seen.observe(b));
+  }
+
+  // the keys: press one and its cap goes down, the page goes to its section, and its demo plays again
+  const caps = [...document.querySelectorAll(".key")];
+  const press = k => {
+    k.classList.add("down"); setTimeout(() => k.classList.remove("down"), 180);
+    const s = document.querySelector(k.getAttribute("href"));
+    s.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
+    history.replaceState(null, "", k.getAttribute("href"));
+    const h = s.querySelector("h2"); if (h) h.focus({ preventScroll: true });
+    setTimeout(() => play(s.querySelector("[data-demo]")), still ? 0 : 450);
+  };
+  caps.forEach(k => k.addEventListener("click", e => { e.preventDefault(); press(k); }));
+  // single-key shortcuts can be switched off (WCAG 2.1.4) and never fire while a control has focus
+  const sw = document.getElementById("kbd-switch"), SK = "coachline-shortcuts";
+  let on = true; try { on = localStorage.getItem(SK) !== "off"; } catch {}
+  const setOn = v => { on = v; sw.setAttribute("aria-pressed", v); sw.textContent = v ? "Shortcuts on" : "Shortcuts off"; try { localStorage.setItem(SK, v ? "on" : "off"); } catch {} };
+  setOn(on); sw.addEventListener("click", () => setOn(!on));
+  addEventListener("keydown", e => {
+    if (!on || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && !a.matches("h2[tabindex], .key")) return;
+    const k = caps.find(c => c.dataset.key.toLowerCase() === e.key.toLowerCase());
+    if (k) { e.preventDefault(); press(k); }
+  });
+
+  // the recordings play only while their tab is shown, never under reduced motion; each has a pause button (WCAG 2.2.2)
+  const vids = [...document.querySelectorAll(".tabpanel video")];
+  const sync = () => vids.forEach(v => {
+    const btn = v.parentElement.querySelector(".playpause"), shown = !v.closest(".tabpanel").hidden;
+    if (shown && !still && !v.dataset.paused) { v.play().catch(() => {}); } else v.pause();
+    btn.textContent = v.paused ? "Play" : "Pause";
+  });
+  vids.forEach(v => {
+    const btn = v.parentElement.querySelector(".playpause");
+    btn.addEventListener("click", () => { if (v.paused) { delete v.dataset.paused; v.play().catch(() => {}); } else { v.dataset.paused = "1"; v.pause(); } btn.textContent = v.paused ? "Play" : "Pause"; });
+    v.addEventListener("play", () => btn.textContent = "Pause"); v.addEventListener("pause", () => btn.textContent = "Play");
+  });
+  if ("IntersectionObserver" in window) new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? sync() : vids.forEach(v => v.pause())), { threshold: .3 }).observe(document.getElementById("watch"));
+  const hero = document.querySelector(".hero-video"), heroBtn = document.querySelector('[data-for="hero"]');
+  if (hero && "IntersectionObserver" in window && !still) {
+    new IntersectionObserver(es => es.forEach(e => (e.isIntersecting && !hero.dataset.paused) ? hero.play().catch(() => {}) : hero.pause()), { threshold: .25 }).observe(hero);
+  }
+  if (hero) {
+    const label = () => heroBtn.textContent = hero.paused ? "Play" : "Pause";
+    heroBtn.addEventListener("click", () => { if (hero.paused) { delete hero.dataset.paused; hero.play().catch(() => {}); } else { hero.dataset.paused = "1"; hero.pause(); } });
+    hero.addEventListener("play", label); hero.addEventListener("pause", label); label();
+  }
+  // tabs
+  const tabs = [...document.querySelectorAll(".tab")];
+  const show = t => tabs.forEach(x => {
+    const on = x === t; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1;
+    document.getElementById(x.getAttribute("aria-controls")).hidden = !on;
+  }) || sync();
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => show(t));
+    t.addEventListener("keydown", e => {
+      const j = e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : null;
+      if (j === null) return; e.preventDefault(); const n = tabs[(j + tabs.length) % tabs.length]; show(n); n.focus();
+    });
+  });
+})();
 </script>
 </body>
 </html>
