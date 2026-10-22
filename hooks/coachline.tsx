@@ -342,6 +342,7 @@ export const register: Register = on => {
   })
 
   on('prompt.edit', async ($, e, next) => {
+    back = null     // you typed: the box is yours again, whatever hold put back
     const box = await next(e)
     schedule($, box.text)
     return box

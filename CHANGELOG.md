@@ -4,6 +4,7 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- Hold: a held prompt now goes back in the box once, so the second Enter sends it (Claude Code 2.1.308 also puts a dropped prompt back, which doubled it).
 - **Website audit and polish**:
   - **Honest keys:** only E, C and L are keys in coachline's panel, so only they are drawn as keycaps. The hint, Use and hold are dashed caps, with a legend.
   - **Shortcuts:** the page's single-key shortcuts have an on/off switch, never fire while a control has focus, and move focus to the section they open.

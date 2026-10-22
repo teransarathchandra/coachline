@@ -680,6 +680,10 @@ function hinting(on: On, opts: { os?: string; draft?: () => string; score?: (dra
   on('prompt.submit', ($, e) => (sent.push(e.text), { text: e.text }))
   on('prompt.fill', ($, e) => (opts.refuse ? { isFilled: false } : (filled.push(e.text), { isFilled: true })))
   on('prompt.change', ($, e) => ({ text: e.text }))
+  on('prompt.edit', ($, e) => {
+    const text = e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end)
+    return { text, cursor: e.start + e.inputText.length }
+  })
   on('process.run', async ($, e) => {
     const score = e.argv.includes('--score')
     if (score) scored.push(e.init?.stdin ?? '')
@@ -924,6 +928,17 @@ test('hold leaves the box alone once it holds something else', async ($, on) => 
   await scoredDraft($, w)
   await $.prompt.submit({ text: 'fix it now please' })
   await handBack($, 'fix it now please in src/auth/login.js')
+  await handBack($, 'fix it now please\nfix it now please')
+  expect(w.filled).toEqual(['fix it now please'])
+})
+
+test('hold forgets what it put back once you type', async ($, on) => {
+  const w = hinting(on, { holding: true })
+  await scoredDraft($, w)
+  await $.prompt.submit({ text: 'fix it now please' })
+  const text = 'fix it now please'
+  await ($.prompt as unknown as { edit: (e: object) => Promise<unknown> }).edit({
+    text, cursor: text.length, start: text.length, end: text.length, inputText: '!', origin: { kind: 'composer' } })
   await handBack($, 'fix it now please\nfix it now please')
   expect(w.filled).toEqual(['fix it now please'])
 })
