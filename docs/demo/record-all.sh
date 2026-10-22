@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Records every README / website GIF on a Mac, in order, from the repo root:  bash docs/demo/record-all.sh [name ...]
+# Records the README / website recordings on a Mac, in order, from the repo root:  bash docs/demo/record-all.sh [name ...]
+# The other GIFs need no recording: python3 docs/demo/scene_gifs.py makes them from the website (see docs/demo/HANDOFF.md).
 # Needs vhs (brew install vhs), ffmpeg, python3 with Pillow (pip3 install pillow), and the demo login signed in once:
 #   CLAUDE_CONFIG_DIR=~/.claude-coachline-demo claude auth login
-# With names (install prompt website hint use browse patterns library), records only those. Each take is checked: the file must exist
-# and be newer than the start of its run. Real-Claude takes (install, prompt, website, hint, use) use the demo login's subscription.
+# With names (install prompt website), records only those. Each take is checked: the file must exist and be newer than the start
+# of its run. They use the demo login's subscription. website is taken for the hero still, docs/assets/screenshot.png.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 for t in vhs ffmpeg python3; do command -v "$t" >/dev/null || { echo "missing: $t" >&2; exit 1; }; done
@@ -11,7 +12,7 @@ python3 -c "import PIL" 2>/dev/null || { echo "missing: Pillow (pip3 install pil
 [ -d "$HOME/.claude-coachline-demo" ] || { echo "sign in to the demo login first: CLAUDE_CONFIG_DIR=~/.claude-coachline-demo claude auth login" >&2; exit 1; }
 mkdir -p docs/demo/.rec
 
-ALL=(install prompt website hint use browse patterns library)
+ALL=(install prompt website)
 NAMES=("${@:-${ALL[@]}}")
 for n in "${NAMES[@]}"; do
   start=$(date +%s); echo "== $n"

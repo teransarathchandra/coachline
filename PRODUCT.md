@@ -42,7 +42,7 @@ Visible, outside the turn. Other prompt improvers inject hidden instructions int
 
 ## Evidence on Hand
 
-- Real screenshots and GIFs of the product: `docs/assets/` (screenshot.png, desktop.png, editor.png, install.gif, prompt.gif, website.gif, browse.gif, patterns.gif; new macOS recordings to replace them are planned, see docs/demo/HANDOFF.md).
+- Media in `docs/assets/`: recordings of the real Claude Code on macOS (install.gif, prompt.gif, screenshot.png) and stills (desktop.png, editor.png); animated illustrations with coachline's real messages (hint, use, hold, newtask); and the standalone panel's own rendered frames (browse, patterns, library). See docs/demo/HANDOFF.md.
 - Verifiable facts: MIT licence, zero dependencies, CI on macOS / Linux / Windows × Python 3.9 / 3.13, the live GitHub star count.
 - None of: testimonials, customer logos, user counts, benchmarks. Never invent them.
 

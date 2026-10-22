@@ -174,6 +174,7 @@
   /* phones get the illustrations: a whole terminal at phone width is too small to read */
   @media (max-width: 639px) { .chrome video.wide-only { display: none; } }
   /* the panel's own output */
+  .term .cell { display: inline-block; width: 1ch; font-style: normal; overflow: hidden; vertical-align: bottom; }
   .term { margin: 0; background: var(--term); color: #cdd6f4; border: 1px solid var(--term-line); border-radius: 12px; padding: 18px;
           font: 400 0.71875rem/1.3 var(--mono); overflow-x: auto; white-space: pre; scrollbar-color: #333342 var(--term); }
   @media (min-width: 30rem) { .term { font-size: 0.78125rem; } }
@@ -201,16 +202,27 @@
                      transition: transform .12s var(--ease), border-color .2s, color .2s; }
   .scene kbd.enter.down { transform: translateY(2px); border-bottom-width: 1px; border-color: #e8735a; color: #e8735a; }
   .scene .note { color: #f9e2af; font-size: 0.8125rem; transition: opacity .3s var(--ease); }
-  .scene .sent-line { color: #8b90a8; font-size: 0.8125rem; margin-bottom: 10px; padding-left: 2px; }
-  .scene .msg { margin-top: 10px; font-size: 0.8125rem; min-height: 1.6em; color: #a6e3a1; transition: opacity .3s var(--ease); }
+  .scene .sent-line { color: #8b90a8; font-size: 0.8125rem; margin-bottom: 10px; padding-left: 2px; transition: opacity .3s var(--ease); }
+  .scene .msg { margin-top: 10px; font-size: 0.8125rem; min-height: 3.2em; color: #a6e3a1; transition: opacity .3s var(--ease); }
   .scene .msg.warn { color: #f9e2af; }
   .pcard { border: 1px solid #94e2d5; border-radius: 8px; padding: 10px 12px 12px; margin-bottom: 14px; }
-  .pcard-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .pcard-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2px 10px; margin-bottom: 6px; }
+  .pcard-head > span:first-child { white-space: nowrap; }
   .pcard-head > span:first-child { color: #94e2d5; font-weight: 700; font-size: 0.8125rem; }
   .pbtns { display: flex; gap: 6px; }
   .pbtn { font-size: 0.75rem; color: #cdd6f4; border: 1px solid #3a3a48; border-radius: 4px; padding: 3px 8px; transition: background .15s, color .15s, border-color .2s; }
   .pbtn.down { background: #e8735a; color: #14141b; border-color: #e8735a; }
   .pcard-text { color: #94e2d5; font-size: 0.8125rem; line-height: 1.5; }
+  .pcard.improve { border-color: #89b4fa; } .pcard.improve .pcard-head > span:first-child { color: #89b4fa; }
+  .pcard.web { border-color: #f5c2e7; margin-bottom: 0; } .pcard.web .pcard-head > span:first-child { color: #f5c2e7; }
+  .pmeta { color: #8b90a8; font-size: 0.75rem; font-weight: 400; }
+  .pline { font-size: 0.8125rem; line-height: 1.5; color: #89b4fa; }
+  .pline.dim { color: #8b90a8; } .web .pline.url { color: #cdd6f4; }
+  .find { padding: 8px 0 2px; color: #f5c2e7; font-size: 0.8125rem; transition: opacity .35s var(--ease); }
+  .find + .find { border-top: 1px dashed #2e2e39; margin-top: 6px; }
+  .chk { margin-left: 8px; color: #a6e3a1; font-size: 0.75rem; }
+  .chk.wait { color: #f9e2af; }
+  .scene [data-improve], .scene [data-web] { transition: opacity .35s var(--ease); }
   .scene [data-meter], .scene [data-hint], .scene [data-tail] { transition: opacity .3s var(--ease); }
   .scene .faded { opacity: 0; }
   .box .tail, .box .note, .box .sent { margin-top: 0.625rem; font-size: 0.8125rem; min-height: 1.6em; overflow-wrap: anywhere; }
@@ -383,7 +395,7 @@
       <div class="chrome"><div class="chrome-bar"><span>Claude Code · prompt box</span><span class="chrome-tag">illustration</span></div>
         <div class="box scene" data-demo="scene" data-scene="hold" role="img"
              aria-label="Illustration: with hold on, Enter on &quot;clean this up properly&quot; is held with what it lacks and the text stays in the box; Enter again sends it.">
-          <div class="sent-line" aria-hidden="true" data-sent hidden>&gt; clean this up properly</div>
+          <div class="sent-line faded" aria-hidden="true" data-sent>&gt; clean this up properly</div>
           <div class="area" aria-hidden="true"><span class="gt">&gt; </span><span data-draft>clean this up properly</span><span class="caret"></span></div>
           <div class="row" aria-hidden="true"><kbd class="enter" data-enter>Enter</kbd><span class="note" data-note>coachline held this: replace 'best/properly/clean' with a rule you can check. Press Enter again to send it as is</span></div>
         </div>
@@ -408,7 +420,7 @@
     <figure>
       <div class="chrome"><div class="chrome-bar"><span>coachline · standalone panel</span><span class="chrome-tag real">rendered output</span></div><pre class="term wide-only" data-demo="frame" aria-label="The coachline panel showing what to improve in a vague prompt"><!-- frame:analyse --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar w"> · this thread · 4 prompts</span><span class="bg-bar">                        </span><span class="bg-bar grn">● Claude on </span>
 
- <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">18:39 · ✓ analysed · earlier prompt, G = newest · …</span> <span class="wht">─╮</span>
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">22:35 · ✓ analysed · earlier prompt, G = newest · …</span> <span class="wht">─╮</span>
  <span class="wht">│</span> <span class="b wht">fix the login bug, users can&#x27;t sign in</span>                               <span class="wht">│</span>
  <span class="wht">╰──────────────────────────────────────────────────────────────────────╯</span>
  <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">────────────────────────────────────────────────</span> <span class="dim">debugging</span> <span class="blu">─╮</span>
@@ -431,13 +443,13 @@
 <span class="blu"> 2 patterns from your past chats · i to read · s installs a skill</span>
 <span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
 <span class="dim"> Prompts in this thread   ▾</span>
-   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the product page
-<span class="rev"> › ✓ 18:39  fix the login bug, users can&#x27;t sign in                       </span>
-   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more premium
+   <span class="grn">✓</span> <span class="dim">22:23  </span>add a size picker to the product page
+<span class="rev"> › ✓ 22:35  fix the login bug, users can&#x27;t sign in                       </span>
+   <span class="grn">✓</span> <span class="dim">22:46  </span>make the shoe site look more premium
 <span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">prompt</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">e</span><span class="bg-bar"> </span><span class="bg-bar w">analyse</span><span class="bg-bar">  </span><span class="bg-bar b wht">Enter</span><span class="bg-bar"> </span><span class="bg-bar w">full</span><span class="bg-bar">  </span><span class="bg-bar b wht">i</span><span class="bg-bar"> </span><span class="bg-bar w">patterns</span><span class="bg-bar">  </span><span class="bg-bar b wht">s</span><span class="bg-bar"> </span><span class="bg-bar w">skill</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">   </span><!-- /frame --></pre>
       <pre class="term narrow-only" data-demo="frame" aria-label="The coachline panel showing what to improve in a vague prompt"><!-- frame:analyse-narrow --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar">                    </span><span class="bg-bar grn">● Claude on </span>
 
- <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">18:39 · ✓ analysed ·…</span> <span class="wht">─╮</span>
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">22:35 · ✓ analysed ·…</span> <span class="wht">─╮</span>
  <span class="wht">│</span> <span class="b wht">fix the login bug, users can&#x27;t sign in</span> <span class="wht">│</span>
  <span class="wht">╰────────────────────────────────────────╯</span>
  <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">──────────────────</span> <span class="dim">debugging</span> <span class="blu">─╮</span>
@@ -461,8 +473,8 @@
 <span class="blu"> 2 patterns from your past chats · i to re…</span>
 <span class="dim"> ─────────────────────────────────────────</span>
 <span class="dim"> Prompts in this thread   ▾</span>
-   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the produ…
-<span class="rev"> › ✓ 18:39  fix the login bug, users can&#x27;t…</span>
+   <span class="grn">✓</span> <span class="dim">22:23  </span>add a size picker to the produ…
+<span class="rev"> › ✓ 22:35  fix the login bug, users can&#x27;t…</span>
 <span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">prompt</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">e</span><span class="bg-bar"> </span><span class="bg-bar w">analyse</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">      </span><!-- /frame --></pre></div>
       <figcaption>Rendered by coachline's own code, with made-up chats.</figcaption>
     </figure>
@@ -512,7 +524,7 @@
     <figure>
       <div class="chrome"><div class="chrome-bar"><span>coachline · standalone panel</span><span class="chrome-tag real">rendered output</span></div><pre class="term wide-only" data-demo="frame" aria-label="The coachline panel after copying an enhanced prompt"><!-- frame:copy --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar w"> · this thread · 4 prompts</span><span class="bg-bar">                        </span><span class="bg-bar grn">● Claude on </span>
 
- <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">───────────────────────────</span> <span class="dim">18:57 · ✓ analysed · </span><span style="color:#e8735a">▰▱▱▱▱</span> <span class="wht">─╮</span>
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">───────────────────────────</span> <span class="dim">22:53 · ✓ analysed · </span><span style="color:#e8735a"><i class="cell">▰</i><i class="cell">▱</i><i class="cell">▱</i><i class="cell">▱</i><i class="cell">▱</i></span> <span class="wht">─╮</span>
  <span class="wht">│</span> <span class="b wht">commit this and open a pr with a good description</span>                    <span class="wht">│</span>
  <span class="wht">╰──────────────────────────────────────────────────────────────────────╯</span>
  <span class="blu">╭─ </span><span class="b blu">Improve</span> <span class="blu">──────────────────────────────────────────────────────</span> <span class="dim">git</span> <span class="blu">─╮</span>
@@ -531,14 +543,14 @@
 <span class="blu"> 2 patterns from your past chats · i to read · s installs a skill</span>
 <span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
 <span class="dim"> Prompts in this thread    </span>
-   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the product page
-   <span class="grn">✓</span> <span class="dim">18:39  </span>fix the login bug, users can&#x27;t sign in
-   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more premium
-<span class="rev"> › ✓ 18:57  commit this and open a pr with a good description            </span>
+   <span class="grn">✓</span> <span class="dim">22:23  </span>add a size picker to the product page
+   <span class="grn">✓</span> <span class="dim">22:35  </span>fix the login bug, users can&#x27;t sign in
+   <span class="grn">✓</span> <span class="dim">22:46  </span>make the shoe site look more premium
+<span class="rev"> › ✓ 22:53  commit this and open a pr with a good description            </span>
 <span class="bg-bar"> </span><span class="bg-bar grn">✓ copied the enhanced prompt (205 characters) via pbcopy</span><span class="bg-bar">                </span><!-- /frame --></pre>
       <pre class="term narrow-only" data-demo="frame" aria-label="The coachline panel after copying an enhanced prompt"><!-- frame:copy-narrow --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar">                    </span><span class="bg-bar grn">● Claude on </span>
 
- <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">18:57 · ✓ analysed ·…</span> <span class="wht">─╮</span>
+ <span class="wht">╭─ </span><span class="b wht">Your prompt</span> <span class="wht">──</span> <span class="dim">22:53 · ✓ analysed ·…</span> <span class="wht">─╮</span>
  <span class="wht">│</span> <span class="b wht">commit this and open a pr with a good</span>  <span class="wht">│</span>
  <span class="wht">│</span> <span class="b wht">description</span>                            <span class="wht">│</span>
  <span class="wht">╰────────────────────────────────────────╯</span>
@@ -562,8 +574,8 @@
 <span class="blu"> 2 patterns from your past chats · i to re…</span>
 <span class="dim"> ─────────────────────────────────────────</span>
 <span class="dim"> Prompts in this thread  ▴ </span>
-   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more p…
-<span class="rev"> › ✓ 18:57  commit this and open a pr with…</span>
+   <span class="grn">✓</span> <span class="dim">22:46  </span>make the shoe site look more p…
+<span class="rev"> › ✓ 22:53  commit this and open a pr with…</span>
 <span class="bg-bar"> </span><span class="bg-bar grn">✓ copied the enhanced prompt (205 charact…</span><!-- /frame --></pre></div>
       <figcaption>Rendered by coachline's own code, with made-up chats.</figcaption>
     </figure>
@@ -597,10 +609,10 @@
 <span class="blu"> 2 patterns from your past chats · i to read · s installs a skill</span>
 <span class="dim"> ───────────────────────────────────────────────────────────────────────</span>
 <span class="dim"> Prompts in this thread    </span>
-   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the product page
-   <span class="grn">✓</span> <span class="dim">18:39  </span>fix the login bug, users can&#x27;t sign in
-   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more premium
-<span class="rev"> › ✓ 18:57  commit this and open a pr with a good description            </span>
+   <span class="grn">✓</span> <span class="dim">22:23  </span>add a size picker to the product page
+   <span class="grn">✓</span> <span class="dim">22:35  </span>fix the login bug, users can&#x27;t sign in
+   <span class="grn">✓</span> <span class="dim">22:46  </span>make the shoe site look more premium
+<span class="rev"> › ✓ 22:53  commit this and open a pr with a good description            </span>
 <span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">choose</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">x</span><span class="bg-bar"> </span><span class="bg-bar w">forget</span><span class="bg-bar">  </span><span class="bg-bar b wht">l</span><span class="bg-bar"> </span><span class="bg-bar w">back</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">                             </span><!-- /frame --></pre>
       <pre class="term narrow-only" data-demo="frame" aria-label="The coachline Library with three saved prompts"><!-- frame:library-narrow --><span class="bg-bar"> </span><span class="bg-bar b" style="color:#0b0b0f;background:#e8735a"> coachline</span><span class="bg-bar">                    </span><span class="bg-bar grn">● Claude on </span>
 
@@ -621,10 +633,10 @@
 <span class="blu"> 2 patterns from your past chats · i to re…</span>
 <span class="dim"> ─────────────────────────────────────────</span>
 <span class="dim"> Prompts in this thread    </span>
-   <span class="grn">✓</span> <span class="dim">18:27  </span>add a size picker to the produ…
-   <span class="grn">✓</span> <span class="dim">18:39  </span>fix the login bug, users can&#x27;t…
-   <span class="grn">✓</span> <span class="dim">18:50  </span>make the shoe site look more p…
-<span class="rev"> › ✓ 18:57  commit this and open a pr with…</span>
+   <span class="grn">✓</span> <span class="dim">22:23  </span>add a size picker to the produ…
+   <span class="grn">✓</span> <span class="dim">22:35  </span>fix the login bug, users can&#x27;t…
+   <span class="grn">✓</span> <span class="dim">22:46  </span>make the shoe site look more p…
+<span class="rev"> › ✓ 22:53  commit this and open a pr with…</span>
 <span class="bg-bar"> </span><span class="bg-bar b wht">↑↓</span><span class="bg-bar"> </span><span class="bg-bar w">choose</span><span class="bg-bar">  </span><span class="bg-bar b wht">c</span><span class="bg-bar"> </span><span class="bg-bar w">copy</span><span class="bg-bar">  </span><span class="bg-bar b wht">l</span><span class="bg-bar"> </span><span class="bg-bar w">back</span><span class="bg-bar">  </span><span class="bg-bar b wht">q</span><span class="bg-bar"> </span><span class="bg-bar w">quit</span><span class="bg-bar">         </span><!-- /frame --></pre></div>
       <figcaption>Rendered by coachline's own code, with made-up prompts.</figcaption>
     </figure>
@@ -634,8 +646,8 @@
 <section class="watch" id="watch" aria-labelledby="h-watch">
   <div class="wrap">
     <h2 id="h-watch">Watch it work</h2>
-    <p class="lead">Recorded in the real Claude Code on macOS, with a demo login and a throwaway project.</p>
-    <div class="tabs" role="tablist" aria-label="Recordings">
+    <p class="lead">Install is recorded in the real Claude Code on macOS, with a demo login and a throwaway project. A new task is an illustration with made-up data.</p>
+    <div class="tabs" role="tablist" aria-label="Install and a new task">
       <button class="tab" role="tab" id="t-install" aria-selected="true" aria-controls="p-install">Install</button>
       <button class="tab" role="tab" id="t-task" aria-selected="false" aria-controls="p-task" tabindex="-1">A new task</button>
     </div>
@@ -644,8 +656,25 @@
       <div class="media-row"><p>Two commands. The pane opens beside the conversation: no restart, no API key.</p><button class="playpause" type="button">Pause</button></div>
     </div>
     <div class="tabpanel" role="tabpanel" id="p-task" aria-labelledby="t-task" hidden>
-      <video src="assets/website.mp4" poster="assets/website-poster.webp" muted loop playsinline preload="none" aria-label="A prompt to build a shoe store website gets a skill to use and checked web finds"></video>
-      <div class="media-row"><p>Starting something new: a skill you already have, then tools and reference docs from the web, each link checked.</p><button class="playpause" type="button">Pause</button></div>
+      <div class="chrome"><div class="chrome-bar"><span>coachline pane · a new task</span><span class="chrome-tag">illustration</span></div>
+        <div class="box scene" data-demo="scene" data-scene="research" role="img"
+             aria-label="Illustration: the prompt &quot;make the shoe site look more premium&quot; gets tips and the frontend-design skill you already have, then two finds from the web, Radix Colors and Refactoring UI, each shown only once its link is checked.">
+          <div class="sent-line" aria-hidden="true">&gt; make the shoe site look more premium</div>
+          <div class="pcard improve" aria-hidden="true" data-improve>
+            <div class="pcard-head"><span>Improve</span><span class="pmeta">ui-design</span></div>
+            <div class="pline dim">a premium look for a shoe store</div>
+            <div class="pline">• Name the pages you want: home, catalog, product, cart.</div>
+            <div class="pline">• Give two or three reference sites you like.</div>
+            <div class="pline">• use /frontend-design: a distinctive, polished look</div>
+          </div>
+          <div class="pcard web" aria-hidden="true" data-web>
+            <div class="pcard-head"><span>Worth a look</span><span class="pmeta">found on the web, not installed</span></div>
+            <div class="find" data-find><b>Radix Colors</b> <span class="pmeta">tech</span><div class="pline dim">accessible neutral palettes with one accent, light and dark</div><div class="pline url">radix-ui.com/colors <span class="chk" data-chk>link checked</span></div></div>
+            <div class="find" data-find><b>Refactoring UI</b> <span class="pmeta">inspo</span><div class="pline dim">spacing, type scale and colour choices that read as premium</div><div class="pline url">refactoringui.com <span class="chk" data-chk>link checked</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="media-row"><p>Illustration with made-up data: a skill you already have, then tools and reference sites from the web, each shown only once its link loads.</p></div>
     </div>
   </div>
 </section>
@@ -742,6 +771,19 @@
   const sleep = (ms, run, box) => new Promise((ok, no) => setTimeout(() => run === box.dataset.run ? ok() : no(), ms));
   const typeInto = async (el, text, run, box, speed = 38) => { for (const ch of text) { el.textContent += ch; await sleep(speed, run, box); } };
   const SCRIPTS = {
+    async research(box, run) {
+      const imp = box.querySelector("[data-improve]"), web = box.querySelector("[data-web]"), finds = [...box.querySelectorAll("[data-find]")];
+      const chks = [...box.querySelectorAll("[data-chk]")];
+      imp.classList.add("faded"); web.classList.add("faded"); finds.forEach(f => f.classList.add("faded"));
+      await sleep(900, run, box); imp.classList.remove("faded");
+      await sleep(2000, run, box); web.classList.remove("faded");
+      for (const [i, f] of finds.entries()) {
+        chks[i].textContent = "checking the link…"; chks[i].classList.add("wait"); f.classList.remove("faded");
+        await sleep(1100, run, box); chks[i].textContent = "link checked"; chks[i].classList.remove("wait");
+        await sleep(500, run, box);
+      }
+      await sleep(2400, run, box);
+    },
     async hint(box, run) {
       const d = box.querySelector("[data-draft]"), meter = box.querySelector("[data-meter]"), hint = box.querySelector("[data-hint]"), tail = box.querySelector("[data-tail]");
       d.textContent = ""; tail.classList.add("faded");
@@ -759,17 +801,18 @@
     async hold(box, run) {
       const d = box.querySelector("[data-draft]"), enter = box.querySelector("[data-enter]"), note = box.querySelector("[data-note]"), sent = box.querySelector("[data-sent]");
       const press = async () => { enter.classList.add("down"); await sleep(160, run, box); enter.classList.remove("down"); };
-      d.textContent = ""; note.classList.add("faded"); sent.hidden = true;
+      d.textContent = ""; note.classList.add("faded"); sent.classList.add("faded");
       await sleep(300, run, box); await typeInto(d, "clean this up properly", run, box);
       await sleep(600, run, box); await press(); note.classList.remove("faded");
-      await sleep(2600, run, box); await press(); note.classList.add("faded"); sent.hidden = false; d.textContent = "";
+      await sleep(2600, run, box); await press(); note.classList.add("faded"); sent.classList.remove("faded"); d.textContent = "";
       await sleep(2200, run, box);
-      sent.hidden = true; d.textContent = "clean this up properly"; note.classList.remove("faded");
+      sent.classList.add("faded"); d.textContent = "clean this up properly"; note.classList.remove("faded");
     },
     async use(box, run) {
       const d = box.querySelector("[data-draft]"), btn = box.querySelector("[data-use]"), msg = box.querySelector("[data-msg]");
       const press = async () => { btn.classList.add("down"); await sleep(180, run, box); btn.classList.remove("down"); };
-      const filled = box.dataset.filled;                                    // the still, kept from page load: a cancelled run may have left the box half done
+      const filled = box.dataset.filled, area = d.parentElement;
+      area.style.minHeight = area.offsetHeight + "px";                      // the short draft keeps the filled prompt's room                                    // the still, kept from page load: a cancelled run may have left the box half done
       d.textContent = "fix the login bug"; msg.textContent = ""; msg.classList.remove("warn");
       await sleep(900, run, box); await press();
       msg.textContent = "your prompt box has a draft: press Use again to replace it"; msg.classList.add("warn");
@@ -777,12 +820,13 @@
       d.innerHTML = filled; msg.classList.remove("warn"); msg.textContent = "in your prompt box: fill the [ASK] parts, then send";
       await sleep(2000, run, box);
       const ask = d.querySelector(".ask"), answer = document.createElement("span"); ask.replaceWith(answer); msg.textContent = "";
-      await typeInto(answer, "users get a 401 from POST /api/session", run, box);
+      await typeInto(answer, "a 401 from POST /api/session", run, box);
       await sleep(2400, run, box);
       d.innerHTML = filled; msg.textContent = "in your prompt box: fill the [ASK] parts, then send";
     },
   };
   document.querySelectorAll(".scene").forEach(box => { const d = box.querySelector("[data-draft]"); if (d) box.dataset.filled = d.innerHTML; });
+  document.querySelectorAll(".scene").forEach(box => box.addEventListener("scene:play", () => scenes.get(box)()));
   document.querySelectorAll(".scene").forEach(box => scenes.set(box, () => {
     if (still) return;
     const run = String(Math.random()); box.dataset.run = run;               // a newer run cancels this one at its next step
@@ -850,7 +894,8 @@
   const tabs = [...document.querySelectorAll(".tab")];
   const show = t => tabs.forEach(x => {
     const on = x === t; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1;
-    document.getElementById(x.getAttribute("aria-controls")).hidden = !on;
+    const panel = document.getElementById(x.getAttribute("aria-controls")); panel.hidden = !on;
+    if (on) { const sc = panel.querySelector(".scene"); if (sc) play(sc); }      // a tab's illustration plays when it is shown
   }) || sync();
   tabs.forEach((t, i) => {
     t.addEventListener("click", () => show(t));
