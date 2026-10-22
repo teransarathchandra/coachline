@@ -13,7 +13,7 @@ next due) is kept in ~/.claude/coach/pane-<session>.json. When a standalone pane
 import argparse, json, os, re, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import coach, discover, review, watch
+import coach, discover, library, review, watch
 
 LOCK_SECONDS = 30   # a tick holding the lock longer than this died; the next one takes over
 
@@ -76,7 +76,10 @@ def standalone_shows(session):
 UNWRAPPED = 10 ** 6                    # --width 0: one line per paragraph; the Claude Code pane wraps each to its own width
 
 
-def tick(session, width=80, io=None, now=None):
+LIBRARY_SHOWN = 50
+
+
+def tick(session, width=80, io=None, now=None, project=None):
     work = coach.auto_open_on()                         # auto-open off: the pane never shows, so nothing is sent and no notice used up
     st = watch.build(coach.HIST, session=session, notice=work)
     ui = load_ui(session)
@@ -96,15 +99,17 @@ def tick(session, width=80, io=None, now=None):
                         "text": e["text"], "after": e["after"], "lines": [list(l) for l in watch.card_lines(st, ui, i, e, iw, acts=True)]})
     skill = next((x["slug"] for x in st["insights"] if x.get("slug")), None)
     return {"ai": st["ai"], "research": coach.research_on(), "researching": discover.researching(session), "auto_open": coach.auto_open_on(), "hints": coach.hints_on(), "session": st["session"], "entries": entries,
-            "patterns": watch.pattern_texts(st), "skill": skill, "notice": st["notice"]}
+            "patterns": watch.pattern_texts(st), "skill": skill, "notice": st["notice"],
+            "library": [{k: e[k] for k in ("id", "text", "uses")} for e in library.entries(project)[:LIBRARY_SHOWN]] if project else []}
 
 
-def score(draft):
-    """The hint under the prompt box for a draft being typed: local only, no lock, no state."""
+def score(draft, project=None):
+    """The hint under the prompt box for a draft being typed, and a saved prompt like it: local only, no lock, no state."""
     words = len(coach.body(draft).split())
     command = draft.lstrip()[:1] in ("!", "#") or coach.BUILTIN.match(draft.strip())   # a shell line, a memory note, a setting
-    if not words or command or not coach.hints_on(): return {"meter": None, "hint": None, "words": 0, "hold": False}
-    return {"meter": watch.meter(draft), "hint": coach.hint_for(draft, beginner=coach.level() == "beginner"), "words": words, "hold": coach.hold_on()}   # hold rides with the draft
+    if not words or command or not coach.hints_on(): return {"meter": None, "hint": None, "words": 0, "hold": False, "match": None}
+    return {"meter": watch.meter(draft), "hint": coach.hint_for(draft, beginner=coach.level() == "beginner"), "words": words,
+            "hold": coach.hold_on(), "match": library.match(draft, project) if project else None}            # hold rides with the draft
 
 
 def main(argv):
@@ -112,22 +117,36 @@ def main(argv):
     ap.add_argument("--json", action="store_true"); ap.add_argument("--session"); ap.add_argument("--width", type=int, default=80)
     ap.add_argument("--enhance", metavar="KEY"); ap.add_argument("--install", metavar="SLUG")
     ap.add_argument("--mark", nargs=2, metavar=("STATUS", "ID")); ap.add_argument("--research", metavar="KEY")
-    ap.add_argument("--outcome", choices=("aborted", "next"), help="from the pane module: a turn you interrupted (the prompt on stdin), or "
-                    "your next prompt ({prev, text} JSON on stdin); recorded locally, nothing is printed or sent")
+    ap.add_argument("--outcome", choices=("aborted", "next", "done"), help="from the pane module: a turn you interrupted (the prompt on stdin), "
+                    "your next prompt ({prev, text} JSON on stdin), or a turn that ended normally ({text, project}); recorded locally, nothing "
+                    "is printed or sent")
     ap.add_argument("--score", action="store_true", help="the draft on stdin -> its meter and hint as JSON (nothing is saved or sent)")
+    ap.add_argument("--project", help="with --score or --json: the session's folder, for its saved prompts")
+    ap.add_argument("--library", nargs=2, metavar=("used|forget", "ID"), help="a saved prompt was used from the Library, or is to be forgotten")
     a = ap.parse_args(argv)
+    if a.library:
+        what, i = a.library
+        if what not in ("used", "forget"): print("usage: pane.py --library used|forget ID", file=sys.stderr); return 2
+        try: return 0 if (library.used(i) if what == "used" else library.forget(i)) else 1
+        except OSError: return 1                              # Windows: another tab holds the file this instant
     if a.outcome:
         raw = sys.stdin.buffer.read().decode("utf-8", "replace")
         try:
             if a.outcome == "aborted": coach.record_outcome("aborted", raw)
             else:
                 d = json.loads(raw)
-                if isinstance(d, dict) and coach.is_correction(str(d.get("text", ""))): coach.record_outcome("corrected", str(d.get("prev", "")))
+                if not isinstance(d, dict): return 0
+                if a.outcome == "done": library.candidate(str(d.get("text", "")), str(d.get("project", "")))
+                else:
+                    try:                                      # one failing must not skip the other
+                        if coach.is_correction(str(d.get("text", ""))): coach.record_outcome("corrected", str(d.get("prev", "")))
+                    finally:
+                        library.followup(str(d.get("text", "")), prev=str(d.get("prev", "")), project=d.get("project"))
         except (ValueError, OSError): pass                    # evidence is a bonus: never fail the pane over it
         return 0
     if a.score:
         # bytes in, ASCII out: right whatever the console code page (cp1252 on Windows), and JSON.parse reads the escapes
-        sys.stdout.write(json.dumps(score(sys.stdin.buffer.read().decode("utf-8", "replace")))); return 0
+        sys.stdout.write(json.dumps(score(sys.stdin.buffer.read().decode("utf-8", "replace"), a.project))); return 0
     if a.enhance:
         coach.spawn_key(a.enhance)
         if a.session:                                   # so the pane shows it as being analysed, and the autopilot does not send it again
@@ -147,7 +166,7 @@ def main(argv):
         coach.spawn_research(a.research)
         print("searching the web for this task in the background (up to ~4 minutes)"); return 0
     if a.json and a.session:
-        sys.stdout.write(json.dumps(tick(a.session, a.width), ensure_ascii=False)); return 0
+        sys.stdout.write(json.dumps(tick(a.session, a.width, project=a.project), ensure_ascii=False)); return 0
     ap.print_help(); return 2
 
 

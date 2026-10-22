@@ -479,6 +479,8 @@ def sweep(now=None):
             except OSError: pass
     _rewrite(REWRITES, lambda lines: lines[-REWRITES_KEEP:])
     _rewrite(OUTCOMES, _recent((time.time() if now is None else now) - OUTCOME_DAYS * 86400))
+    import library                                    # here, not at the top: library imports this module
+    library.promote_due(now)
     return gone
 
 def tab_key(env=None):
@@ -783,11 +785,15 @@ def data_usage():
     return n, size
 
 def forget(what):
-    """Delete what coachline learned and cached: 'all' is everything but your settings (KEPT), 'outcomes' the outcome log only.
+    """Delete what coachline learned and cached: 'all' is everything but your settings (KEPT), 'outcomes' the outcome log only,
+    'library' the saved prompts and their candidates.
     Returns the paths removed."""
-    if what == "outcomes":
-        try: os.remove(OUTCOMES); return [OUTCOMES]
-        except OSError: return []
+    if what in ("outcomes", "library"):
+        gone = []
+        for p in ([OUTCOMES] if what == "outcomes" else [os.path.join(STATE, n) for n in ("library.json", "library-pending.json", "library-vetoes.json")]):
+            try: os.remove(p); gone.append(p)
+            except OSError: pass
+        return gone
     if what != "all": raise ValueError(what)
     gone = []
     for root, dirs, files in os.walk(STATE, topdown=False):
@@ -831,10 +837,10 @@ if __name__ == "__main__":
     ap.add_argument("--doctor", action="store_true"); ap.add_argument("--show", action="store_true", help="list rejection-rule hits")
     ap.add_argument("--bg-rewrite", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--key", help=argparse.SUPPRESS); ap.add_argument("--copy", action="store_true", help="with --coach: copy the enhanced prompt to the clipboard")
-    ap.add_argument("--forget", metavar="all|outcomes", help="delete what coachline keeps (all: except your settings and llm-off.txt)")
+    ap.add_argument("--forget", metavar="all|outcomes|library", help="delete what coachline keeps (all: except your settings and llm-off.txt)")
     a = ap.parse_args()
     if a.forget is not None:
-        if a.forget not in ("all", "outcomes"): print("usage: coach.py --forget all|outcomes"); sys.exit(2)
+        if a.forget not in ("all", "outcomes", "library"): print("usage: coach.py --forget all|outcomes|library"); sys.exit(2)
         before = data_usage()[1]; gone = forget(a.forget)
         print(f"removed {len(gone)} files ({size_text(before - data_usage()[1])})" + ("; kept your settings and llm-off.txt" if a.forget == "all" else ""))
     elif a.bg_rewrite:

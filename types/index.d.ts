@@ -22,6 +22,7 @@ export type PaneState = {
   skill: string | null
   notice: string | null
   hints?: boolean
+  library?: { id: string; text: string; uses: number }[]
 }
 
 declare module 'claude-code' {
@@ -32,6 +33,7 @@ declare module 'claude-code' {
       sel: number
       full: boolean
       showPatterns: boolean
+      showLibrary: boolean
       closed: boolean
       msg: string
       hint: { draft: string; tail: string | null; hint: string | null; hold: boolean } | null

@@ -604,7 +604,7 @@ async function shown(ui: { findAll: (q: { type?: string }) => Promise<{ type: st
 // each prompt picked from the list, the patterns opened, the whole long prompt shown; and back
 const VIEWS: [string, string[], string[]][] = [
   ['first prompt', ['e0'], []], ['second prompt', ['e1'], []], ['third prompt', ['e2'], []],
-  ['patterns', ['patterns'], ['patterns']], ['whole prompt', ['e2', 'whole'], ['less']],
+  ['patterns', ['patterns'], ['patterns']], ['whole prompt', ['e2', 'whole'], ['less']], ['library', ['library'], ['library']],
 ]
 
 test('every surface shows the same words and buttons', async ($, on) => {
@@ -641,7 +641,7 @@ test('every button does the same on every surface', async ($, on) => {
       const ui = await $.ui.mount({ plugin: 'coachline', surface, component: 'Pane', requestId: 'coachline', props: {} as never })
       for (const key of go) await ui.press({ key })
       for (const b of await ui.findAll({ type: 'Button' })) {
-        if (!b.key || /^e\d+$|^(patterns|whole|less)$/.test(b.key)) continue    // they change the view, which the test above follows
+        if (!b.key || /^e\d+$|^(patterns|whole|less|library)$/.test(b.key)) continue    // they change the view, which the test above follows
         w.ran.length = 0
         copies.length = 0
         w.fills.length = 0
@@ -882,7 +882,7 @@ test('each prompt you send reports the one before it, for a correction to be fou
   await $.prompt.submit({ text: 'make it look nicer please' })
   await $.prompt.submit({ text: 'no, I meant the header' })
   await settle()
-  expect(outcomes(w)).toEqual([`next ${JSON.stringify({ prev: 'make it look nicer please', text: 'no, I meant the header' })}`])
+  expect(outcomes(w)).toEqual([`next ${JSON.stringify({ prev: 'make it look nicer please', text: 'no, I meant the header', project: '/w' })}`])
 })
 
 // hold (opt-in): a clearly vague prompt stops at Enter, goes back in the box; a second Enter sends it
@@ -925,4 +925,79 @@ test('hold never drops a prompt it cannot put back', async ($, on) => {
   await scoredDraft($, w)
   expect((await $.prompt.submit({ text: 'fix it now please' })).drop).toBeUndefined()
   expect(w.sent).toEqual(['fix it now please'])
+})
+
+// the library: a turn that ended normally after your prompt becomes a candidate; a similar draft is told so, never filled
+test('a turn that ends normally after your prompt is offered to the library with its project', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await settle()
+  await $.prompt.submit({ text: 'add pagination to the orders table' })
+  await $.turn.start({ text: 'add pagination to the orders table', turnId: 't1' } as never)
+  await $.turn.complete({ answer: 'Done.', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+  await $.turn.start({ text: '', turnId: 't2' } as never)
+  await $.turn.complete({ answer: 'Done.', durationMs: 5, isAborted: false, turnId: 't2', reason: 'answer' } as never)
+  await $.prompt.submit({ text: 'then sort it by date' })
+  await $.turn.start({ text: 'then sort it by date', turnId: 't3' } as never)
+  await $.turn.complete(ABORT('t3'))
+  await settle()
+  expect(outcomes(w).filter(o => o.startsWith('done'))).toEqual([`done ${JSON.stringify({ text: 'add pagination to the orders table', project: '/w' })}`])
+})
+
+test('a draft like a saved prompt says so under the box, and nothing is filled', async ($, on) => {
+  const w = hinting(on, { score: () => ({ meter: '▰▰▰▰▱', hint: null, words: 14, hold: false, match: { id: 'abc', text: 'add pagination…' } }) })
+  await scoredDraft($, w)
+  await draw($)
+  expect(w.tails.at(-1)).toBe('· ▰▰▰▰▱  ↻ similar prompt worked before')
+  expect(w.filled).toEqual([])
+})
+
+// the Library view: saved prompts for this project, each with Use and Forget
+const SAVED = { id: 'abc123abc123', text: 'add pagination to the orders table with 25 rows per page and keep the current sort order', uses: 2 }
+
+test('the Library lists saved prompts; Use fills one and counts it, Forget removes it', async ($, on) => {
+  const w = world(on, { out: STATE({ entries: [ASKING], library: [SAVED] }) })
+  await $.session.start(START)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  await ui.press({ key: 'library' })
+  expect(await ui.find({ type: 'Text', text: /add pagination to the orders table/ })).toBeDefined()
+  w.ran.length = 0
+  await ui.press({ key: `libuse:${SAVED.id}` })
+  await settle()
+  expect(w.fills.map(f => f.text)).toEqual([SAVED.text])
+  expect(w.ran.filter(a => a.includes('--library')).map(a => a.slice(2).join(' '))).toEqual([`--library used ${SAVED.id}`])
+  w.ran.length = 0
+  await ui.press({ key: `libforget:${SAVED.id}` })
+  await settle()
+  expect(w.ran.filter(a => a.includes('--library')).map(a => a.slice(2).join(' '))).toEqual([`--library forget ${SAVED.id}`])
+  await ui.unmount()
+})
+
+test('an empty Library says what will land there', async ($, on) => {
+  world(on, { out: STATE({ entries: [ASKING], library: [] }) })
+  await $.session.start(START)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  await ui.press({ key: 'library' })
+  expect(await ui.find({ type: 'Text', text: /Prompts that worked first time land here: none yet in this project/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the pane asks for the library of this project', async ($, on) => {
+  const w = world(on)
+  await $.session.start(START)
+  await settle()
+  expect(w.ran.some(a => a.includes('--json') && a.includes('--project') && a.includes('/w'))).toBe(true)
+})
+
+test('the Library view has no Analyse button', async ($, on) => {
+  world(on, { out: STATE({ entries: [{ ...CARD, after: '', state: 'local' }], library: [] }) })
+  await $.session.start(START)
+  await settle()
+  const ui = await $.ui.mount({ plugin: 'coachline', surface: 'terminal', component: 'Pane', requestId: 'coachline', props: {} as never })
+  expect(await ui.find({ type: 'Button', key: 'analyse' })).toBeDefined()
+  await ui.press({ key: 'library' })
+  expect(await ui.find({ type: 'Button', key: 'analyse' })).toBeUndefined()
+  await ui.unmount()
 })

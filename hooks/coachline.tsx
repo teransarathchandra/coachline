@@ -12,6 +12,7 @@ const error = atom({ plugin: 'coachline', key: 'error' } as const, '')
 const sel = atom({ plugin: 'coachline', key: 'sel' } as const, -1)
 const full = atom({ plugin: 'coachline', key: 'full' } as const, false)
 const showPatterns = atom({ plugin: 'coachline', key: 'showPatterns' } as const, false)
+const showLibrary = atom({ plugin: 'coachline', key: 'showLibrary' } as const, false)
 const closed = atom({ plugin: 'coachline', key: 'closed' } as const, false)
 const msg = atom({ plugin: 'coachline', key: 'msg' } as const, '')
 // the hint under the prompt box: the draft it was worked out for, and the tail to draw while the box still holds that draft
@@ -143,7 +144,8 @@ async function refresh($: EngineInterface): Promise<PaneState | null> {
 
 async function refreshOnce($: EngineInterface): Promise<PaneState | null> {
   // --width 0: unwrapped. The pane may sit beside the conversation, narrower than the viewport's columns, so its Text wraps each line
-  const r = await run($, ['--json', '--session', await $.session.id(), '--width', '0'])
+  const p = await folder($)
+  const r = await run($, ['--json', '--session', await $.session.id(), '--width', '0', ...(p ? ['--project', p] : [])])
   let s: PaneState | null = null
   if (r.ok) {
     try {
@@ -211,16 +213,24 @@ function schedule($: EngineInterface, draft: string) {
   })
 }
 
+// the session's folder: known from session.start, else (after a reload of this module) asked for
+async function folder($: EngineInterface): Promise<string> {
+  const now = await $.session.cwd().catch(() => '')      // asked each time: /cd or a worktree move changes it
+  if (now) project = now
+  return project
+}
+
 async function score($: EngineInterface, draft: string) {
   if (scoring) return                     // the running score picks up the newest draft when it ends
   scoring = true
   try {
     if ((await read($, state))?.hints === false) return
-    const r = await run($, ['--score'], draft)
+    const p = await folder($)
+    const r = await run($, p ? ['--score', '--project', p] : ['--score'], draft)
     if (!r.ok) return
-    const d = JSON.parse(r.out) as { meter: string | null; hint: string | null; words: number; hold?: boolean }
+    const d = JSON.parse(r.out) as { meter: string | null; hint: string | null; words: number; hold?: boolean; match?: { id: string; text: string } | null }
     if ((await $.prompt.read()).text !== draft) return
-    const tail = d.meter && d.words >= 3 ? `· ${d.meter}${d.hint ? `  ${d.hint}` : ''}` : null
+    const tail = d.meter && d.words >= 3 ? `· ${d.meter}${d.hint ? `  ${d.hint}` : ''}${d.match ? '  ↻ similar prompt worked before' : ''}` : null
     await update($, hint, () => ({ draft, tail, hint: d.words >= 3 ? d.hint : null, hold: !!d.hold }))
   } finally {
     scoring = false
@@ -234,7 +244,27 @@ const HUMAN = ['composer', 'sdk', 'bridge']
 let last: string | null = null
 // the main loop's running turn, and its prompt only when it is the one you sent: a schedule's or /compact's turn blames nothing
 let running: { turnId: string; text: string | null } | null = null
+let project = ''      // the session's folder: the library's project, and where a similar saved prompt is looked for
 let asked = false     // the last answer ended in a question: "no, just the parser" answers it, it corrects nothing
+
+// Use: a text into the prompt box, its [ASK] gaps in bold; never sent (Q7). A draft in the box is replaced only on a second press
+// within ARM_MS. Where the box does not take it, it is copied. Answers what to tell the person, and whether the text got anywhere.
+async function fillBox($: EngineInterface, text: string, surface: string): Promise<{ note: string; done: boolean }> {
+  const now = await $.clock.now()
+  if ((await $.prompt.read()).text.trim() && now - armedAt > ARM_MS) {
+    armedAt = now
+    return { note: 'your prompt box has a draft: press Use again to replace it', done: false }
+  }
+  armedAt = -Infinity
+  const decorations = [...text.matchAll(ASK)].map(m => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, bold: true }))
+  const r = await $.prompt.fill({ text, mode: 'replace', decorations })
+  if (r.isFilled) return { note: text.includes('[ASK:') ? 'in your prompt box: fill the [ASK] parts, then send' : 'in your prompt box: send it when ready', done: true }
+  if (r.refusal === 'dialog') return { note: 'close the dialog first, then press Use', done: false }
+  // no box here (the desktop app, an editor), or a cause unknown: the clipboard never touches the box, so copy
+  const c = await $.ui.copy({ text, surface: surface as never })
+  const why = r.refusal === 'no_composer' ? 'no prompt box here' : 'the prompt box did not take it'
+  return c.isCopied ? { note: `copied instead: ${why}`, done: true } : { note: NO_CLIPBOARD, done: false }
+}
 
 export const register: Register = on => {
   // The terminal's pane, but not the Windows terminal's, which has watch.py's panel. The desktop app and the editors' Claude Code
@@ -242,6 +272,7 @@ export const register: Register = on => {
   // prompt: session.attach; at a reload they are already attached
   on('session.start', async ($, e, next) => {
     last = null; running = null; asked = false; held = { text: '', at: -Infinity }     // a new conversation (/clear, a resume)
+    project = e.cwd
     const r = await next(e)
     if ((e.isInteractive && (await $.env.get('OS')) !== 'Windows_NT') || (await $.session.surfaces()).some(x => APPS.includes(x))) wake($)
     return r
@@ -268,7 +299,7 @@ export const register: Register = on => {
     if (r.drop === undefined && !e.command && (!e.origin || HUMAN.includes(e.origin.kind))) {
       const prev = last
       last = e.text
-      if (prev && !asked) void run($, ['--outcome', 'next'], JSON.stringify({ prev, text: e.text })).catch(ignore)
+      if (prev && !asked) void run($, ['--outcome', 'next'], JSON.stringify({ prev, text: e.text, project })).catch(ignore)
       asked = false
     }
     if (!active) return r
@@ -293,6 +324,7 @@ export const register: Register = on => {
     if (!e.agentId) {
       const t = running?.turnId === e.turnId ? running.text : null
       if (e.isAborted && t) void run($, ['--outcome', 'aborted'], t).catch(ignore)
+      if (!e.isAborted && t) void run($, ['--outcome', 'done'], JSON.stringify({ text: t, project })).catch(ignore)   // a library candidate
       asked = !e.isAborted && e.answer.trim().endsWith('?')
       running = null
     }
@@ -376,6 +408,8 @@ export const register: Register = on => {
     const cur: PaneEntry | undefined = s.entries[i]
     if (!cur) return <Text dimColor>coachline: loading…</Text>
     const isFull = await read($, full)
+    const isLibrary = await read($, showLibrary)
+    const saved = s.library ?? []
     const pats = await read($, showPatterns)
 
     const copy = async () => {
@@ -384,21 +418,18 @@ export const register: Register = on => {
     }
     // the enhanced prompt into the prompt box, its [ASK] gaps in bold; never sent: you fill the gaps and press Enter (Q7)
     const use = async () => {
-      const now = await $.clock.now()
-      if ((await $.prompt.read()).text.trim() && now - armedAt > ARM_MS) {
-        armedAt = now
-        await update($, msg, () => 'your prompt box has a draft: press Use again to replace it')
-        return
-      }
-      armedAt = -Infinity
-      const decorations = [...cur.after.matchAll(ASK)].map(m => ({ start: m.index ?? 0, end: (m.index ?? 0) + m[0].length, bold: true }))
-      const r = await $.prompt.fill({ text: cur.after, mode: 'replace', decorations })
-      if (r.isFilled) return update($, msg, () => 'in your prompt box: fill the [ASK] parts, then send')
-      if (r.refusal === 'dialog') return update($, msg, () => 'close the dialog first, then press Use')
-      // no box here (the desktop app, an editor), or a cause unknown: the clipboard never touches the box, so copy
-      const c = await $.ui.copy({ text: cur.after, surface: e.surface })
-      const why = r.refusal === 'no_composer' ? 'no prompt box here' : 'the prompt box did not take it'
-      await update($, msg, () => (c.isCopied ? `copied instead: ${why}` : NO_CLIPBOARD))
+      const r = await fillBox($, cur.after, e.surface)
+      await update($, msg, () => r.note)
+    }
+    const useSaved = async (id: string, text: string) => {
+      const r = await fillBox($, text, e.surface)
+      await update($, msg, () => r.note)
+      if (r.done) void run($, ['--library', 'used', id]).then(() => refresh($)).catch(ignore)
+    }
+    const forgetSaved = async (id: string) => {
+      const r = await run($, ['--library', 'forget', id])
+      await update($, msg, () => (r.ok ? 'forgotten: it will not be offered again' : r.err))
+      await refresh($)
     }
     const analyse = async () => {
       const r = await run($, s.session ? ['--enhance', cur.key, '--session', s.session] : ['--enhance', cur.key])
@@ -529,14 +560,24 @@ export const register: Register = on => {
       )
     }
 
-    const card = isFull
+    const library = [box({ section: 'enh', head: ['enh', 'head', 'Library', `${saved.length} saved in this project`, null], rows: [] }, 0,
+      saved.length
+        ? saved.flatMap(x => [
+            <Text key={`lt${x.id}`} color={app ? undefined : COLOR.enh}>{x.text}</Text>,
+            <Box key={`lb${x.id}`} gap={1} flexWrap={nw}>
+              <Button key={`libuse:${x.id}`} label="Use" onPress={() => useSaved(x.id, x.text)} />
+              <Button key={`libforget:${x.id}`} label="Forget" onPress={() => forgetSaved(x.id)} />
+            </Box>,
+          ])
+        : [<Text key="libempty" dimColor>Prompts that worked first time land here: none yet in this project.</Text>])]
+    const card = isLibrary ? library : isFull
       ? [box({ section: 'prompt', head: ['prompt', 'head', 'Your prompt', '', null], rows: [] }, 0, [
           <Text key="fulltext" color={app ? undefined : 'whiteBright'}>{cur.text}</Text>,
           <Button key="less" label="Show less" onPress={() => update($, full, () => false)} />,
         ])]
       : sections(cur.lines).map((sec, n) => box(sec, n, sec.rows.map((l, k) => line(l, n * 1000 + k))))
     // watch.py's card names keys ("press e"); here one Analyse button stands for them, whatever the prompt's state
-    const canAnalyse = !cur.after && cur.state !== 'off'
+    const canAnalyse = !cur.after && cur.state !== 'off' && !isLibrary
 
     return (
       <Box flexDirection="column" gap={app ? sp('sm', 0.5) : 0}>
@@ -544,7 +585,8 @@ export const register: Register = on => {
         <Box flexDirection="column" marginY={app ? 0 : 1} gap={app ? sp('sm', 0.5) : 1}>{card}</Box>
         {canAnalyse && <Button key="analyse" label={cur.state === 'pending' ? 'Analyse again' : 'Analyse'}
           variant={app ? 'primary' : undefined} onPress={analyse} />}
-        {s.research && !!cur.after && cur.state !== 'off' && <Button key="research" label="Look again on the web" onPress={research} />}
+        {s.research && !!cur.after && cur.state !== 'off' && !isLibrary && <Button key="research" label="Look again on the web" onPress={research} />}
+        <Button key="library" label={isLibrary ? 'Back to the prompt' : `Library (${saved.length})`} onPress={() => update($, showLibrary, v => !v)} />
         {s.patterns.length > 0 && (
           <Box flexDirection="column" gap={app ? sp('xs', 0.25) : 0}>
             <Button key="patterns" label={pats ? 'Hide patterns' : `${s.patterns.length} pattern${s.patterns.length === 1 ? '' : 's'} from your past chats`}

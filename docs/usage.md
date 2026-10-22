@@ -19,6 +19,8 @@ When you stop Claude mid-turn, or your next prompt starts with "no", "actually",
 
 With `/coach hold on`, a prompt that the hint under the box calls vague stops at Enter: the reason shows, your text goes back in the box, and Enter again within 30 seconds sends it as is. It only holds when that hint is already there for exactly your text, so Enter is never slowed.
 
+A prompt of 12 words or more is saved to your **Library** when its turn ends normally and your next two prompts don't correct it (or a day passes without a correction). Your edit is what's saved, so a prompt sent through **Use** with its `[ASK]` gaps filled is saved filled. When you type something close to a saved prompt, the hint under the box adds `↻ similar prompt worked before`. **Library** in the Claude Code pane lists this project's saved prompts with **Use** and **Forget**. Prompts saved in another project are offered too when it shares a framework with this one, unless that project is in `llm-off.txt`.
+
 Below the card: one line of patterns from your past chats (`i` opens it) and the list of prompts in this thread.
 
 ## Keys
@@ -67,6 +69,7 @@ With the mouse on, the wheel scrolls and a click selects a prompt or presses a b
 | `/coach setup` | Show the current settings |
 | `/coach hold on\|off` | Hold a clearly vague prompt at Enter; press Enter again within 30 s to send it as is (off by default) |
 | `/coach level beginner\|pro\|auto` | Hint wording: beginners also get why (auto: beginner until 50 prompts in your history) |
+| `/coach forget library` | Delete your saved prompts (asks first) |
 | `/coach forget outcomes` | Delete the local record of interrupted and corrected prompts |
 | `/coach hints on\|off` | The hint under the prompt box as you type (on by default; worked out locally, nothing is sent) |
 | `/coach motion on\|off` | The panel's animations (on by default; off by itself with `NO_COLOR`, over SSH or in a slow terminal) |

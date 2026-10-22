@@ -32,6 +32,8 @@ Everything coachline keeps is in `~/.claude/coach/`, including `suggestions.json
 
 `outcomes.jsonl` records a turn you interrupted or a prompt your next one corrected: when, which, how vague, and up to four words from the start of the prompt (a short prompt can be all of it), with known secret patterns such as keys, tokens and `PASSWORD=` values redacted. It stays on your machine, is kept 90 days, and `/coach forget outcomes` deletes it.
 
+`library.json` holds the prompts that worked first time, **whole**, with known secret patterns redacted, so they can be offered again; `library-pending.json` holds the few waiting to be judged. Both stay on your machine and are never sent. A project in `llm-off.txt` keeps its own library but is never offered in another project. `/coach forget library` deletes both files; the pane's **Forget** removes one prompt.
+
 ## How answers are checked
 
 Claude can invent patterns, so its answers are checked on your machine before you see them:

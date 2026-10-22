@@ -23,6 +23,7 @@ Pick an interpreter: `python3`, else `python`, else `py -3`. On Windows, `python
 - `/coach motion on` / `off`: run `<py> <scripts>/setup.py --motion on` (or `off`). Just do it; it only changes how the panel draws.
 - `/coach setup`: run `<py> <scripts>/setup.py` with no options. It only shows the settings and the command that opens the panel.
 - `/coach doctor`: run `<py> <scripts>/coach.py --doctor`.
+- `/coach forget library`: deletes my saved prompts (the Library) and the ones waiting to be saved. Tell me that in one sentence and wait for my yes, then run `<py> <scripts>/coach.py --forget library`.
 - `/coach forget outcomes`: deletes coachline's local record of interrupted and corrected prompts. Just do it: run `<py> <scripts>/coach.py --forget outcomes`.
 - `/coach forget all`: deletes everything coachline keeps in `~/.claude/coach` (analyses, caches, the history review, drafted skills) except my settings and `llm-off.txt`. Tell me that in one sentence and wait for my yes, then run `<py> <scripts>/coach.py --forget all`.
 

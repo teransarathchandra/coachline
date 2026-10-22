@@ -36,7 +36,7 @@ Two commands in Claude Code, and coachline opens in a side panel right away. No 
 
 ### 2 · Type a prompt, see how to make it better
 
-Work as usual. While Claude works on your prompt, the panel shows what to **improve** and an **enhanced prompt**, with `[ASK: …]` where only you know the answer. **Use** puts it in your prompt box; while you type, the line under the box says what your draft lacks.
+Work as usual. While Claude works on your prompt, the panel shows what to **improve** and an **enhanced prompt**, with `[ASK: …]` where only you know the answer. **Use** puts it in your prompt box; while you type, the line under the box says what your draft lacks, or that a prompt like it worked before. Those land in your **Library**.
 
 <img src="docs/assets/prompt.gif" alt="A vague prompt is sent in Claude Code; while Claude works on it, the coachline panel shows tips and an enhanced prompt, and the view zooms in on them" width="100%">
 
