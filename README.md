@@ -17,6 +17,7 @@
 </p>
 
 <p align="center">
+  <a href="https://teransarathchandra.github.io/coachline/"><img src="https://img.shields.io/badge/Website-coachline-E8735A?style=for-the-badge" alt="The coachline website"></a>
   <a href="#install"><img src="https://img.shields.io/badge/Claude_Code-Install_plugin-D97757?style=for-the-badge&logo=claude&logoColor=white" alt="Install in Claude Code"></a>
   <a href="#install"><img src="https://img.shields.io/badge/macOS_·_Linux-Opens_by_itself-555555?style=for-the-badge&logo=apple&logoColor=white" alt="macOS and Linux: opens by itself"></a>
   <a href="#windows"><img src="https://img.shields.io/badge/Windows-Terminal_split-0078D4?style=for-the-badge" alt="Windows: Windows Terminal split"></a>
@@ -58,6 +59,16 @@ For a new task, coachline names the **skills and plugins** you have that fit, th
 <img src="docs/assets/patterns.gif" alt="Patterns from past chats, then the drafted skill is installed with s" width="100%">
 
 </details>
+
+### 4 · Keep what works
+
+- **Use** puts the enhanced prompt in your prompt box with its `[ASK: …]` gaps in bold. You fill them and send; nothing is sent for you.
+- **A hint as you type**: pause, and the line under the box shows how concrete your draft is (`▰▰▱▱▱`) and the one thing it lacks most.
+- **Evidence**: coachline notes when you stop a turn or say "no, I meant…", and shows how often vague prompts led to rework compared with concrete ones.
+- **Library**: a prompt that worked first time is kept. Type something like it later and you are told so; the Library puts it back in the box.
+- **Hold**, if you turn it on: a clearly vague prompt stops at Enter with what it lacks. Enter again sends it as is.
+
+All of it is worked out on your machine. More on the [website](https://teransarathchandra.github.io/coachline/).
 
 ## Install
 

@@ -1,0 +1,9 @@
+{
+  "input": "docs/demo/.rec/hint.mp4",
+  "output": "docs/assets/hint.gif",
+  "size": [1120, 688],
+  "fps": 15,
+  "colors": 64,
+  "timeline": [[0, 22]],
+  "camera": [[2.5, 1, 0.5, 0.5], [3.5, 1.6, 0.3, 0.9]]
+}
