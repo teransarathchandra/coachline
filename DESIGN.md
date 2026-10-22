@@ -24,6 +24,10 @@ colors:
   term-cyan: "#94e2d5"
   term-green: "#a6e3a1"
   term-yellow: "#f9e2af"
+  term-magenta: "#f5c2e7"
+  term-red: "#f38ba8"
+  term-chip: "#3a5cc5"
+  term-chrome: "#17171f"
   ground-light: "#f7f6f3"
   ground-raised-light: "#efede8"
   line-light: "#dedad3"
@@ -292,6 +296,15 @@ A real key you can press, the system's centre.
 - **Pressed:** drops 4px onto its lip, border and legend turn coral; held for 180ms. Transition 140ms on `cubic-bezier(.16, 1, .3, 1)`.
 - **Focus:** 2px coral outline, 3px offset, on the cap rather than the link.
 - **Behaviour:** pressing H, E, U, C, L or Enter on the keyboard (ignored inside fields, with modifiers, on repeats, and Enter on a focused control) or clicking a cap presses it, scrolls smoothly to its section, updates the hash, and after 450ms replays that section's demo.
+
+### Ghost Keycap (honest keys)
+The same footprint as the keycap with a transparent face, a dashed `line-strong` border and no lip: it marks a control that is not a key in coachline's panel (the automatic hint, Claude Code's own Enter, the pane's Use button). Solid caps are only for the panel's real keys (E, C, L). A two-swatch legend in the board head says which is which. Pressed, a ghost cap scales to .94 instead of dropping.
+
+### Window Chrome
+Every demo (terminal frame or prompt-box illustration) sits in one chrome: a 12px-radius `term` box with a hairline `term-line` border and a 10px/16px bar in `term-chrome`, carrying the demo's name in mono (`coachline · standalone panel`, `Claude Code · prompt box`) and a tag. `rendered output` is coral with a solid coral hairline; `illustration` is `term-dim` with a dashed border. The tag is the honesty label; captions only add what the chrome does not say.
+
+### Hero Recording
+Above 640px the hero plays the real prompt recording (`assets/prompt.mp4`, 1120x688, muted, looping) with the hero screenshot as poster; it plays only while on screen, never under reduced motion, and has a Pause/Play button (WCAG 2.2.2). Below 640px it is replaced by the pane crop (`screenshot-pane.webp`).
 
 ### Key Board
 The keys' housing: `ground-raised`, 1px `line` border, 14px radius, a mono 12px `ink-faint` device label row, a 3 or 6 column grid, and a 13px footnote naming the keys with `<kbd>`.

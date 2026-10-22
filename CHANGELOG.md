@@ -4,6 +4,15 @@ All notable changes to coachline. Versions follow [semantic versioning](https://
 
 ## Unreleased
 
+- **Website audit and polish**:
+  - **Honest keys:** only E, C and L are keys in coachline's panel, so only they are drawn as keycaps. The hint, Use and hold are dashed caps, with a legend.
+  - **Shortcuts:** the page's single-key shortcuts have an on/off switch, never fire while a control has focus, and move focus to the section they open.
+  - **Layout:** no sideways scroll at 320px, targets of at least 24px (44px for buttons on touch screens), a skip link, and font sizes in rem.
+  - **Weight:** the recordings play as MP4 (2 MB instead of 6.7 MB) and the screenshots load as WebP. Inter and JetBrains Mono are self-hosted, so the page asks nothing of Google.
+  - **Hero:** plays the real prompt recording, with a pause button.
+  - **Demos:** every demo sits in one window chrome tagged "rendered output" or "illustration".
+  - **Privacy:** the privacy section now says what is sent and to which model.
+
 - **The website, redesigned** around coachline's keys: press H, Enter, E, U, C or L (or tap them) to see what each one does. The proof is the real thing: the panel's own output, rendered by `docs/demo/site_frames.py`, the recordings, and the live star count. No glow, no icon grids. JetBrains Mono is self-hosted (SIL Open Font License) so the panel's box drawing lines up. `PRODUCT.md` and `DESIGN.md` record the product and the design system.
 
 - **A website**: https://teransarathchandra.github.io/coachline/, published from `site/` by a GitHub Pages workflow, with the README's images. A new coral mark and banner, and a social preview image (`docs/demo/social.py`).
